@@ -31,7 +31,7 @@
             // Try to add as many clones as needed
             try {
                 for(var i=0; i<nb-subfields.length; i++) {
-                    window.opener.opener.CloneSubfield(subfields[0].getAttribute('id'));
+                    window.opener.opener.CloneSubfield(subfields[0].getAttribute('id'),'[% advancedMARCEditor %]');
                 }
             }
             catch(err) {
@@ -81,6 +81,9 @@
             [% END %]
             );
         [% END %]
+            var indicators = field_start.getElementsByClassName('indicator flat');
+            indicators[0].value="[% indicator1 %]";
+            indicators[1].value="[% indicator2 %]";
         [% END %]
 
         // browse all its subfields (clear and $9)

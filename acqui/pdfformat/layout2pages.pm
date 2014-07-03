@@ -82,24 +82,44 @@ sub printorders {
     
     my $abaskets;
     my $arrbasket;
-    my @keys = ('Basket (N°)','Document','Qty','RRT GST Inc.','Discount','Discount price GST Exc.','GST', 'Total GST Inc.'); 
+    my @keys = ('Basket (No.)', 'Document', 'Qty', 'RRP tax inc.', 'Discount', 'GST', 'Total tax exc.', 'Total tax inc.');
     for my $bkey (@keys) {
         push(@$arrbasket, $bkey);
     }
     push(@$abaskets, $arrbasket);
-    
+
+    my $titleinfo;
     for my $basket (@$baskets){
         for my $line (@{$orders->{$basket->{basketno}}}) {
             $arrbasket = undef;
-            push( @$arrbasket, 
-                $basket->{basketno}, 
-                @$line[3]." / ".@$line[2].(@$line[0]?" ISBN : ".@$line[0]:'').(@$line[10]?" EN : ".@$line[10]:'').", ".@$line[1].(@$line[4]?' published by '.@$line[4]:''),
-                @$line[5],
-                $num->format_price(@$line[6]),
-                $num->format_price(@$line[8]).'%',
-                $num->format_price(@$line[7]/(1+@$line[9]/100)),
-                $num->format_price(@$line[9]).'%',
-                $num->format_price($num->round(@$line[7])*@$line[5])
+            $titleinfo = "";
+            if ( C4::Context->preference("marcflavour") eq 'UNIMARC' ) {
+                $titleinfo =  $line->{title} . " / " . $line->{author} .
+                    ( $line->{isbn} ? " ISBN: " . $line->{isbn} : '' ) .
+                    ( $line->{en} ? " EN: " . $line->{en} : '' ) .
+                    ( $line->{itemtype} ? ", " . $line->{itemtype} : '' ) .
+                    ( $line->{edition} ? ", " . $line->{edition} : '' ) .
+                    ( $line->{publishercode} ? ' published by '. $line->{publishercode} : '') .
+                    ( $line->{publicationyear} ? ', '. $line->{publicationyear} : '');
+            }
+            else { # MARC21, NORMARC
+                $titleinfo =  $line->{title} . " " . $line->{author} .
+                    ( $line->{isbn} ? " ISBN: " . $line->{isbn} : '' ) .
+                    ( $line->{en} ? " EN: " . $line->{en} : '' ) .
+                    ( $line->{itemtype} ? " " . $line->{itemtype} : '' ) .
+                    ( $line->{edition} ? ", " . $line->{edition} : '' ) .
+                    ( $line->{publishercode} ? ' published by '. $line->{publishercode} : '') .
+                    ( $line->{copyrightdate} ? ' '. $line->{copyrightdate} : '');
+            }
+            push( @$arrbasket,
+                $basket->{basketno},
+                $titleinfo. ($line->{order_vendornote} ? "\n----------------\nNote for vendor : " . $line->{order_vendornote} : '' ),
+                $line->{quantity},
+                $num->format_price($line->{rrpgsti}),
+                $num->format_price($line->{discount}).'%',
+                $num->format_price($line->{gstrate} * 100).'%',
+                $num->format_price($line->{totalgste}),
+                $num->format_price($line->{totalgsti}),
             );
             push(@$abaskets, $arrbasket);
         }
@@ -208,6 +228,8 @@ sub printhead {
     $text->text($bookseller->{address2});
     $text->translate(100/mm, ($height-200)/mm);
     $text->text($bookseller->{address3});
+    $text->translate(100/mm, ($height-205)/mm);
+    $text->text($bookseller->{accountnumber});
     
     # print delivery infos
     $text->font( $pdf->corefont("Times-Bold", -encoding => "utf8"), 4/mm );

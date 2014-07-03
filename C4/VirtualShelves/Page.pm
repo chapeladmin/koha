@@ -214,7 +214,6 @@ sub shelfpage {
                 my $member = GetMember( 'borrowernumber' => $owner );
                 my $ownername = defined($member) ? $member->{firstname} . " " . $member->{surname} : '';
                 $edit = 1;
-                $sortfield='' unless $sortfield;
                 $template->param(
                     edit                => 1,
                     display             => $displaymode,
@@ -224,7 +223,7 @@ sub shelfpage {
                     ownername           => $ownername,
                     "category$category" => 1,
                     category            => $category,
-                    "sort_$sortfield"   => 1,
+                    sortfield           => $sortfield,
                     allow_add           => $allow_add,
                     allow_delete_own    => $allow_delete_own,
                     allow_delete_other  => $allow_delete_other,
@@ -238,7 +237,10 @@ sub shelfpage {
             # explicitly fetch this shelf
             my ($shelfnumber2,$shelfname,$owner,$category,$sorton) = GetShelf($shelfnumber);
 
-            $template->param( 'AllowOnShelfHolds' => C4::Context->preference('AllowOnShelfHolds') );
+            $template->param(
+                'AllowOnShelfHolds'     => C4::Context->preference('AllowOnShelfHolds'),
+                'DisplayMultiPlaceHold' => C4::Context->preference('DisplayMultiPlaceHold'),
+            );
             if (C4::Context->preference('TagsEnabled')) {
                 $template->param(TagsEnabled => 1);
                     foreach (qw(TagsShowOnList TagsInputOnList)) {
@@ -248,36 +250,37 @@ sub shelfpage {
             #check that the user can view the shelf
             if ( ShelfPossibleAction( $loggedinuser, $shelfnumber, 'view' ) ) {
                 my $items;
-                my $authorsort;
-                my $yearsort;
                 my $tag_quantity;
                 my $sortfield = ( $sorton ? $sorton : 'title' );
-                if ( $sortfield eq 'author' ) {
-                    $authorsort = 'author';
-                }
-                if ( $sortfield eq 'year' ) {
-                    $yearsort = 'year';
-                }
-                ( $items, $totitems ) = GetShelfContents( $shelfnumber, $shelflimit, $shelfoffset, $sortfield eq 'year' ? 'copyrightdate' : $sortfield );
+                $sortfield = $query->param('sort') || $sortfield; ## Passed in sorting overrides default sorting
+                my $direction = $query->param('direction') || 'asc';
+                $template->param(
+                    sort      => $sortfield,
+                    direction => $direction,
+                );
+                ( $items, $totitems ) = GetShelfContents( $shelfnumber, $shelflimit, $shelfoffset, $sortfield, $direction );
                 for my $this_item (@$items) {
                     my $biblionumber = $this_item->{'biblionumber'};
                     my $record = GetMarcBiblio($biblionumber);
-                    $this_item->{XSLTBloc} =
-                        XSLTParse4Display($biblionumber, $record, "OPACXSLTResultsDisplay")
-                            if C4::Context->preference("OPACXSLTResultsDisplay") && $type eq 'opac';
+                    if (C4::Context->preference("OPACXSLTResultsDisplay") && $type eq 'opac') {
+                        $this_item->{XSLTBloc} = XSLTParse4Display($biblionumber, $record, "OPACXSLTResultsDisplay");
+                    } elsif (C4::Context->preference("XSLTResultsDisplay") && $type eq 'intranet') {
+                        $this_item->{XSLTBloc} = XSLTParse4Display($biblionumber, $record, "XSLTResultsDisplay");
+                    }
 
                     # the virtualshelfcontents table does not store these columns nor are they retrieved from the items
                     # and itemtypes tables, so I'm commenting them out for now to quiet the log -crn
                     #$this_item->{imageurl} = $imgdir."/".$itemtypes->{ $this_item->{itemtype}  }->{'imageurl'};
                     #$this_item->{'description'} = $itemtypes->{ $this_item->{itemtype} }->{'description'};
                     $this_item->{'dateadded'} = format_date( $this_item->{'dateadded'} );
-                    $this_item->{'imageurl'}  = getitemtypeinfo( $this_item->{'itemtype'} )->{'imageurl'};
+                    $this_item->{'imageurl'}  = getitemtypeinfo( $this_item->{'itemtype'}, $type )->{'imageurl'};
                     $this_item->{'coins'}     = GetCOinSBiblio( $record );
                     $this_item->{'subtitle'} = GetRecordValue('subtitle', $record, GetFrameworkCode($this_item->{'biblionumber'}));
                     $this_item->{'normalized_upc'}  = GetNormalizedUPC(       $record,$marcflavour);
                     $this_item->{'normalized_ean'}  = GetNormalizedEAN(       $record,$marcflavour);
                     $this_item->{'normalized_oclc'} = GetNormalizedOCLCNumber($record,$marcflavour);
                     $this_item->{'normalized_isbn'} = GetNormalizedISBN(undef,$record,$marcflavour);
+                    if(!defined($this_item->{'size'})) { $this_item->{'size'} = "" }; #TT has problems with size
                     # Getting items infos for location display
                     my @items_infos = &GetItemsLocationInfo( $this_item->{'biblionumber'});
                     $this_item->{'itemsissued'} = CountItemsIssued( $this_item->{'biblionumber'} );
@@ -294,6 +297,17 @@ sub shelfpage {
                     }
 
                 }
+                if($type eq 'intranet'){
+                    # Build drop-down list for 'Add To:' menu...
+                    my ($totalref, $pubshelves, $barshelves)=
+                    C4::VirtualShelves::GetSomeShelfNames($loggedinuser,'COMBO',1);
+                    $template->param(
+                        addbarshelves     => $totalref->{bartotal},
+                        addbarshelvesloop => $barshelves,
+                        addpubshelves     => $totalref->{pubtotal},
+                        addpubshelvesloop => $pubshelves,
+                    );
+                }
                 push @paramsloop, { display => 'privateshelves' } if $category == 1;
                 $showadd = 1;
                 my $i = 0;
@@ -302,8 +316,7 @@ sub shelfpage {
                     shelfname           => $shelfname,
                     shelfnumber         => $shelfnumber,
                     viewshelf           => $shelfnumber,
-                    authorsort          => $authorsort,
-                    yearsort            => $yearsort,
+                    sortfield           => $sortfield,
                     manageshelf         => $manageshelf,
                     allowremovingitems  => ShelfPossibleAction( $loggedinuser, $shelfnumber, 'delete'),
                     allowaddingitem     => ShelfPossibleAction( $loggedinuser, $shelfnumber, 'add'),
@@ -324,7 +337,7 @@ sub shelfpage {
         #Add a shelf
             if ( my $newshelf = $query->param('addshelf') ) {
 
-                # note: a user can always add a new shelf
+                # note: a user can always add a new shelf (except database administrator account)
                 my $shelfnumber = AddShelf( {
                     shelfname => $newshelf,
                     sortfield => $query->param('sortfield'),
@@ -335,7 +348,9 @@ sub shelfpage {
                     },
                     $query->param('owner') );
                 $stay = 1;
-                if ( $shelfnumber == -1 ) {    #shelf already exists.
+                if( !$shelfnumber ) {
+                    push @paramsloop, { addshelf_failed => 1 };
+                } elsif ( $shelfnumber == -1 ) {    #shelf already exists.
                     $showadd = 1;
                     push @paramsloop, { already => $newshelf };
                     $template->param( shelfnumber => $shelfnumber );
@@ -347,13 +362,22 @@ sub shelfpage {
 
         #Deleting a shelf (asking for confirmation if it has entries)
             foreach ( $query->param() ) {
-                /DEL-(\d+)/ or next;
+                /(DEL|REMSHR)-(\d+)/ or next;
                 $delflag = 1;
-                my $number = $1;
+                my $number = $2;
                 unless ( defined $shelflist->{$number} || defined $privshelflist->{$number} ) {
                     push( @paramsloop, { unrecognized => $number } );
                     last;
                 }
+                #remove a share
+                if(/REMSHR/) {
+                    RemoveShare($loggedinuser, $number);
+                    delete $shelflist->{$number} if exists $shelflist->{$number};
+                    delete $privshelflist->{$number} if exists $privshelflist->{$number};
+                    $stay=0;
+                    next;
+                }
+                #
                 unless ( ShelfPossibleAction( $loggedinuser, $number, 'manage' ) ) {
                     push( @paramsloop, { nopermission => $shelfnumber } );
                     last;
@@ -412,14 +436,6 @@ sub shelfpage {
         my $category  = $shelflist->{$element}->{'category'};
         my $owner     = $shelflist->{$element}->{'owner'}||0;
         my $canmanage = ShelfPossibleAction( $loggedinuser, $element, 'manage' );
-        my $sortfield = $shelflist->{$element}->{'sortfield'};
-        if ( $sortfield ){
-            if ( $sortfield eq 'author' ) {
-                $shelflist->{$element}->{"authorsort"} = 'author';
-            } elsif ( $sortfield eq 'year' ) {
-                $shelflist->{$element}->{"yearsort"} = 'year';
-            }
-        }
         $shelflist->{$element}->{"viewcategory$category"} = 1;
         $shelflist->{$element}->{manageshelf} = $canmanage;
         if($canmanage || ($loggedinuser && $owner==$loggedinuser)) {
@@ -429,6 +445,7 @@ sub shelfpage {
         $shelflist->{$element}->{ownername} = defined($member) ? $member->{firstname} . " " . $member->{surname} : '';
         $numberCanManage++ if $canmanage;    # possibly outmoded
         if ( $shelflist->{$element}->{'category'} eq '1' ) {
+            $shelflist->{$element}->{shares} = IsSharedList($element);
             push( @shelveslooppriv, $shelflist->{$element} );
         } else {
             push( @shelvesloop, $shelflist->{$element} );
@@ -437,7 +454,7 @@ sub shelfpage {
 
     my $url = $type eq 'opac' ? "/cgi-bin/koha/opac-shelves.pl" : "/cgi-bin/koha/virtualshelves/shelves.pl";
     my %qhash = ();
-    foreach (qw(display viewshelf sortfield)) {
+    foreach (qw(display viewshelf sortfield sort direction)) {
         $qhash{$_} = $query->param($_) if $query->param($_);
     }
     ( scalar keys %qhash ) and $url .= '?' . join '&', map { "$_=$qhash{$_}" } keys %qhash;
@@ -453,7 +470,7 @@ sub shelfpage {
         shelvesloopall                                                     => [ ( @shelvesloop, @shelveslooppriv ) ],
         numberCanManage                                                    => $numberCanManage,
         "BiblioDefaultView" . C4::Context->preference("BiblioDefaultView") => 1,
-        csv_profiles                                                       => GetCsvProfilesLoop()
+        csv_profiles                                                       => GetCsvProfilesLoop('marc')
     );
     if (   $shelfnumber
         or $shelves

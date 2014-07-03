@@ -2,9 +2,11 @@
 <title>Koha &rsaquo; Tools &rsaquo; Batch item modification</title>
 [% INCLUDE 'doc-head-close.inc' %]
 <script type="text/javascript" src="[% themelang %]/js/background-job-progressbar.js"></script>
-<link rel="stylesheet" type="text/css" href="[% themelang %]/css/pages/batchMod.css" />
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
+<script type="text/javascript" src="[% themelang %]/js/cataloging.js"></script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
+<script type="text/javascript" src="[% themelang %]/js/pages/batchMod.js"></script>
 <script type="text/javascript">
 //<![CDATA[
 
@@ -15,17 +17,7 @@ for( x=0; x<allColumns.length; x++ ){
   allColumns[x] = Number(allColumns[x]) + 2;
 }
 $(document).ready(function(){
-  $("#itemst").tablesorter({ widgets : ['zebra'], headers: {0:{sorter: false}} });
-  $("#selectallbutton").click(function() {
-      $("#itemst").find("input:checkbox").each(function() {
-   $(this).attr("checked", "checked");
-      });
-  });
-  $("#clearallbutton").click(function() {
-      $("#itemst").find("input:checkbox").each(function() {
-   $(this).removeAttr("checked");
-      });
-  });
+
   $("input[name='disable_input']").click(function() {
       var row = $(this).attr("id");
       row = row.replace("row","hint");
@@ -39,10 +31,10 @@ $(document).ready(function(){
           $("#"+row).html("");
       }
   });
+
 });
 //]]>
 </script>
-<script type="text/javascript" src="[% themelang %]/js/pages/batchMod.js"></script>
 <!--[if IE]>
 <style type="text/css">#selections { display: none; }</style>
 <![endif]-->
@@ -62,7 +54,14 @@ $(document).ready(function(){
 <div id="doc3" class="yui-t7">
     <div id="bd">
         <div id="yui-main">
-            [% IF ( show ) %]<h1>Batch item modification</h1>[% ELSE %]<h1>Batch item modification results</h1>[% END %]
+            [% IF ( show ) %]
+              <h1>Batch item modification</h1>
+            [% ELSE %]
+              <h1>Batch item modification results</h1>
+              <div class="dialog message">
+              [% modified_items %] item(s) modified (with [% modified_fields %] fields modified)
+              </div>
+            [% END %]
 [% IF ( barcode_not_unique ) %]<div class="dialog alert"><strong>Error saving item</strong>: Barcode must be unique.</div>[% END %]
 [% IF ( no_next_barcode ) %]<div class="dialog alert"><strong>Error saving items</strong>: Unable to automatically determine values for barcodes. No item has been inserted.</div>[% END %]
 [% IF ( book_on_loan ) %]<div class="dialog alert"><strong>Cannot Delete</strong>: item is checked out.</div>[% END %]
@@ -80,8 +79,10 @@ $(document).ready(function(){
         [% END %]
     </tbody>
       </table>
-      [% UNLESS ( too_many_items ) %]
-      <h4>The following barcodes were found: </h4>
+      [% IF ( item_loop ) %]
+          [% UNLESS ( too_many_items ) %]
+          <h4>The following barcodes were found: </h4>
+          [% END %]
       [% END %]
   [% END %] <!-- /notfoundbarcodes -->
 
@@ -91,9 +92,16 @@ $(document).ready(function(){
      <input type="hidden" name="runinbackground" id="runinbackground" value="" />
      <input type="hidden" name="completedJobID" id="completedJobID" value="" />
      <input type="hidden" name="src" id="src" value="[% src %]" />
+     [% IF biblionumber %]
+        <input type="hidden" name="biblionumber" id="biblionumber" value="[% biblionumber %]" />
+     [% END %]
 
 [% IF ( item_loop ) %]
-  [% IF ( show ) %]<div id="toolbar"><a id="selectallbutton" href="#">Select All</a> | <a id="clearallbutton" href="#">Clear All</a></div>[% ELSE %][% END %]
+  [% IF show %]
+    <div id="toolbar">
+      <a id="selectallbutton" href="#">Select all</a> | <a id="clearallbutton" href="#">Clear all</a> | <a id="clearonloanbutton" href="#">Clear on loan</a>
+    </div>
+  [% END %]
 <div id="cataloguing_additem_itemlist">
 
 <p id="selections"><strong>Show/hide columns:</strong> <span class="selected"><input type="checkbox" checked="checked" id="showall"/><label for="showall">Show all columns</label></span> <span><input type="checkbox" id="hideall"/><label for="hideall">Hide all columns</label></span> 
@@ -105,14 +113,24 @@ $(document).ready(function(){
       <thead>
     <tr>
         <th>&nbsp;</th>
-        <th>Title</th>
+        <th class="anti-the">Title</th>
         [% FOREACH item_header_loo IN item_header_loop %]
         <th> [% item_header_loo.header_value %] </th>
         [% END %] 
     </tr>
       </thead>
       <tbody>
-            [% FOREACH item_loo IN item_loop %] <tr> [% IF ( show ) %][% IF ( item_loo.nomod ) %] <td class="error">Cannot Edit</td>[% ELSE %]<td><input type="checkbox" name="itemnumber" value="[% item_loo.itemnumber %]" id="row[% item_loo.itemnumber %]" checked="checked" /></td>[% END %][% ELSE %]<td>&nbsp;</td>[% END %]
+            [% FOREACH item_loo IN item_loop %]
+              <tr>
+                [% IF show %]
+                  [% IF item_loo.nomod %]
+                    <td class="error">Cannot edit</td>
+                  [% ELSE %]
+                    <td><input type="checkbox" name="itemnumber" value="[% item_loo.itemnumber %]" id="row[% item_loo.itemnumber %]" checked="checked" data-is-onloan="[% item_loo.onloan %]" /></td>
+                  [% END %]
+                [% ELSE %]
+                  <td>&nbsp;</td>
+                [% END %]
                 <td><label for="row[% item_loo.itemnumber %]"><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% item_loo.biblionumber %]">[% item_loo.title %]</a>[% IF ( item_loo.author ) %], by [% item_loo.author %][% END %]</label></td>
                 [% FOREACH item_valu IN item_loo.item_value %] <td>[% item_valu.field |html %]</td> 
         [% END %] </tr>
@@ -137,11 +155,12 @@ $(document).ready(function(){
 
 [% IF ( too_many_items ) %]
     <p>Too many items ([% too_many_items %]): not displaying each one individually.</p>
-    [% FOREACH itemnumbers_hashre IN itemnumbers_hashref %]
-  <input type="hidden" name="itemnumber" value="[% itemnumbers_hashre.itemnumber %]" />
+    [% FOREACH itemnumber IN itemnumbers_array %]
+  <input type="hidden" name="itemnumber" value="[% itemnumber %]" />
     [% END %]
 [% END %]<!-- /too_many_items -->
 
+[% IF ( item_loop ) %]
 <div id="cataloguing_additem_newitem">
         <h2>Edit Items</h2>
         <div class="hint">Checking the box right next the subfield label will disable the entry and delete the subfield on all selected items. Leave fields blank to make no change.</div>
@@ -163,7 +182,9 @@ $(document).ready(function(){
                 <input type="hidden" name="subfield"       value="[% ite.subfield %]" />
                 <input type="hidden" name="mandatory"       value="[% ite.mandatory %]" />
                 [% IF ( ite.repeatable ) %]
-                    <span class="buttonPlus" onclick="CloneSubfield('subfield[% ite.tag %][% ite.subfield %][% ite.random %]')">+</span>
+                    <a href="#" class="buttonPlus" onclick="CloneItemSubfield(this.parentNode); return false;">
+                        <img src="[% interface %]/[% theme %]/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
+                    </a>
                 [% END %]
                 <span class="hint" id="hint[% ite.tag %][% ite.subfield %][% ite.random %]"></span>
             </div></li>
@@ -179,10 +200,15 @@ $(document).ready(function(){
          <a href="/cgi-bin/koha/tools/batchMod.pl" class="cancel" onclick="history.back();return false;">Cancel</a>
     </fieldset>
 </div>
+[% ELSE %]
+    <p><a href="/cgi-bin/koha/tools/batchMod.pl">Return to batch item modification</a></p>
+[% END %]
 [% ELSE %] <!-- // show -->
 <fieldset class="action">
-[% IF ( src == 'CATALOGUING') %]
-   <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% item_loo.biblionumber %]">Done</a>
+[% IF src == 'CATALOGUING' # from catalogue/detail.pl > Edit items in a batch%]
+   <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblionumber %]">Done</a>
+[% ELSIF src %]
+   <a href="[% src %]">Done</a>
 [% ELSE %]
    <a href="/cgi-bin/koha/tools/batchMod.pl">Done</a>
 [% END %]

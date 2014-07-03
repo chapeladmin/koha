@@ -9,7 +9,7 @@
   exclude-result-prefixes="marc items">
 
 <xsl:import href="UNIMARCslimUtils.xsl"/>
-<xsl:output method = "html" indent="yes" omit-xml-declaration = "yes" />
+<xsl:output method = "html" indent="yes" omit-xml-declaration = "yes" encoding="UTF-8"/>
 <xsl:key name="item-by-status" match="items:item" use="items:status"/>
 <xsl:key name="item-by-status-and-branch" match="items:item" use="concat(items:status, ' ', items:homebranch)"/>
 
@@ -28,6 +28,7 @@
 
   <xsl:variable name="hidelostitems" select="marc:sysprefs/marc:syspref[@name='hidelostitems']"/>
   <xsl:variable name="singleBranchMode" select="marc:sysprefs/marc:syspref[@name='singleBranchMode']"/>
+  <xsl:variable name="OPACURLOpenInNewWindow" select="marc:sysprefs/marc:syspref[@name='OPACURLOpenInNewWindow']"/>
 
   <xsl:if test="marc:datafield[@tag=200]">
     <xsl:for-each select="marc:datafield[@tag=200]">
@@ -79,23 +80,26 @@
   <xsl:call-template name="tag_title">
     <xsl:with-param name="tag">454</xsl:with-param>
     <xsl:with-param name="label">Translation of</xsl:with-param>
+    <xsl:with-param name="spanclass">original_title</xsl:with-param>
   </xsl:call-template>
 
   <xsl:call-template name="tag_title">
     <xsl:with-param name="tag">461</xsl:with-param>
     <xsl:with-param name="label">Set Level</xsl:with-param>
+    <xsl:with-param name="spanclass">set_level</xsl:with-param>
   </xsl:call-template>
 
   <xsl:call-template name="tag_title">
     <xsl:with-param name="tag">464</xsl:with-param>
     <xsl:with-param name="label">Piece-Analytic Level</xsl:with-param>
+    <xsl:with-param name="spanclass">piece_analytic_level</xsl:with-param>
   </xsl:call-template>
 
   <xsl:call-template name="tag_210" />
 
   <xsl:call-template name="tag_215" />
 
-  <span class="results_summary">
+  <span class="results_summary availability">
     <span class="label">Availability: </span>
     <xsl:choose>
       <xsl:when test="marc:datafield[@tag=856]">
@@ -106,6 +110,9 @@
                 <xsl:attribute name="href">
                   <xsl:value-of select="marc:subfield[@code='u']"/>
                 </xsl:attribute>
+                <xsl:if test="$OPACURLOpenInNewWindow='1'">
+                    <xsl:attribute name="target">_blank</xsl:attribute>
+                </xsl:if>
                 <xsl:choose>
                   <xsl:when test="marc:subfield[@code='y' or @code='3' or @code='z']">
                     <xsl:call-template name="subfieldSelect">                        
@@ -126,11 +133,11 @@
         </xsl:for-each>
       </xsl:when>
       <xsl:when test="count(key('item-by-status', 'available'))=0 and count(key('item-by-status', 'reference'))=0">
-        No copies available
+        No items available
       </xsl:when>
       <xsl:when test="count(key('item-by-status', 'available'))>0">
         <span class="available">
-          <b><xsl:text>Copies available for loan: </xsl:text></b>
+          <b><xsl:text>Items available for loan: </xsl:text></b>
           <xsl:variable name="available_items" select="key('item-by-status', 'available')"/>
       <xsl:choose>
       <xsl:when test="$singleBranchMode=1">
@@ -167,11 +174,13 @@
     <xsl:choose>
       <xsl:when test="count(key('item-by-status', 'reference'))>0">
         <span class="available">
-          <b><xsl:text>Copies available for reference: </xsl:text></b>
+          <b><xsl:text>Items available for reference: </xsl:text></b>
           <xsl:variable name="reference_items"
                         select="key('item-by-status', 'reference')"/>
           <xsl:for-each select="$reference_items[generate-id() = generate-id(key('item-by-status-and-branch', concat(items:status, ' ', items:homebranch))[1])]">
-            <xsl:value-of select="items:homebranch"/>
+            <xsl:if test="$singleBranchMode=0">
+                <xsl:value-of select="items:homebranch"/>
+            </xsl:if>
             <xsl:if test="items:itemcallnumber != '' and items:itemcallnumber">[<xsl:value-of select="items:itemcallnumber"/>]</xsl:if>
             <xsl:text> (</xsl:text>
             <xsl:value-of select="count(key('item-by-status-and-branch', concat(items:status, ' ', items:homebranch)))"/>
@@ -216,7 +225,7 @@
         <xsl:text>). </xsl:text>
       </span>
     </xsl:if>
-    <xsl:if test="count(key('item-by-status', 'On Orangemanr'))>0">
+    <xsl:if test="count(key('item-by-status', 'On order'))>0">
       <span class="unavailable">
         <xsl:text>On order (</xsl:text>
         <xsl:value-of select="count(key('item-by-status', 'On order'))"/>

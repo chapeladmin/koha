@@ -40,6 +40,8 @@ my $borcatfilter    = $input->param('borcat') || '';
 my $itemtypefilter  = $input->param('itemtype') || '';
 my $borflagsfilter  = $input->param('borflag') || '';
 my $branchfilter    = $input->param('branch') || '';
+my $homebranchfilter    = $input->param('homebranch') || '';
+my $holdingbranchfilter = $input->param('holdingbranch') || '';
 my $op              = $input->param('op') || '';
 my $dateduefrom = format_date_in_iso($input->param( 'dateduefrom' )) || '';
 my $datedueto   = format_date_in_iso($input->param( 'datedueto' )) || '';
@@ -60,7 +62,7 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
         query           => $input,
         type            => "intranet",
         authnotrequired => 0,
-        flagsrequired   => { reports => 1, circulate => "circulate_remaining_permissions" },
+        flagsrequired   => { circulate => "overdues_report" },
         debug           => 1,
     }
 );
@@ -89,10 +91,11 @@ while (my ($itemtype, $description) =$req->fetchrow) {
         itemtypename => $description,
     };
 }
-my $onlymine=C4::Context->preference('IndependantBranches') && 
-             C4::Context->userenv &&
-             C4::Context->userenv->{flags} % 2 !=1 &&
-             C4::Context->userenv->{branch};
+my $onlymine =
+     C4::Context->preference('IndependentBranches')
+  && C4::Context->userenv
+  && !C4::Context->IsSuperLibrarian()
+  && C4::Context->userenv->{branch};
 
 $branchfilter = C4::Context->userenv->{'branch'} if ($onlymine && !$branchfilter);
 
@@ -214,14 +217,17 @@ if (@patron_attr_filter_loop) {
 $template->param(
     patron_attr_header_loop => [ map { { header => $_->{description} } } grep { ! $_->{isclone} } @patron_attr_filter_loop ],
     branchloop   => GetBranchesLoop($branchfilter, $onlymine),
+    homebranchloop => GetBranchesLoop( $homebranchfilter, $onlymine ),
+    holdingbranchloop => GetBranchesLoop( $holdingbranchfilter, $onlymine ),
     branchfilter => $branchfilter,
+    homebranchfilter => $homebranchfilter,
+    holdingbranchfilter => $homebranchfilter,
     borcatloop=> \@borcatloop,
     itemtypeloop => \@itemtypeloop,
     patron_attr_filter_loop => \@patron_attr_filter_loop,
     borname => $bornamefilter,
     order => $order,
     showall => $showall,
-    DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
     dateduefrom => $input->param( 'dateduefrom' ) || '',
     datedueto   => $input->param( 'datedueto' ) || '',
 );
@@ -261,6 +267,8 @@ if ($noreport) {
         issues.itemnumber,
         issues.issuedate,
         items.barcode,
+        items.homebranch,
+        items.holdingbranch,
         biblio.title,
         biblio.author,
         borrowers.borrowernumber,
@@ -296,6 +304,8 @@ if ($noreport) {
         $strsth .= " AND borrowers.lost <> 0";
     }
     $strsth.=" AND borrowers.branchcode   = '" . $branchfilter   . "' " if $branchfilter;
+    $strsth.=" AND items.homebranch       = '" . $homebranchfilter . "' " if $homebranchfilter;
+    $strsth.=" AND items.holdingbranch    = '" . $holdingbranchfilter . "' " if $holdingbranchfilter;
     $strsth.=" AND date_due < '" . $datedueto . "' "  if $datedueto;
     $strsth.=" AND date_due > '" . $dateduefrom . "' " if $dateduefrom;
     # restrict patrons (borrowers) to those matching the patron attribute filter(s), if any
@@ -353,6 +363,8 @@ if ($noreport) {
             title                  => $data->{title},
             author                 => $data->{author},
             branchcode             => $data->{branchcode},
+            homebranchcode         => $data->{homebranchcode},
+            holdingbranchcode      => $data->{holdingbranchcode},
             itemcallnumber         => $data->{itemcallnumber},
             replacementprice       => $data->{replacementprice},
             enumchron              => $data->{enumchron},

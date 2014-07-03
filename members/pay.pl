@@ -29,6 +29,7 @@
 use strict;
 use warnings;
 
+use URI::Escape;
 use C4::Context;
 use C4::Auth;
 use C4::Output;
@@ -42,15 +43,14 @@ use C4::Branch;
 use C4::Members::Attributes qw(GetBorrowerAttributes);
 
 our $input = CGI->new;
-our $writeoff_sth;
-our $add_writeoff_sth;
 
+my $updatecharges_permissions = $input->param('woall') ? 'writeoff' : 'remaining_permissions';
 our ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     {   template_name   => 'members/pay.tmpl',
         query           => $input,
         type            => 'intranet',
         authnotrequired => 0,
-        flagsrequired   => { borrowers => 1, updatecharges => 1 },
+        flagsrequired   => { borrowers => 1, updatecharges => $updatecharges_permissions },
         debug           => 1,
     }
 );
@@ -89,7 +89,8 @@ if ($writeoff_all) {
     my $itemno       = $input->param('itemnumber');
     my $account_type = $input->param('accounttype');
     my $amount       = $input->param('amountoutstanding');
-    WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $account_type, $amount, $branch );
+    my $payment_note = $input->param("payment_note");
+    WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $account_type, $amount, $branch, $payment_note );
 }
 
 for (@names) {
@@ -102,29 +103,14 @@ for (@names) {
     }
 }
 
-$template->param( activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne '') );
+$template->param(
+    activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+    RoutingSerials => C4::Context->preference('RoutingSerials'),
+);
 
 add_accounts_to_template();
 
 output_html_with_http_headers $input, $cookie, $template->output;
-
-sub writeoff {
-    my ( $accountlines_id, $itemnum, $accounttype, $amount ) = @_;
-    my $manager_id = 0;
-    $manager_id = C4::Context->userenv->{'number'} if C4::Context->userenv;
-
-    # if no item is attached to fine, make sure to store it as a NULL
-    $itemnum ||= undef;
-    get_writeoff_sth();
-    $writeoff_sth->execute( $accountlines_id );
-
-    my $acct = getnextacctno($borrowernumber);
-    $add_writeoff_sth->execute( $borrowernumber, $acct, $itemnum, $amount, $manager_id );
-
-    UpdateStats( $branch, 'writeoff', $amount, q{}, q{}, q{}, $borrowernumber );
-
-    return;
-}
 
 sub add_accounts_to_template {
 
@@ -181,12 +167,12 @@ sub redirect_to_paycollect {
     $redirect .=
       get_for_redirect( 'amountoutstanding', "amountoutstanding$line_no", 1 );
     $redirect .= get_for_redirect( 'accountno',    "accountno$line_no",    0 );
-    $redirect .= get_for_redirect( 'description',  "description$line_no",  0 );
     $redirect .= get_for_redirect( 'title',        "title$line_no",        0 );
     $redirect .= get_for_redirect( 'itemnumber',   "itemnumber$line_no",   0 );
     $redirect .= get_for_redirect( 'notify_id',    "notify_id$line_no",    0 );
     $redirect .= get_for_redirect( 'notify_level', "notify_level$line_no", 0 );
     $redirect .= get_for_redirect( 'accountlines_id', "accountlines_id$line_no", 0 );
+    $redirect .= q{&} . 'payment_note' . q{=} . uri_escape( $input->param("payment_note_$line_no") );
     $redirect .= '&remote_user=';
     $redirect .= $user;
     return print $input->redirect($redirect);
@@ -205,7 +191,8 @@ sub writeoff_all {
             my $amount    = $input->param("amountoutstanding$value");
             my $accountno = $input->param("accountno$value");
             my $accountlines_id = $input->param("accountlines_id$value");
-            WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $accounttype, $amount, $branch );
+            my $payment_note = $input->param("payment_note_$value");
+            WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $accounttype, $amount, $branch, $payment_note );
         }
     }
 
@@ -234,7 +221,7 @@ sub borrower_add_additional_fields {
     } elsif ( $b_ref->{category_type} eq 'A' ) {
         $b_ref->{adultborrower} = 1;
     }
-    my ( $picture, $dberror ) = GetPatronImage( $b_ref->{cardnumber} );
+    my ( $picture, $dberror ) = GetPatronImage( $b_ref->{borrowernumber} );
     if ($picture) {
         $b_ref->{has_picture} = 1;
     }
@@ -263,31 +250,13 @@ sub payselected {
     }
     $amt = '&amt=' . $amt;
     my $sel = '&selected=' . join ',', @lines_to_pay;
+    my $notes = '&notes=' . join("%0A", map { $input->param("payment_note_$_") } @lines_to_pay );
     my $redirect =
         "/cgi-bin/koha/members/paycollect.pl?borrowernumber=$borrowernumber"
       . $amt
-      . $sel;
+      . $sel
+      . $notes;
 
     print $input->redirect($redirect);
-    return;
-}
-
-sub get_writeoff_sth {
-
-    # lets prepare these statement handles only once
-    if ($writeoff_sth) {
-        return;
-    } else {
-        my $dbh = C4::Context->dbh;
-
-        # Do we need to validate accounttype
-        my $sql = 'Update accountlines set amountoutstanding=0 '
-          . 'WHERE accountlines_id=?';
-        $writeoff_sth = $dbh->prepare($sql);
-        my $insert =
-q{insert into accountlines (borrowernumber,accountno,itemnumber,date,amount,description,accounttype,manager_id)}
-          . q{values (?,?,?,now(),?,'Writeoff','W',?)};
-        $add_writeoff_sth = $dbh->prepare($insert);
-    }
     return;
 }

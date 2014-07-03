@@ -28,6 +28,7 @@ use C4::Output;
 use CGI;
 use C4::Acquisition;
 use C4::Budgets;
+use C4::Branch;
 use C4::Bookseller qw( GetBookSellerFromId);
 use C4::Debug;
 use C4::Biblio;
@@ -65,7 +66,7 @@ the supplier this script have to display the basket.
 =cut
 
 my $query        = new CGI;
-my $basketno     = $query->param('basketno');
+our $basketno     = $query->param('basketno');
 my $booksellerid = $query->param('booksellerid');
 
 my ( $template, $loggedinuser, $cookie, $userflags ) = get_template_and_user(
@@ -80,13 +81,25 @@ my ( $template, $loggedinuser, $cookie, $userflags ) = get_template_and_user(
 );
 
 my $basket = GetBasket($basketno);
+$booksellerid = $basket->{booksellerid} unless $booksellerid;
+my ($bookseller) = GetBookSellerFromId($booksellerid);
+
+unless (CanUserManageBasket($loggedinuser, $basket, $userflags)) {
+    $template->param(
+        cannot_manage_basket => 1,
+        basketno => $basketno,
+        basketname => $basket->{basketname},
+        booksellerid => $booksellerid,
+        name => $bookseller->{name}
+    );
+    output_html_with_http_headers $query, $cookie, $template->output;
+    exit;
+}
 
 # FIXME : what about the "discount" percentage?
 # FIXME : the query->param('booksellerid') below is probably useless. The bookseller is always known from the basket
 # if no booksellerid in parameter, get it from basket
 # warn "=>".$basket->{booksellerid};
-$booksellerid = $basket->{booksellerid} unless $booksellerid;
-my ($bookseller) = GetBookSellerFromId($booksellerid);
 my $op = $query->param('op');
 if (!defined $op) {
     $op = q{};
@@ -97,15 +110,51 @@ $template->param( skip_confirm_reopen => 1) if $confirm_pref eq '2';
 
 if ( $op eq 'delete_confirm' ) {
     my $basketno = $query->param('basketno');
-    DelBasket($basketno);
+    my $delbiblio = $query->param('delbiblio');
+    my @orders = GetOrders($basketno);
+#Delete all orders included in that basket, and all items received.
+    foreach my $myorder (@orders){
+        DelOrder($myorder->{biblionumber},$myorder->{ordernumber});
+    }
+# if $delbiblio = 1, delete the records if possible
+    if ((defined $delbiblio)and ($delbiblio ==1)){
+        my @cannotdelbiblios ;
+        foreach my $myorder (@orders){
+            my $biblionumber = $myorder->{'biblionumber'};
+            my $countbiblio = CountBiblioInOrders($biblionumber);
+            my $ordernumber = $myorder->{'ordernumber'};
+            my $subscriptions = scalar GetSubscriptionsId ($biblionumber);
+            my $itemcount = GetItemsCount($biblionumber);
+            my $error;
+            if ($countbiblio == 0 && $itemcount == 0 && $subscriptions == 0) {
+                $error = DelBiblio($myorder->{biblionumber}) }
+            else {
+                push @cannotdelbiblios, {biblionumber=> ($myorder->{biblionumber}),
+                                         title=> $myorder->{'title'},
+                                         author=> $myorder->{'author'},
+                                         countbiblio=> $countbiblio,
+                                         itemcount=>$itemcount,
+                                         subscriptions=>$subscriptions};
+            }
+            if ($error) {
+                push @cannotdelbiblios, {biblionumber=> ($myorder->{biblionumber}),
+                                         title=> $myorder->{'title'},
+                                         author=> $myorder->{'author'},
+                                         othererror=> $error};
+            }
+        }
+        $template->param( cannotdelbiblios => \@cannotdelbiblios );
+    }
+ # delete the basket
+    DelBasket($basketno,);
     $template->param( delete_confirmed => 1 );
 } elsif ( !$bookseller ) {
     $template->param( NO_BOOKSELLER => 1 );
 } elsif ( $op eq 'del_basket') {
     $template->param( delete_confirm => 1 );
-    if ( C4::Context->preference("IndependantBranches") ) {
+    if ( C4::Context->preference("IndependentBranches") ) {
         my $userenv = C4::Context->userenv;
-        unless ( $userenv->{flags} == 1 ) {
+        unless ( C4::Context->IsSuperLibrarian() ) {
             my $validtest = ( $basket->{creationdate} eq '' )
               || ( $userenv->{branch} eq $basket->{branch} )
               || ( $userenv->{branch} eq '' )
@@ -140,9 +189,6 @@ if ( $op eq 'delete_confirm' ) {
         address3             => $bookseller->{'address3'},
         address4             => $bookseller->{'address4'},
       );
-} elsif ($op eq 'attachbasket' && $template->{'VARS'}->{'CAN_user_acquisition_group_manage'} == 1) {
-      print $query->redirect('/cgi-bin/koha/acqui/basketgroup.pl?basketno=' . $basket->{'basketno'} . '&op=attachbasket&booksellerid=' . $booksellerid);
-    # check if we have to "close" a basket before building page
 } elsif ($op eq 'export') {
     print $query->header(
         -type       => 'text/csv',
@@ -177,24 +223,38 @@ if ( $op eq 'delete_confirm' ) {
         }
         exit;
     } else {
-    $template->param(confirm_close => "1",
-            booksellerid    => $booksellerid,
-            basketno        => $basket->{'basketno'},
-                basketname      => $basket->{'basketname'},
-            basketgroupname => $basket->{'basketname'});
-        
+    $template->param(
+        confirm_close   => "1",
+        booksellerid    => $booksellerid,
+        basketno        => $basket->{'basketno'},
+        basketname      => $basket->{'basketname'},
+        basketgroupname => $basket->{'basketname'},
+    );
     }
 } elsif ($op eq 'reopen') {
-    my $basket;
-    $basket->{basketno} = $query->param('basketno');
-    $basket->{closedate} = undef;
-    ModBasket($basket);
+    ReopenBasket($query->param('basketno'));
     print $query->redirect('/cgi-bin/koha/acqui/basket.pl?basketno='.$basket->{'basketno'})
+} elsif ( $op eq 'mod_users' ) {
+    my $basketusers_ids = $query->param('basketusers_ids');
+    my @basketusers = split( /:/, $basketusers_ids );
+    ModBasketUsers($basketno, @basketusers);
+    print $query->redirect("/cgi-bin/koha/acqui/basket.pl?basketno=$basketno");
+    exit;
+} elsif ( $op eq 'mod_branch' ) {
+    my $branch = $query->param('branch');
+    $branch = undef if(defined $branch and $branch eq '');
+    ModBasket({
+        basketno => $basket->{basketno},
+        branch   => $branch
+    });
+    print $query->redirect("/cgi-bin/koha/acqui/basket.pl?basketno=$basketno");
+    exit;
 } else {
+    my @branches_loop;
     # get librarian branch...
-    if ( C4::Context->preference("IndependantBranches") ) {
+    if ( C4::Context->preference("IndependentBranches") ) {
         my $userenv = C4::Context->userenv;
-        unless ( $userenv->{flags} == 1 ) {
+        unless ( C4::Context->IsSuperLibrarian() ) {
             my $validtest = ( $basket->{creationdate} eq '' )
               || ( $userenv->{branch} eq $basket->{branch} )
               || ( $userenv->{branch} eq '' )
@@ -204,24 +264,45 @@ if ( $op eq 'delete_confirm' ) {
                 exit 1;
             }
         }
+        if (!defined $basket->{branch} or $basket->{branch} eq $userenv->{branch}) {
+            push @branches_loop, {
+                branchcode => $userenv->{branch},
+                branchname => $userenv->{branchname},
+                selected => 1,
+            };
+        }
+    } else {
+        # get branches
+        my $branches = C4::Branch::GetBranches;
+        my @branchcodes = sort {
+            $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname}
+        } keys %$branches;
+        foreach my $branch (@branchcodes) {
+            my $selected = 0;
+            if (defined $basket->{branch}) {
+                $selected = 1 if $branch eq $basket->{branch};
+            } else {
+                $selected = 1 if $branch eq C4::Context->userenv->{branch};
+            }
+            push @branches_loop, {
+                branchcode => $branch,
+                branchname => $branches->{$branch}->{branchname},
+                selected => $selected
+            };
+        }
     }
+
 #if the basket is closed,and the user has the permission to edit basketgroups, display a list of basketgroups
-    my $basketgroups;
-    my $member = GetMember(borrowernumber => $loggedinuser);
-    if ($basket->{closedate} && haspermission({ acquisition => 'group_manage'} )) {
+    my ($basketgroup, $basketgroups);
+    my $staffuser = GetMember(borrowernumber => $loggedinuser);
+    if ($basket->{closedate} && haspermission($staffuser->{userid}, { acquisition => 'group_manage'} )) {
         $basketgroups = GetBasketgroups($basket->{booksellerid});
         for my $bg ( @{$basketgroups} ) {
             if ($basket->{basketgroupid} && $basket->{basketgroupid} == $bg->{id}){
                 $bg->{default} = 1;
+                $basketgroup = $bg;
             }
         }
-        my %emptygroup = ( id   =>   undef,
-                           name =>   "No group");
-        if ( ! $basket->{basketgroupid} ) {
-            $emptygroup{default} = 1;
-            $emptygroup{nogroup} = 1;
-        }
-        unshift( @$basketgroups, \%emptygroup );
     }
 
     # if the basket is closed, calculate estimated delivery date
@@ -239,6 +320,13 @@ if ( $op eq 'delete_confirm' ) {
       and warn sprintf
       "loggedinuser: $loggedinuser; creationdate: %s; authorisedby: %s",
       $basket->{creationdate}, $basket->{authorisedby};
+
+    my @basketusers_ids = GetBasketUsers($basketno);
+    my @basketusers;
+    foreach my $basketuser_id (@basketusers_ids) {
+        my $basketuser = GetMember(borrowernumber => $basketuser_id);
+        push @basketusers, $basketuser if $basketuser;
+    }
 
     #to get active currency
     my $cur = GetCurrency();
@@ -286,13 +374,9 @@ if ( $op eq 'delete_confirm' ) {
     my @orders = GetOrders($basketno);
 
     if ($basket->{basketgroupid}){
-        my $basketgroup = GetBasketgroup($basket->{basketgroupid});
-        for my $key (keys %$basketgroup ){
-            $basketgroup->{"basketgroup$key"} = delete $basketgroup->{$key};
-        }
-        $basketgroup->{basketgroupdeliveryplace} = C4::Branch::GetBranchName( $basketgroup->{basketgroupdeliveryplace} );
-        $basketgroup->{basketgroupbillingplace} = C4::Branch::GetBranchName( $basketgroup->{basketgroupbillingplace} );
-        $template->param(%$basketgroup);
+        $basketgroup = GetBasketgroup($basket->{basketgroupid});
+        $basketgroup->{deliveryplacename} = C4::Branch::GetBranchName( $basketgroup->{deliveryplace} );
+        $basketgroup->{billingplacename} = C4::Branch::GetBranchName( $basketgroup->{billingplace} );
     }
     my $borrower= GetMember('borrowernumber' => $loggedinuser);
     my $budgets = GetBudgetHierarchy;
@@ -307,21 +391,20 @@ if ( $op eq 'delete_confirm' ) {
         last;
     }
 
-    my @cancelledorders = GetCancelledOrders($basketno);
-    foreach (@cancelledorders) {
-        $_->{'line_total'} = sprintf("%.2f", $_->{'ecost'} * $_->{'quantity'});
-    }
-
     $template->param(
         basketno             => $basketno,
         basketname           => $basket->{'basketname'},
+        basketbranchname     => C4::Branch::GetBranchName($basket->{branch}),
         basketnote           => $basket->{note},
         basketbooksellernote => $basket->{booksellernote},
         basketcontractno     => $basket->{contractnumber},
         basketcontractname   => $contract->{contractname},
+        branches_loop        => \@branches_loop,
         creationdate         => $basket->{creationdate},
         authorisedby         => $basket->{authorisedby},
         authorisedbyname     => $basket->{authorisedbyname},
+        basketusers_ids      => join(':', @basketusers_ids),
+        basketusers          => \@basketusers,
         closedate            => $basket->{closedate},
         estimateddeliverydate=> $estimateddeliverydate,
         deliveryplace        => C4::Branch::GetBranchName( $basket->{deliveryplace} ),
@@ -331,7 +414,7 @@ if ( $op eq 'delete_confirm' ) {
         name                 => $bookseller->{'name'},
         books_loop           => \@books_loop,
         book_foot_loop       => \@book_foot_loop,
-        cancelledorders_loop => \@cancelledorders,
+        cancelledorders_loop => \@cancelledorders_loop,
         total_quantity       => $total_quantity,
         total_gste           => sprintf( "%.2f", $total_gste ),
         total_gsti           => sprintf( "%.2f", $total_gsti ),
@@ -339,6 +422,7 @@ if ( $op eq 'delete_confirm' ) {
         currency             => $cur->{'currency'},
         listincgst           => $bookseller->{listincgst},
         basketgroups         => $basketgroups,
+        basketgroup          => $basketgroup,
         grouped              => $basket->{basketgroupid},
         unclosable           => @orders ? 0 : 1, 
         has_budgets          => $has_budgets,
@@ -425,6 +509,20 @@ sub get_order_infos {
     $line{suggestionid}         = $$suggestion{suggestionid};
     $line{surnamesuggestedby}   = $$suggestion{surnamesuggestedby};
     $line{firstnamesuggestedby} = $$suggestion{firstnamesuggestedby};
+
+    foreach my $key (qw(transferred_from transferred_to)) {
+        if ($line{$key}) {
+            my $order = GetOrder($line{$key});
+            my $basket = GetBasket($order->{basketno});
+            my $bookseller = GetBookSellerFromId($basket->{booksellerid});
+            $line{$key} = {
+                order => $order,
+                basket => $basket,
+                bookseller => $bookseller,
+                timestamp => $line{$key . '_timestamp'},
+            };
+        }
+    }
 
     return \%line;
 }

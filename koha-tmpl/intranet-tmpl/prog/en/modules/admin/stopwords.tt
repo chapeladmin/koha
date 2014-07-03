@@ -7,16 +7,11 @@
 [% END %]
 </title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script language="javascript" type="text/javascript">
+<script type="text/javascript">
 //<![CDATA[
     $(document).ready(function() {
         new YAHOO.widget.Button("newstopword");
     });
-    function toUC(f) {
-        var x=f.value.toUpperCase();
-        f.value=x;
-        return true;
-    }
     function Check(f) {
         if (f.word.value.length==0) {
             alert(_("Form not submitted: word missing"));

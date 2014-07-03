@@ -72,7 +72,7 @@ if ($src eq 'circ') {   # if we were called from circulation, use the circulatio
     use C4::Members;
     my $borrowernumber = $object;
     my $data = GetMember('borrowernumber'=>$borrowernumber);
-    my ($picture, $dberror) = GetPatronImage($data->{'cardnumber'});
+    my ($picture, $dberror) = GetPatronImage($data->{'borrowernumber'});
     $template->param( picture => 1 ) if $picture;
     
     $template->param(   menu            => 1,
@@ -96,14 +96,13 @@ if ($src eq 'circ') {   # if we were called from circulation, use the circulatio
                         email           => $data->{'email'},
                         branchcode      => $data->{'branchcode'},
                         branchname		=> GetBranchName($data->{'branchcode'}),
+                        RoutingSerials => C4::Context->preference('RoutingSerials'),
     );
 }
 
 $template->param(
-	DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
-	              dateformat => C4::Dates->new()->format(),
-				       debug => $debug,
-	C4::Search::enabled_staff_search_views,
+    debug => $debug,
+    C4::Search::enabled_staff_search_views,
 );
 
 if ($do_it) {
@@ -116,7 +115,7 @@ if ($do_it) {
     @data=@$results;
     my $total = scalar @data;
     foreach my $result (@data){
-	if ($result->{'info'} eq 'item'||$result->{module} eq "CIRCULATION"){
+	if (substr($result->{'info'}, 0, 4) eq 'item' || $result->{module} eq "CIRCULATION"){
 	    # get item information so we can create a working link
         my $itemnumber=$result->{'object'};
         $itemnumber=$result->{'info'} if ($result->{module} eq "CIRCULATION");
@@ -125,6 +124,28 @@ if ($do_it) {
 	    $result->{'biblioitemnumber'}=$item->{'biblionumber'};		
         $result->{'barcode'}=$item->{'barcode'};
 	}
+    #always add firstname and surname for librarian/user
+    if ($result->{'user'}){
+        my $userdetails = C4::Members::GetMemberDetails($result->{'user'});
+        if ($userdetails->{'firstname'}){
+            $result->{'userfirstname'} = $userdetails->{'firstname'};
+        }
+        if ($userdetails->{'surname'}){
+            $result->{'usersurname'} = $userdetails->{'surname'};
+        }
+    }
+    #add firstname and surname for borrower, when using the CIRCULATION, MEMBERS, FINES
+    if ($result->{module} eq "CIRCULATION" || $result->{module} eq "MEMBERS" || $result->{module} eq "FINES"){
+        if($result->{'object'}){
+            my $borrowerdetails = C4::Members::GetMemberDetails($result->{'object'});
+            if ($borrowerdetails->{'firstname'}){
+            $result->{'borrowerfirstname'} = $borrowerdetails->{'firstname'};
+            }
+            if ($borrowerdetails->{'surname'}){
+                $result->{'borrowersurname'} = $borrowerdetails->{'surname'};
+            }
+        }
+    }
     }
     
     if ( $output eq "screen" ) {

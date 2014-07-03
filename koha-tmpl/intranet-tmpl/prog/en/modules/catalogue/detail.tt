@@ -1,4 +1,22 @@
+[% USE Koha %]
+[% USE KohaDates %]
+[% USE AuthorisedValues %]
+
+[% ShowCourseReserves = 0 %]
+[% IF UseCourseReserves %]
+    [% FOREACH item IN itemloop %]
+       [% IF item.course_reserves %]
+           [% FOREACH r IN item.course_reserves %]
+               [% IF r.course.enabled == 'yes' %]
+                   [% ShowCourseReserves = 1 %]
+               [% END %]
+           [% END %]
+        [% END %]
+    [% END %]
+[% END %]
+
 [% INCLUDE 'doc-head-open.inc' %]
+[% INCLUDE 'greybox.inc' %]
 <title>Koha &rsaquo; Catalog &rsaquo;
   [% IF ( unknownbiblionumber ) %]
     Unknown record
@@ -6,12 +24,12 @@
     Details for [% title |html %] [% FOREACH subtitl IN subtitle %] [% subtitl.subfield %][% END %]
   [% END %]
 </title>
-[% INCLUDE 'doc-head-close.inc' %]<script type="text/JavaScript" language="JavaScript">
+[% INCLUDE 'doc-head-close.inc' %]<script type="text/JavaScript">
 //<![CDATA[
 // http://www.oreillynet.com/pub/a/javascript/2003/10/21/amazonhacks.html
 function verify_images() {
     $("#bookcoverimg img").each(function(i){
-           if ((this.src.indexOf('images.amazon.com') >= 0) || (this.src.indexOf('g-images.amazon.com') >=0)) {
+           if ((this.src.indexOf('images.amazon.com') >= 0) || (this.src.indexOf('g-images.amazon.com') >=0) || (this.src.indexOf('images-na.ssl-images-amazon.com'))) {
             w = this.width;
             h = this.height;
             if ((w == 1) || (h == 1)) {
@@ -24,24 +42,233 @@ function verify_images() {
         }
         });
 	$("#editions img").each(function(i){
-           if ((this.src.indexOf('images.amazon.com') >= 0) || (this.src.indexOf('g-images.amazon.com') >=0)) {
+           if ((this.src.indexOf('images.amazon.com') >= 0) || (this.src.indexOf('g-images.amazon.com') >=0) || (this.src.indexOf('images-na.ssl-images-amazon.com'))) {
             w = this.width;
             h = this.height;
             if ((w == 1) || (h == 1)) {
-				this.src = 'http://g-images.amazon.com/images/G/01/x-site/icons/no-img-sm.gif';
+                          this.src = 'https://images-na.ssl-images-amazon.com/images/G/01/x-site/icons/no-img-sm.gif';
             } else if ((this.complete != null) && (!this.complete)) {
-				this.src = 'http://g-images.amazon.com/images/G/01/x-site/icons/no-img-sm.gif';
+                             this.src = 'https://images-na.ssl-images-amazon.com/images/G/01/x-site/icons/no-img-sm.gif';
             }
         }
         });
 }
+
+    function removeLocalImage(imagenumber) {
+
+        $.ajax({
+            url: "/cgi-bin/koha/svc/cover_images?action=delete&biblionumber=" + [% biblionumber %] + "&imagenumber=" + imagenumber,
+            success: function(data) {
+                $(data).each( function(i) {
+                    if ( this.deleted == 1 ) {
+                        $('#imagenumber-' + this.imagenumber).remove();
+                    }
+                });
+            },
+            error: function(data) {
+                alert(_("An error occurred on deleting this image"));
+            }
+        });
+
+    }
+
+    [% IF StaffDetailItemSelection %]
+        function selectAllItems(div) {
+            $("input[name='itemnumber'][type='checkbox']", div).attr('checked', 'checked');
+            itemSelectionBuildActionLinks(div);
+        }
+
+        function clearAllItems(div) {
+            $("input[name='itemnumber'][type='checkbox']", div).removeAttr('checked');
+            itemSelectionBuildActionLinks(div);
+        }
+
+        function itemSelectionBuildDeleteLink(div) {
+            var itemnumbers = new Array();
+            $("input[name='itemnumber'][type='checkbox']:checked", div).each(function() {
+                itemnumbers.push($(this).val());
+            });
+            if (itemnumbers.length > 0) {
+                  var url = '/cgi-bin/koha/tools/batchMod.pl?op=show&del=1';
+                  url += '&itemnumber=' + itemnumbers.join('&itemnumber=');
+                  url += '&src=' + '[% "/cgi-bin/koha/catalogue/detail.pl?biblionumber=$biblionumber" |uri %]';
+                  $('a.itemselection_action_delete').attr('href', url);
+                  $('a.itemselection_action_delete').show();
+            } else {
+                $('a.itemselection_action_delete').hide();
+                return false;
+            }
+            return true
+        }
+
+        function itemSelectionBuildModifyLink(div) {
+            var itemnumbers = new Array();
+            $("input[name='itemnumber'][type='checkbox']:checked", div).each(function() {
+                itemnumbers.push($(this).val());
+            });
+            if (itemnumbers.length > 0) {
+                  var url = '/cgi-bin/koha/tools/batchMod.pl?op=show';
+                  url += '&itemnumber=' + itemnumbers.join('&itemnumber=');
+                  url += '&src=' + '[% "/cgi-bin/koha/catalogue/detail.pl?biblionumber=$biblionumber" |uri %]';
+                  $('a.itemselection_action_modify').attr('href', url);
+                  $('a.itemselection_action_modify').show();
+            } else {
+                $('a.itemselection_action_modify').hide();
+                return false;
+            }
+            return true;
+        }
+
+        function itemSelectionBuildActionLinks(div) {
+          var delete_link_ok = itemSelectionBuildDeleteLink(div);
+          var modify_link_ok = itemSelectionBuildModifyLink(div);
+          if (modify_link_ok || delete_link_ok) {
+            $('.itemselection_actions', div).show();
+          } else {
+            $('.itemselection_actions', div).hide();
+          }
+        }
+
+        $(document).ready(function() {
+          $('table.items_table').each(function() {
+            var div = $(this).parent().parent();
+            itemSelectionBuildActionLinks(div);
+          });
+          $("input[name='itemnumber'][type='checkbox']").change(function() {
+            var div = $(this).parents('table').parent().parent();
+            itemSelectionBuildActionLinks(div);
+          });
+        });
+    [% END %]
+
      $(document).ready(function() {
         $('#bibliodetails').tabs();
         $('#search-form').focus();
-     });
+        $('.thumbnails > li > a > span.remove').click(function() {
+            var result = confirm(_("Are you sure you want to delete this cover image?"));
+
+            if ( result == true ) {
+                var imagenumber = $(this).parent().parent().attr('id').split('-')[1];
+                removeLocalImage(imagenumber);
+            }
+
+            return false;
+        });
+    });
+
      [% IF ( AmazonCoverImages ) %]$(window).load(function() {
         verify_images();
      });[% END %]
+//]]>
+</script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.dataTables.columnFilter.js"></script>
+[% INCLUDE 'browser-strings.inc' %]
+<!--[if lt IE 9]>
+<script type="text/javascript" src="[% interface %]/lib/shims/json2.min.js"></script>
+<![endif]-->
+<script type="text/javascript" src="[% interface %]/js/browser.js"></script>
+<script type="text/javascript">
+//<![CDATA[
+    var browser = KOHA.browser('[% searchid %]', parseInt('[% biblionumber %]', 10));
+    browser.show();
+
+    function activate_filters(id) {
+        table = $("#" + id + " table");
+        if (table.length == 1) {
+            filters_row = table.find('thead tr.filters_row');
+
+            [% IF StaffDetailItemSelection %]
+                var aoColumns = [];
+                filters_row.find('th').each(function() {
+                    aoColumns.push('text');
+                });
+                aoColumns[0] = null;
+            [% END %]
+
+            if (table.find('thead tr.columnFilter').length == 0) {
+                table.dataTable().columnFilter({
+                    'sPlaceHolder': 'head:after'
+                    [% IF StaffDetailItemSelection %]
+                    ,   'aoColumns': aoColumns
+                    [% END %]
+                });
+                filters_row.addClass('columnFilter');
+            }
+            filters_row.show();
+        }
+
+        $('#' + id + '_activate_filters')
+            .text(_("Deactivate filters"))
+            .unbind('click')
+            .click(function() {
+                deactivate_filters(id);
+                return false;
+            });
+    }
+
+    function deactivate_filters(id) {
+        filters_row = $("#" + id + " table").find('thead tr.filters_row');
+
+        filters_row.find('input[type="text"]')
+            .val('')            // Empty filter text boxes
+            .trigger('keyup')   // Filter (display all rows)
+            .trigger('blur');   // Reset value to the column name
+        filters_row.hide();
+
+        $('#' + id + '_activate_filters')
+            .text(_("Activate filters"))
+            .unbind('click')
+            .click(function() {
+                activate_filters(id);
+                return false;
+            });
+    }
+
+    $(document).ready(function() {
+        var ids = ['holdings', 'otherholdings'];
+        for (var i in ids) {
+            var id = ids[i];
+            table = $('#' + id + ' table');
+
+            // Duplicate the table header row for columnFilter
+            thead_row = table.find('thead tr');
+            clone = thead_row.clone().addClass('filters_row');
+            thead_row.before(clone);
+
+            // Enable sorting
+            table.dataTable($.extend(true, {}, dataTablesDefaults, {
+                'sDom': 't',
+                'bPaginate': false,
+                'bAutoWidth': false
+                [% IF StaffDetailItemSelection %]
+                ,   "aoColumnDefs": [
+                        { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false }
+                    ]
+                [% END %]
+            }));
+
+            // Show a link to activate filtering
+            link = $('<a>')
+                .attr('href', '#')
+                .attr('id', id + '_activate_filters');
+            table.before(link);
+            deactivate_filters(id);
+        }
+        [% IF Koha.Preference('AcquisitionDetails') %]
+            $("#orders").dataTable($.extend(true, {}, dataTablesDefaults, {
+                'sDom': 't',
+                'bPaginate': false,
+                'bAutoWidth': false,
+                "aaSorting": [[ 3, "desc" ]],
+                "aoColumnDefs": [
+                    { "aTargets": [ 3, 4 ], "sType": "title-string" }
+                ]
+            }));
+
+        [% END %]
+    });
 //]]>
 </script>
 </head>
@@ -115,10 +342,11 @@ function verify_images() {
                     [% END %]
                     </span>
         [% END %]
+        <span id="catalogue_detail_marc_preview" class="results_summary"><span class="label">MARC Preview:</span> <a href="/cgi-bin/koha/catalogue/showmarc.pl?id=[% biblionumber %]" title="MARC" rel="gb_page_center[600,500]">Show</a></span>
         [% IF ( holdcount ) %]<span class="results_summary"><span class="label">Holds:</span> <span class="holdcount"><a href="/cgi-bin/koha/reserve/request.pl?biblionumber=[% biblionumber %]">[% holdcount %]</a></span></span>[% ELSE %][% END %]
 
         [% IF ( AmazonCoverImages ) %]</div><div class="yui-u" id="bookcoverimg">
-        <a href="http://www.amazon[% AmazonTld %]/gp/reader/[% normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img border="0" src="http://images.amazon.com/images/P/[% normalized_isbn %].01.MZZZZZZZ.jpg" alt="" /></a>[% END %]
+        <a href="http://www.amazon[% AmazonTld %]/gp/reader/[% normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img border="0" src="https://images-na.ssl-images-amazon.com/images/P/[% normalized_isbn %].01.MZZZZZZZ.jpg" alt="" /></a>[% END %]
     [% ELSE %]
 
     <h3>[% title |html %]</h3>
@@ -174,16 +402,20 @@ function verify_images() {
     	<a href="http://[% OpacUrl %]/cgi-bin/koha/opac-detail.pl?biblionumber=[% biblionumber %]" target="_blank">Open in new window</a>
 		</li>
 	[% END %]
+        <li id="catalogue_detail_marc_preview">
+            <strong>MARC Preview:</strong>
+            <a href="/cgi-bin/koha/catalogue/showmarc.pl?id=[% biblionumber %]" title="MARC" rel="gb_page_center[600,500]">Show</a>
+        </li>
         </ul>
         </div>
        
 [% IF ( AmazonCoverImages ) %]<div class="yui-u" id="bookcoverimg">
-<a href="http://www.amazon[% AmazonTld %]/gp/reader/[% normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img border="0" src="http://images.amazon.com/images/P/[% normalized_isbn %].01.MZZZZZZZ.jpg" alt="" /></a></div>[% END %]
+<a href="http://www.amazon[% AmazonTld %]/gp/reader/[% normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img border="0" src="https://images-na.ssl-images-amazon.com/images/P/[% normalized_isbn %].01.MZZZZZZZ.jpg" alt="" /></a></div>[% END %]
         
         <div class="yui-u" style="margin-top: 1em;">
         <ul>
         [% IF ( MARCISBNS ) %]
-            <li><strong>ISBN:</strong><ul>[% FOREACH MARCISBN IN MARCISBNS %]<li>[% MARCISBN.marcisbn %]</li>[% END %]</ul></li>
+            <li><strong>ISBN:</strong><ul>[% FOREACH MARCISBN IN MARCISBNS %]<li>[% MARCISBN %]</li>[% END %]</ul></li>
         [% ELSE %]
             [% IF ( normalized_isbn ) %]
                 <li><strong>ISBN:</strong> [% normalized_isbn %]</li>
@@ -255,22 +487,44 @@ function verify_images() {
 </div>
 <div id="bibliodetails" class="toptabs">
 
-<ul>   
-<li><a href="#holdings">Holdings</a></li>
-<li><a href="#description">Descriptions</a></li>
+<ul>
+    [% IF (SeparateHoldings) %]
+        <li><a href="#holdings">[% LoginBranchname %] holdings</a></li>
+        <li><a href="#otherholdings">Other holdings</a></li>
+    [% ELSE %]
+        <li><a href="#holdings">Holdings</a></li>
+    [% END %]
+[% IF ( MARCNOTES || notes ) %]<li><a href="#description">Descriptions</a></li>[% END %]
 [% IF ( subscriptionsnumber ) %]<li><a href="#subscriptions">Subscriptions</a></li>[% END %]
+[% IF Koha.Preference('AcquisitionDetails') %]<li><a href="#acq_details">Acquisition details</a></li>[% END %]
 [% IF ( FRBRizeEditions ) %][% IF ( XISBNS ) %]<li><a href="#editions">Editions</a></li>[% END %][% END %]
 [% IF ( LocalCoverImages ) %][% IF ( localimages || CAN_user_tools_upload_local_cover_images ) %]<li><a href="#images">Images</a></li>[% END %][% END %]
- </ul>
+[% IF ( HTML5MediaEnabled ) %][% IF ( HTML5MediaSets ) %]<li><a href="#html5media">Play media</a></li>[% END %][% END %]
+</ul>
 
-<div id="holdings">
-[% IF ( count ) %]
-    [% IF ( showncount ) %]
-        <table>
+[% items_table_block_iter = 0 %]
+[% BLOCK items_table %]
+    [% items_table_block_iter = items_table_block_iter + 1 %]
+    [% IF (StaffDetailItemSelection) %]
+        <a href="#" onclick="selectAllItems($(this).parent()); return false;">Select all</a> |
+        <a href="#" onclick="clearAllItems($(this).parent()); return false;">Clear all</a>
+        <span class="itemselection_actions">
+          | Actions:
+          [% IF CAN_user_tools_items_batchdel %]
+            <a class="itemselection_action_delete">Delete selected items</a>
+          [% END %]
+          [% IF CAN_user_tools_items_batchmod %]
+            <a class="itemselection_action_modify">Modify selected items</a>
+          [% END %]
+        </span>
+    [% END %]
+    <table class="items_table">
+        <thead>
             <tr>
+                [% IF (StaffDetailItemSelection) %]<th></th>[% END %]
                 [% IF ( item_level_itypes ) %]<th>Item type</th>[% END %]
                 <th>Current location</th>
-                <th>Home Library</th>
+                <th>Home library</th>
                 [% IF ( itemdata_ccode ) %]<th>Collection</th>[% END %]
                 <th>Call number</th>
                 <th>Status</th>
@@ -278,151 +532,208 @@ function verify_images() {
                 <th>Barcode</th>
                 [% IF ( volinfo ) %]<th>Publication details</th>[% END %]
                 [% IF ( itemdata_uri ) %]<th>url</th>[% END %]
-                [% IF ( itemdata_copynumber ) %]<th>Copy no.</th>[% END %]
+                [% IF ( itemdata_copynumber ) %]<th>Copy number</th>[% END %]
                 [% IF materials %]<th>Materials specified</th>[% END %]
                 [% IF ( itemdata_itemnotes ) %]<th>Public notes</th>[% END %]
-        [% IF ( SpineLabelShowPrintOnBibDetails ) %]<th>Spine label</th>[% END %]
-        [% IF ( hostrecords ) %]<th>Host records</th>[% END %]
-		[% IF ( analyze ) %]<th>Used in</th><th></th>[% END %]
+                [% IF ( SpineLabelShowPrintOnBibDetails ) %]<th>Spine label</th>[% END %]
+                [% IF ( hostrecords ) %]<th>Host records</th>[% END %]
+                [% IF ( analyze ) %]<th>Used in</th><th></th>[% END %]
+                [% IF ( ShowCourseReserves ) %]<th>Course Reserves</th>[% END %]
+                [% IF ( CAN_user_editcatalogue_edit_items ) %]<th>Edit</th>[% END %]
             </tr>
-            [% FOREACH itemloo IN itemloop %]
+        </thead>
+        <tbody>
+            [% FOREACH item IN items %]
                 <tr>
-                    [% IF ( item_level_itypes ) %]
-                    <td class="itype">
-                        [% IF !noItemTypeImages && itemloo.imageurl %]
-                            <img src="[% itemloo.imageurl %]" alt="[% itemloo.description %]" title="[% itemloo.description %]" />
-                        [% END %]
-                        [% itemloo.description %]
+                [% IF (StaffDetailItemSelection) %]
+                    <td style="text-align:center;vertical-align:middle">
+                        <input type="checkbox" value="[% item.itemnumber %]" name="itemnumber" />
                     </td>
+                [% END %]
+                    [% IF ( item_level_itypes ) %]
+                        <td class="itype">
+                            [% IF !noItemTypeImages && item.imageurl %]
+                                <img src="[% item.imageurl %]" alt="[% item.description %]" title="[% item.description %]" />
+                            [% END %]
+                            [% item.description %]
+                        </td>
                     [% END %]
-                    <td class="location">[% UNLESS ( singlebranchmode ) %][% itemloo.branchname %] [% END %]</td>
-                    <td class="homebranch">[% itemloo.homebranch %]<span class="shelvingloc">[% itemloo.location %]</span> </td>
-		    [% IF ( itemdata_ccode ) %]<td>[% itemloo.ccode %]</td>[% END %]
-                    <td class="itemcallnumber">[% IF ( itemloo.itemcallnumber ) %] [% itemloo.itemcallnumber %][% END %]</td>
+                    <td class="location">[% UNLESS ( singlebranchmode ) %][% item.branchname %] [% END %]</td>
+                    <td class="homebranch">[% item.homebranch %]<span class="shelvingloc">[% item.location %]</span> </td>
+                    [% IF ( itemdata_ccode ) %]<td>[% item.ccode %]</td>[% END %]
+                    <td class="itemcallnumber">[% IF ( item.itemcallnumber ) %] [% item.itemcallnumber %][% END %]</td>
                     <td class="status">
 
-                [% IF ( itemloo.datedue ) %]
-						<span class="datedue">Checked out
-                    [% UNLESS ( itemloo.NOTSAMEBRANCH ) %]
-                          to <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% itemloo.borrowernumber %]">
-			  [% IF ( itemloo.hidepatronname ) %]
-			      [% itemloo.cardnumber %]
-			  [% ELSE %]
-			      [% itemloo.firstname %] [% itemloo.surname %]
-			  [% END %]
-			  </a>
-                    [% END %]
-						: due [% itemloo.datedue %]
-						</span>
-                [% ELSIF ( itemloo.transfertwhen ) %]
-                           In transit from [% itemloo.transfertfrom %],
-                           to [% itemloo.transfertto %], since [% itemloo.transfertwhen %]
-							<!-- FIXME: the "since" clause is redundant w/ lastseen field -->
-                [% END %]
+                        [% IF ( item.datedue ) %]
+                            <span class="datedue">Checked out
+                                [% UNLESS ( item.NOTSAMEBRANCH ) %]
+                                    to <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% item.borrowernumber %]">
+                                        [% IF ( item.hidepatronname ) %]
+                                            [% item.cardnumber %]
+                                        [% ELSE %]
+                                            [% item.firstname %] [% item.surname %]
+                                        [% END %]
+                                    </a>
+                                [% END %]
+                                : due [% item.datedue %]
+                            </span>
+                        [% ELSIF ( item.transfertwhen ) %]
+                            <span class="intransit">In transit from [% item.transfertfrom %] to [% item.transfertto %] since [% item.transfertwhen %]</span>
+                        [% END %]
 
-                [% IF ( itemloo.itemlost ) %]
-                    [% IF ( itemloo.itemlostloop ) %]
-                    [% FOREACH itemlostloo IN itemloo.itemlostloop %]
-                        [% IF ( itemlostloo.selected ) %]
+                        [% IF ( item.itemlost ) %]
+                            [% IF ( item.itemlostloop ) %]
+                                [% FOREACH itemlostloo IN item.itemlostloop %]
+                                    [% IF ( itemlostloo.selected ) %]
                                         <span class="lost">[% itemlostloo.lib %]</span>
+                                    [% END %]
+                                [% END %]
+                            [% ELSE %]
+                                <span class="lost">Unavailable (lost or missing)</span>
+                            [% END %]
                         [% END %]
-                    [% END %]
-                    [% ELSE %]
-                                        <span class="lost">Unavailable (lost or missing)</span>
-                    [% END %]
-                [% END %]
 
-                [% IF ( itemloo.wthdrawn ) %]
-                                        <span class="wdn">Withdrawn</span>
-                [% END %]
+                        [% IF ( item.withdrawn ) %]
+                            <span class="wdn">Withdrawn</span>
+                        [% END %]
 
-                [% IF ( itemloo.damaged ) %]
-                    [% IF ( itemloo.itemdamagedloop ) %]
-                        [% FOREACH itemdamagedloo IN itemloo.itemdamagedloop %]
-                        [% IF ( itemdamagedloo.selected ) %]
+                        [% IF ( item.damaged ) %]
+                            [% IF ( item.itemdamagedloop ) %]
+                                [% FOREACH itemdamagedloo IN item.itemdamagedloop %]
+                                    [% IF ( itemdamagedloo.selected ) %]
                                         <span class="dmg">[% itemdamagedloo.lib %]</span>
+                                    [% END %]
+                                [% END %]
+                            [% ELSE %]
+                                <span class="dmg">Damaged</span>
+                            [% END %]
                         [% END %]
+
+                        [% IF ( item.itemnotforloan ) %]
+                            Not for loan
+                            [% IF ( item.notforloanvalue ) %]
+                                ([% item.notforloanvalue %])
+                            [% END %]
                         [% END %]
-                    [% ELSE %]
-                                        <span class="dmg">Damaged</span>
-                    [% END %]
-                [% END %]
 
-                [% IF ( itemloo.itemnotforloan ) %]
-                    Not for loan 
-                    [% IF ( itemloo.notforloanvalue ) %]
-                        ([% itemloo.notforloanvalue %])
-                    [% END %]
-                [% END %]
+                        [% IF ( item.reservedate ) %]
+                            [% IF ( item.waitingdate ) %]
+                                Waiting
+                            [% ELSE %]
+                                Item-level hold
+                            [% END %]
+                            [% IF ( canreservefromotherbranches ) %]
+                                for <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% item.ReservedForBorrowernumber %]">
+                                    [% IF ( item.hidepatronname ) %]
+                                        [% item.Reservedcardnumber %]
+                                    [% ELSE %]
+                                        [% item.ReservedForFirstname %] [% item.ReservedForSurname %]
+                                    [% END %]
+                                </a>
+                            [% END %]
+                            [% IF ( item.waitingdate ) %]
+                                at[% ELSE %]for delivery at
+                            [% END %]
+                            [% item.ExpectedAtLibrary %]
+                            [% IF ( item.waitingdate ) %]
+                                since [% item.waitingdate | $KohaDates %]
+                            [% ELSE %]
+                                [% IF ( item.reservedate ) %]
+                                    (placed [% item.reservedate %])
+                                [% END %]
+                            [% END %]
+                        [% END %]
+                        [% UNLESS ( item.itemnotforloan or item.onloan or item.itemlost or item.withdrawn or item.damaged or item.transfertwhen or item.reservedate ) %]
+                            Available
+                        [% END %]
 
-                            
-                [% IF ( itemloo.reservedate ) %]
-                    [% IF ( itemloo.waitingdate ) %]
-                        Waiting
-                    [% ELSE %]
-                        Item-level hold
-                    [% END %]
-                    [% IF ( canreservefromotherbranches ) %]for <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% itemloo.ReservedForBorrowernumber %]">
-		        [% IF ( itemloo.hidepatronname ) %]
-		            [% itemloo.Reservedcardnumber %]
-		        [% ELSE %]
-		            [% itemloo.ReservedForFirstname %] [% itemloo.ReservedForSurname %]
-			[% END %]
-		    </a>[% END %]
-                    [% IF ( itemloo.waitingdate ) %]
-                        at[% ELSE %]for delivery at
-                    [% END %]   [% itemloo.ExpectedAtLibrary %]
-                    [% IF ( itemloo.waitingdate ) %]
-                        since [% itemloo.waitingdate %]
-                    [% ELSE %]
-                        [% IF ( itemloo.reservedate ) %](placed [% itemloo.reservedate %])[% END %]
-                    [% END %]
-                [% END %]
-                [% UNLESS ( itemloo.itemnotforloan ) %][% UNLESS ( itemloo.onloan ) %][% UNLESS ( itemloo.itemlost ) %][% UNLESS ( itemloo.wthdrawn ) %][% UNLESS ( itemloo.damaged ) %][% UNLESS ( itemloo.transfertwhen ) %][% UNLESS ( itemloo.reservedate ) %]
-                                        Available
-                [% END %][% END %][% END %][% END %][% END %][% END %][% END %]
+                        [% IF ( item.restricted ) %]
+                            <span class="restricted">([% item.restricted %])</span>
+                        [% END %]
 
-                [% IF ( itemloo.restricted ) %]<span class="restricted">([% itemloo.restricted %])</span>[% END %]
-                        
                     </td>
-                    <td class="datelastseen">[% itemloo.datelastseen %]</td>
-                    <td><a href="/cgi-bin/koha/catalogue/moredetail.pl?type=[% itemloo.type %]&amp;itemnumber=[% itemloo.itemnumber %]&amp;biblionumber=[% itemloo.biblionumber %]&amp;bi=[% itemloo.biblioitemnumber %]#item[% itemloo.itemnumber %]">[% itemloo.barcode %]</a></td>
-				[% IF ( volinfo ) %]	<td class="enumchron">
-					[% IF ( itemdata_enumchron ) %]
-						[% IF ( itemloo.enumchron ) %]
-						[% itemloo.enumchron %][% IF ( itemloo.serialseq ) %] -- [% END %]
-						[% END %]
-					[% itemloo.serialseq %][% IF ( itemloo.publisheddate ) %] ([% itemloo.publisheddate %])[% END %]
-					[% END %]
-				</td>[% END %]
-				[% IF ( itemdata_uri ) %]
-					<td class="uri"><a href="[% itemloo.uri %]">[% itemloo.uri %]</a></td>
-				[% END %]
-				[% IF ( itemdata_copynumber ) %]
-					<td class="copynumber">[% itemloo.copynumber %]</td>
-				[% END %]
-	        [% IF materials %]
-		    <td class="materials"> [% itemloo.materials %] </td>
-		[% END %]
-                [% IF ( itemdata_itemnotes ) %]<td><div class="itemnotes">[% itemloo.itemnotes %]</div></td>[% END %]
-		[% IF ( SpineLabelShowPrintOnBibDetails ) %]
-            <td><a href="/cgi-bin/koha/labels/spinelabel-print.pl?barcode=[% itemloo.barcode %]" >Print label</a></td>
-		[% END %]
-                [% IF ( hostrecords ) %]
-                      <td>[% IF ( itemloo.hostbiblionumber) %]<a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% itemloo.hostbiblionumber %]" >[% itemloo.hosttitle %]</a>[% END %]</td>
-                [% END %]
-                [% IF ( analyze ) %]<td>
-			[% IF ( itemloo.countanalytics ) %]
-				<a href="/cgi-bin/koha/catalogue/search.pl?idx=hi&amp;q=[% itemloo.itemnumber %]">[% itemloo.countanalytics %] analytics</a>
-			[% END %]</td>
-		[% END %]
-                [% IF ( analyze ) %]
-                        <td><a href="/cgi-bin/koha/cataloguing/addbiblio.pl?hostbiblionumber=[% itemloo.biblionumber %]&amp;hostitemnumber=[% itemloo.itemnumber %]">Create analytics</a></td>
-                [% END %]
+                    <td class="datelastseen">[% item.datelastseen %]</td>
+                    <td><a href="/cgi-bin/koha/catalogue/moredetail.pl?type=[% item.type %]&amp;itemnumber=[% item.itemnumber %]&amp;biblionumber=[% item.biblionumber %]&amp;bi=[% item.biblioitemnumber %]#item[% item.itemnumber %]">[% item.barcode %]</a></td>
+                    [% IF ( volinfo ) %]
+                        <td class="enumchron">
+                            [% IF ( itemdata_enumchron ) %]
+                                [% IF item.enumchron && item.serialseq %]
+                                    <span class="enum">[% item.enumchron %]</span>
+                                    [% IF ( item.serialseq && item.enumchron!=item.serialseq ) %]
+                                        <span class="sep"> -- </span>
+                                        <span class="serialseq">[% item.serialseq %]</span>
+                                    [% END %]
+                                [% ELSIF item.enumchron %]
+                                    <span class="enum">[% item.enumchron %]</span>
+                                [% ELSIF item.serialseq %]
+                                    <span class="serialseq">[% item.serialseq %]</span>
+                                [% END %]
+                                [% IF ( item.publisheddate ) %]
+                                    <span class="pubdate">([% item.publisheddate %])</span>
+                                [% END %]
+                            [% END %]
+                        </td>
+                    [% END %]
+                    [% IF ( itemdata_uri ) %]
+                        <td class="uri"><a href="[% item.uri %]">[% item.uri %]</a></td>
+                    [% END %]
+                    [% IF ( itemdata_copynumber ) %]
+                        <td class="copynumber">[% item.copynumber %]</td>
+                    [% END %]
+                    [% IF materials %]
+                        <td class="materials"> [% item.materials %] </td>
+                    [% END %]
+                    [% IF ( itemdata_itemnotes ) %]
+                        <td><div class="itemnotes">[% item.itemnotes %]</div></td>
+                    [% END %]
+                    [% IF ( SpineLabelShowPrintOnBibDetails ) %]
+                        <td><a href="/cgi-bin/koha/labels/spinelabel-print.pl?barcode=[% item.barcode %]" >Print label</a></td>
+                    [% END %]
+                    [% IF ( hostrecords ) %]
+                        <td>[% IF ( item.hostbiblionumber) %]<a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% item.hostbiblionumber %]" >[% item.hosttitle %]</a>[% END %]</td>
+                    [% END %]
+                    [% IF ( analyze ) %]
+                        <td>
+                            [% IF ( item.countanalytics ) %]
+                                <a href="/cgi-bin/koha/catalogue/search.pl?idx=hi&amp;q=[% item.itemnumber %]">[% item.countanalytics %] analytics</a>
+                            [% END %]
+                        </td>
+                    [% END %]
+                    [% IF ( analyze ) %]
+                        <td><a href="/cgi-bin/koha/cataloguing/addbiblio.pl?hostbiblionumber=[% item.biblionumber %]&amp;hostitemnumber=[% item.itemnumber %]">Create analytics</a></td>
+                    [% END %]
 
+                [% IF ShowCourseReserves %]
+                    <td>
+                        [% IF item.course_reserves %]
+                            [% FOREACH r IN item.course_reserves %]
+                                [% IF r.course.enabled == 'yes' %]
+                                    <p>
+                                      <a href="/cgi-bin/koha/course_reserves/course-details.pl?course_id=[% r.course.course_id %]">
+                                         [% r.course.course_name %]
+                                         <!--[% IF r.course.course_number %] [% r.course.course_number %] [% END %]-->
+                                         [% IF r.course.section %] [% r.course.section %] [% END %]
+                                         [% IF r.course.term %] [% AuthorisedValues.GetByCode( 'TERM', r.course.term ) %] [% END %]
+                                      </a>
+                                   </p>
+                               [% END %]
+                           [% END %]
+                       [% END %]
+                    </td>
+                [% END %]
+                [% IF ( CAN_user_editcatalogue_edit_items ) %]
+                    <td><a href="/cgi-bin/koha/cataloguing/additem.pl?op=edititem&biblionumber=[% item.biblionumber %]&itemnumber=[% item.itemnumber %]#edititem">Edit</a></td>
+                [% END %]
                 </tr>
             [% END %]
-        </table>
+        </tbody>
+    </table>
+[% END %][%# end of block items_table %]
+
+<div id="holdings">
+[% IF ( count ) %]
+    [% IF ( showncount ) %]
+        [% PROCESS items_table items=itemloop %]
         [% END %]
                 [% IF ( hiddencount ) %]
                    <p><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblionumber %]&amp;showallitems=1">Show all items ([% hiddencount %] hidden)</a>
@@ -445,7 +756,19 @@ function verify_images() {
     [% END %]
 [% END %]
     </div>
-    
+
+[% IF (SeparateHoldings) %]
+    <div id="otherholdings">
+        [% IF (otheritemloop.size) %]
+            [% PROCESS items_table items=otheritemloop %]
+        [% ELSE %]
+            No other items.
+        [% END %]
+    </div>
+[% END %]
+
+[% IF ( MARCNOTES || notes ) %]
+
 <div id="description">
 <div class="content_set">
 
@@ -461,6 +784,8 @@ function verify_images() {
 </div>
 </div>
 
+[% END %]
+
 [% IF ( subscriptionsnumber ) %]
 <div id="subscriptions">
 <div class="yui-g">
@@ -470,13 +795,18 @@ function verify_images() {
     [% FOREACH subscription IN subscriptions %]
 	    [% IF ( subscription.branchname ) %]<h3>At library: [% subscription.branchname %]</h3>[% ELSE %]
 	    [% IF ( subscription.branchcode ) %]<h3>At library: [% subscription.branchcode %]</h3>[% END %][% END %]
+            [% IF ( subscription.closed ) %]<p>This subscription is closed.</p>[% END %]
+            [% IF ( subscription.callnumber ) %]<p>Callnumber: [% subscription.callnumber %] </p>[% END %]
             [% IF ( subscription.subscriptionnotes ) %]<p>[% subscription.subscriptionnotes FILTER html_line_break %] </p>[% END %]
+            [% IF ( subscription.missinglist ) %]<p>Missing issues: [% subscription.missinglist %] </p>[% END %]
+            [% IF ( subscription.librariannote ) %]<p>([% subscription.librariannote %])</p>[% END %]
             [% IF ( subscription.latestserials ) %]
             <p> The [% subscription.staffdisplaycount %] latest issues related to this subscription:</p>
             <table>
                 <tr>
                     <th>Issue #</th>
-                    <th>Date</th>
+                    <th>Date arrived</th>
+                    <th>Date published</th>
                     <th>Status</th>
                     <th>Note</th>
                 </tr>
@@ -484,20 +814,21 @@ function verify_images() {
                 <tr>
                     <td>[% latestserial.serialseq %]</td>
                     <td>[% latestserial.planneddate %]</td>
-                    <td>[% IF ( latestserial.status1 ) %]Expected
-                        [% ELSE %]
-                            [% IF ( latestserial.status2 ) %]Arrived
-                            [% ELSE %]
-                                [% IF ( latestserial.status3 ) %]Late
-                                [% ELSE %]
-                                    [% IF ( latestserial.status4 ) %]Missing
-                                    [% ELSE %]
-                                        [% IF ( latestserial.status5 ) %]Not issued
-                                        [% END %]
-                                    [% END %]
-                                [% END %]
-                            [% END %]
-                        [% END %]</td>
+                    <td>[% latestserial.publisheddate%]</td>
+                    <td>
+                      [% IF ( latestserial.status1 ) %]Expected[% END %]
+                      [% IF ( latestserial.status2 ) %]Arrived[% END %]
+                      [% IF ( latestserial.status3 ) %]Late[% END %]
+                      [% IF ( latestserial.status4 ) %]Missing[% END %]
+                      [% IF ( latestserial.status41 ) %]Missing (never received)[% END %]
+                      [% IF ( latestserial.status42 ) %]Missing (sold out)[% END %]
+                      [% IF ( latestserial.status43 ) %]Missing (damaged)[% END %]
+                      [% IF ( latestserial.status44 ) %]Missing (lost)[% END %]
+                      [% IF ( latestserial.status5 ) %]Not issued[% END %]
+                      [% IF ( latestserial.status6 ) %]Delete[% END %]
+                      [% IF ( latestserial.status7 ) %]Claimed[% END %]
+                      [% IF ( latestserial.status8 ) %]Stopped[% END %]
+                    </td>
                     <td>[% latestserial.notes %]</td>
                 </tr>
             [% END %]
@@ -510,10 +841,65 @@ function verify_images() {
 </div>
 [% END %]
 
+[% IF Koha.Preference('AcquisitionDetails') %]
+<div id="acq_details">
+  [% IF orders %]
+    <table id="orders">
+      <thead>
+        <tr>
+          <th>Basket group</th>
+          <th>Basket</th>
+          <th>Order number</th>
+          <th>Creation date</th>
+          <th>Receive date</th>
+          <th>Status</th>
+          <th>Quantity</th>
+        </tr>
+      </thead>
+      <tbody>
+      [% FOR order IN orders %]
+          <tr>
+            <td>
+            [% IF (order.basketgroupid) %]
+                [% IF CAN_user_acquisition_group_manage %]
+                    <a href="/cgi-bin/koha/acqui/basketgroup.pl?op=add&booksellerid=[% order.id %]&basketgroupid=[% order.basketgroupid %]">[% order.groupname %] ([% order.basketgroupid %])</a>
+                [% ELSE %]
+                    [% order.groupname %] ([% order.basketgroupid %])
+                [% END %]
+            [% END %]
+            </td>
+            <td>[% IF CAN_user_acquisition_order_manage %]
+                <a href="/cgi-bin/koha/acqui/basket.pl?basketno=[% order.basketno %]">[% order.basketname %] ([% order.basketno %])</a>
+            [% ELSE %]
+                [% order.basketname %] ([% order.basketno %])
+            [% END %]</td>
+            <td>[% order.ordernumber %]</td>
+            <td><span title="[% order.creationdate %]">[% order.creationdate | $KohaDates%]</span></td>
+            <td><span title="[% order.datereceived %]">[% order.datereceived | $KohaDates%]</span></td>
+            <td>
+              [% SWITCH order.orderstatus %]
+                [% CASE 'new' %]New
+                [% CASE 'ordered' %]Ordered
+                [% CASE 'partial' %]Partial
+                [% CASE 'complete' %]Complete
+                [% CASE 'cancelled' %]Cancelled
+              [% END %]
+            </td>
+            <td>[% order.quantity %]</th>
+          </tr>
+      [% END %]
+      </tbody>
+    </table>
+  [% ELSE %]
+    There is no order for this biblio.
+  [% END %]
+</div>
+[% END %]
+
 [% IF ( FRBRizeEditions ) %][% IF ( XISBNS ) %]
 <div id="editions"><h4>Editions</h4>
 <table>
-[% FOREACH XISBN IN XISBNS %]<tr>[% IF ( AmazonCoverImages ) %]<td><a href="http://www.amazon.com/gp/reader/[% XISBN.normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img src="http://images.amazon.com/images/P/[% XISBN.normalized_isbn %].01._AA75_PU_PU-5_.jpg" /></a></td>[% END %]
+[% FOREACH XISBN IN XISBNS %]<tr>[% IF ( AmazonCoverImages ) %]<td><a href="http://www.amazon.com/gp/reader/[% XISBN.normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img src="https://images-na.ssl-images-amazon.com/images/P/[% XISBN.normalized_isbn %].01._AA75_PU_PU-5_.jpg" /></a></td>[% END %]
 [% UNLESS ( item_level_itypes ) %]<td>[% IF ( noItemTypeImages ) %][% XISBN.description %][% ELSE %]<img src="[% XISBN.imageurl %]" alt="[% XISBN.description %]" title="[% XISBN.description %]">[% END %]</td>[% END %]
 <td><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% XISBN.biblionumber %]">[% XISBN.title |html %]</a> by [% XISBN.author %] &copy;[% XISBN.copyrightdate %]
   [% IF ( XISBN.publishercode ) %]
@@ -530,19 +916,42 @@ function verify_images() {
 [% IF ( LocalCoverImages ) %]
 <div id="images">
 [% IF ( localimages.0 ) %]
-<p>Click on an image to view it in the image viewer</p>
+    <p>Click on an image to view it in the image viewer</p>
+    <ul class="thumbnails">
 [% FOREACH image IN localimages %]
-[% IF image %]
-<a class="localimage" href="/cgi-bin/koha/catalogue/imageviewer.pl?biblionumber=[% biblionumber %]&amp;imagenumber=[% image %]"><img alt="" src="/cgi-bin/koha/catalogue/image.pl?thumbnail=1&amp;imagenumber=[% image %]" /></a>
+    [% IF image %]
+        <li id="imagenumber-[% image %]">
+            <a class="thumbnail" href="/cgi-bin/koha/catalogue/imageviewer.pl?biblionumber=[% biblionumber %]&amp;imagenumber=[% image %]">
+                <img alt="remove this image" src="/cgi-bin/koha/catalogue/image.pl?thumbnail=1&amp;imagenumber=[% image %]" />
+                [% IF CAN_user_tools_upload_local_cover_images %]
+                  <span class="remove" title="remove this image">Delete image</span>
+                [% END %]
+            </a>
+        </li>
+    [% END %]
 [% END %]
-[% END %]
+    </ul>
 [% ELSE %]
 [% IF ( CAN_user_tools_upload_local_cover_images ) %]
-<p>No images have been uploaded for this bibliographic record yet. Please <a href='/cgi-bin/koha/tools/upload-cover-image.pl?biblionumber=[% biblionumber %]&amp;filetype=image'>upload</a> one.</p>
+    <p>No images have been uploaded for this bibliographic record yet. Please <a href='/cgi-bin/koha/tools/upload-cover-image.pl?biblionumber=[% biblionumber %]&amp;filetype=image'>upload</a> one.</p>
 [% END %]
 [% END %]
 </div>
 [% END %]
+
+[% IF ( HTML5MediaEnabled ) %]
+<div id="html5media">
+        <p>
+        <[% HTML5MediaParent %] controls preload=none>
+          [% FOREACH HTML5MediaSet IN HTML5MediaSets %]
+            <[% HTML5MediaSet.child  %] src="[% HTML5MediaSet.srcblock %]"[% HTML5MediaSet.typeblock %] />
+          [% END %]
+            [[% HTML5MediaParent %] tag not supported by your browser.]
+        </[% HTML5MediaParent %]>
+        </p>
+</div>
+[% END %]
+
 
 </div><!-- /bibliodetails -->
 

@@ -54,6 +54,11 @@ our $PERL_DEPS = {
         'required' => '1',
         'min_ver'  => '1.53'
     },
+    'DBIx::Class::Schema::Loader' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '0.07000'
+    },
     'Net::Z3950::ZOOM' => {
         'usage'    => 'Core',
         'required' => '1',
@@ -83,11 +88,6 @@ our $PERL_DEPS = {
         'usage'    => 'Core',
         'required' => '1',
         'min_ver'  => '1.59'
-    },
-    'POE' => {
-        'usage'    => 'Core',
-        'required' => '1',
-        'min_ver'  => '0.9999'
     },
     'Email::Date' => {
         'usage'    => 'Core',
@@ -194,6 +194,19 @@ our $PERL_DEPS = {
         'required' => '1',
         'min_ver'  => '0.33'
     },
+    'Text::PDF' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '0.29',
+        # We don't use this directly, but it's not a required dependency for
+        # PDF::Reuse however we need it via that or tests fail.
+    },
+    'Font::TTF' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '0.45',
+        # Also needed for our use of PDF::Reuse
+    },
     'DateTime' => {
         'usage'    => 'Core',
         'required' => '1',
@@ -202,7 +215,7 @@ our $PERL_DEPS = {
     'DateTime::TimeZone' => {
         'usage'    => 'Core',
         'required' => '1',
-        'min_ver'  => '1.26'
+        'min_ver'  => '1.20'
     },
     'DateTime::Format::DateParse' => {
         'usage'    => 'Core',
@@ -254,15 +267,15 @@ our $PERL_DEPS = {
         'required' => '0',
         'min_ver'  => '0.17'
     },
-    'CHI' => {
+    'Cache::FastMmap' => {
         'usage'    => 'Caching',
         'required' => '0',
-        'min_ver'  => '0.36'
+        'min_ver'  => '1.34'
     },
-    'CHI::Driver::Memcached' => {
+    'Cache::Memory' => {
         'usage'    => 'Caching',
         'required' => '0',
-        'min_ver'  => '0.12'
+        'min_ver'  => '2.04'
     },
     'Net::LDAP::Filter' => {
         'usage'    => 'LDAP Interface Feature',
@@ -457,7 +470,7 @@ our $PERL_DEPS = {
     'MARC::Record' => {
         'usage'    => 'Core',
         'required' => '1',
-        'min_ver'  => '2'
+        'min_ver'  => '2.0.6'
     },
     'Locale::Currency::Format' => {
         'usage'    => 'Core',
@@ -482,7 +495,7 @@ our $PERL_DEPS = {
     'MARC::File::XML' => {
         'usage'    => 'Core',
         'required' => '1',
-        'min_ver'  => '0.88'
+        'min_ver'  => '1.0.1'
     },
     'XML::SAX::Writer' => {
         'usage'    => 'Core',
@@ -576,12 +589,12 @@ our $PERL_DEPS = {
     },
     'DBD::Mock' => {
         'usage'    => 'Core',
-        'required' => '0',
+        'required' => '1',
         'min_ver'  => '1.39'
     },
     'Test::MockModule' => {
         'usage'    => 'Core',
-        'required' => '0',
+        'required' => '1',
         'min_ver'  => '0.05',
     },
     'Test::Warn' => {
@@ -593,7 +606,11 @@ our $PERL_DEPS = {
         'usage'    => 'Core',
         'required' => '0',
         'min_ver'  => '0.14',
-
+    },
+    'Test::Deep' => {
+        'usage'    => 'Core',
+        'required' => '0',
+        'min_ver'  => '0.106',
     },
     'Test::YAML::Valid' => {
         'usage'    => 'Core',
@@ -609,6 +626,116 @@ our $PERL_DEPS = {
         'usage'    => 'Core',
         'required' => '1',
         'min_ver'  => '1.23',
+    },
+    'AnyEvent' => {
+        'usage'    => 'Command line scripts',
+        'required' => '0',
+        'min_ver'  => '5.0',
+    },
+    'AnyEvent::HTTP' => {
+        'usage'    => 'Command line scripts',
+        'required' => '0',
+        'min_ver'  => '2.13',
+    },
+    'Moose' => {
+        'usage'    => 'Core',
+        'required' => '0',
+        'min_ver'  => '1.09',
+      },
+    'String::Random' => {
+        'usage'    => 'OpacSelfRegistration',
+        'required' => '1',
+        'min_ver'  => '0.22',
+    },
+    'File::Temp' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '0.22',
+    },
+    'File::Copy' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '2.08',
+    },
+    'File::Path' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '2.07',
+    },
+    'Archive::Extract' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '0.60',
+    },
+    'Archive::Zip' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '1.30',
+    },
+    'Module::Load::Conditional' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '0.38',
+    },
+    'Module::Bundled::Files' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '0.03',
+    },
+    'Module::Pluggable' => {
+        'usage'    => 'Plugins',
+        'required' => '0',
+        'min_ver'  => '3.9',
+    },
+    'File::Slurp' => {
+        'usage'    => 'Command line scripts',
+        'required' => '0',
+        'min_ver'  => '9999.13',
+    },
+    'Test::WWW::Mechanize' => {
+        'usage'    => 'Testing suite',
+        'required' => '0',
+        'min_ver'  => '1.44',
+    },
+    'Library::CallNumber::LC' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '0.22',
+    },
+    'Crypt::Eksblowfish::Bcrypt' => {
+        'usage'    => 'Password storage',
+        'required' => '1',
+        'min_ver'  => '0.008',
+    },
+    'HTTPD::Bench::ApacheBench' => {
+        'usage'    => 'Load testing',
+        'required' => '0',
+        'min_ver'  => '0.73',
+    },
+    'Email::Valid' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '0.190',
+    },
+    'OpenOffice::OODoc' => {
+        usage      => 'Export',
+        required   => 1,
+        min_ver    => '2.125',
+    },
+    'Locale::Maketext' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '1.19',
+    },
+    'Locale::Maketext::Lexicon' => {
+        'usage'    => 'Core',
+        'required' => '1',
+        'min_ver'  => '0.91',
+    },
+    'LWP::Protocol::https' => {
+        'usage'    => 'OverDrive integration',
+        'required' => '0',
+        'min_ver'  => '5.836',
     },
 };
 

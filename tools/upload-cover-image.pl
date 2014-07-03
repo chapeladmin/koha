@@ -61,7 +61,7 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
         query           => $input,
         type            => "intranet",
         authnotrequired => 0,
-        flagsrequired   => { tools => 'upload_cover_images' },
+        flagsrequired   => { tools => 'upload_local_cover_images' },
         debug           => 0,
     }
 );
@@ -151,7 +151,7 @@ if ($fileID) {
                             $filename =~ s/^\s+//;
                             $filename =~ s/\s+$//;
                             if (C4::Context->preference("CataloguingLog")) {
-                                logaction('CATALOGUING', 'MODIFY', $biblionumber, "cover image: $filename");
+                                logaction('CATALOGUING', 'MODIFY', $biblionumber, "biblio cover image: $filename");
                             }
                             my $srcimage = GD::Image->new("$dir/$filename");
                             if ( defined $srcimage ) {

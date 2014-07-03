@@ -3,10 +3,9 @@
 # This Koha test module is a stub!  
 # Add more tests here!!!
 
-use strict;
-use warnings;
+use Modern::Perl;
 
-use Test::More tests => 10;
+use Test::More tests => 11;
 use MARC::Record;
 
 BEGIN {
@@ -82,21 +81,43 @@ my $test4xml=qq(<?xml version="1.0" encoding="UTF-8"?>
 </mods>
 );
 
-is ($mods, $test4xml, "testing marc2mosxml");
+is ($mods, $test4xml, "testing marc2modsxml");
 
+$marc->append_fields(MARC::Field->new(
+    '100', ' ', ' ', a => 'Rowling, J.K.'
+));
 my $field = MARC::Field->new('245','','','a' => "Harry potter");
 $marc->append_fields($field);
+$marc->append_fields(MARC::Field->new(
+    '260', ' ', ' ', b => 'Scholastic', c => '2001'
+));
 
 #my $endnote=marc2endnote($marc->as_usmarc);
 #print $endnote;
 
-my $bibtex=marc2bibtex($marc);
-my $test5xml=qq(\@book{,
-	title = "Harry potter"
+my $bibtex=marc2bibtex($marc, 'testID');
+my $test5xml=qq(\@book{testID,
+	author = {Rowling, J.K.},
+	title = {Harry potter},
+	publisher = {Scholastic},
+	year = {2001}
 }
 );
 
 is ($bibtex, $test5xml, "testing bibtex");
+
+$marc->append_fields(MARC::Field->new(
+    '264', '3', '1', b => 'Reprints', c => '2011'
+));
+$bibtex = marc2bibtex($marc, 'testID');
+my $rdabibtex = qq(\@book{testID,
+	author = {Rowling, J.K.},
+	title = {Harry potter},
+	publisher = {Reprints},
+	year = {2011}
+}
+);
+is ($bibtex, $rdabibtex, "testing bibtex with RDA 264 field");
 
 my @entity=C4::Record::_entity_encode("Björn");
 is ($entity[0], "Bj&#xC3;&#xB6;rn", "Html umlauts");

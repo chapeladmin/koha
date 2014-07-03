@@ -1,5 +1,6 @@
 <select class="advsearch" name="idx">
     <option value="kw">Keyword</option>
+    <option value="kw,phr">&nbsp;&nbsp;&nbsp;&nbsp; Keyword as phrase</option>
     <option value="au">Author</option>
     <option value="au,phr">&nbsp;&nbsp;&nbsp;&nbsp; Author as phrase</option>
     <option value="cpn">&nbsp;&nbsp;&nbsp;&nbsp; Corporate name</option>
@@ -20,13 +21,23 @@
     [% END %]
     <option value="bc">Barcode</option>
     <option value="location">Shelving location</option>
+    [% IF (numbersphr) %]
+    <option value="sn,phr">Standard number</option>
+    [% ELSE %]
     <option value="sn">Standard number</option>
+    [% END %]
     <option value="nb">&nbsp;&nbsp;&nbsp;&nbsp; ISBN</option>
     <option value="ns">&nbsp;&nbsp;&nbsp;&nbsp; ISSN</option>
+    [% IF (numbersphr) %]
+    <option value="callnum,phr">&nbsp;&nbsp;&nbsp;&nbsp; Call number</option>
+    [% ELSE %]
     <option value="callnum">&nbsp;&nbsp;&nbsp;&nbsp; Call number</option>
+    [% END %]
     <option value="ln,rtrn">Language</option>
     <option value="nt">Notes/Comments</option>
-    <option value="curriculum">Curriculum</option>
+    [% IF (marcflavour != 'UNIMARC' ) %]
+        <option value="curriculum">Curriculum</option>
+    [% END %]
     <option value="pb">Publisher</option>
     <option value="pl">Publisher location</option>
     <option value="yr">Publication date (yyyy)</option>

@@ -1,23 +1,22 @@
+[% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Circulation &rsaquo; Transfers to your library</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-<script type="text/javascript" language="JavaScript">
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">
 //<![CDATA[
-$.tablesorter.addParser({
-    id: 'articles',
-    is: function(s) {return false;  },
-    format: function(s) { return s.toLowerCase().replace(/^(the|an|a) /,''); },
-    type: 'text'
-});
 $(document).ready(function() {
     [% FOREACH branchesloo IN branchesloop %]
-    $.tablesorter.defaults.widgets = ['zebra'];
-    $("#transferst[% branchesloo.branchcode %]").tablesorter({[% IF ( branchesloo.dateformat_metric ) %]
-        dateFormat: 'uk',[% END %]
-        sortList: [[0,0]],
-        headers: { 1: { sorter: 'articles' }}
-    });
+    $("#transferst[% branchesloo.branchcode %]").dataTable($.extend(true, {}, dataTablesDefaults, {
+        "aoColumnDefs": [
+            { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false },
+            { "sType": "anti-the", "aTargets" : [ "anti-the" ] },
+            { "sType": "title-string", "aTargets" : [ "title-string" ] }
+        ],
+        "sDom": 't',
+        "bPaginate": false
+    }));
     [% END %]
 });
 //]]>
@@ -45,8 +44,8 @@ $(document).ready(function() {
             <table style="width: 100%" id="transferst[% branchesloo.branchcode %]">
             <caption>Coming from [% branchesloo.branchname %]</caption>
             <thead><tr>
-                <th>Date of transfer</th>
-                <th>Title</th>
+                <th class="title-string">Date of transfer</th>
+                <th class="anti-the">Title</th>
                 <th>On hold for</th>
                 <th>Home library</th>
                 <th>Call no.</th>
@@ -58,9 +57,9 @@ $(document).ready(function() {
                 [% ELSE %]
                 <tr>
                 [% END %]
-                    <td><p>[% reser.datetransfer %]</p> [% IF ( reser.messcompa ) %]<span class="error">Transfer is [% reser.diff %] days late</span>[% END %]</td>
-                    <td><span style="display:none;">[% reser.title |html %]</span><!-- invisible title for tablesorter -->
-                   [% INCLUDE 'biblio-default-view.inc' biblionumber = reser.biblionumber %][% reser.title |html %] [% IF ( reser.subtitle ) %] [% FOREACH subtitl IN reser.subtitle %][% subtitl.subfield %][% END %][% END %]</a> [% IF ( reser.author ) %]by [% reser.author %][% END %]
+                    <td><p><span title="[% reser.datetransfer %]">[% reser.datetransfer | $KohaDates %]</span></p> [% IF ( reser.messcompa ) %]<span class="error">Transfer is [% reser.diff %] days late</span>[% END %]</td>
+                    <td>
+                        [% INCLUDE 'biblio-default-view.inc' biblionumber = reser.biblionumber %][% reser.title |html %] [% IF ( reser.subtitle ) %] [% FOREACH subtitl IN reser.subtitle %][% subtitl.subfield %][% END %][% END %]</a> [% IF ( reser.author ) %]by [% reser.author %][% END %]
                             [% IF ( reser.itemtype ) %]&nbsp; (<b>[% reser.itemtype %]</b>)[% END %]
                             <br />Barcode: [% reser.barcode %]
                     </td>

@@ -54,11 +54,10 @@ if ( $run_report ) {
     # XXX GetHoldsQueueItems() does not support $itemtypeslimit!
     my $items = GetHoldsQueueItems($branchlimit, $itemtypeslimit);
     $template->param(
-        branch     => $branchlimit,
+        branchlimit     => $branchlimit,
         total      => scalar @$items,
         itemsloop  => $items,
         run_report => $run_report,
-        dateformat => C4::Context->preference("dateformat"),
     );
 }
 

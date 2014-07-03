@@ -9,7 +9,7 @@
   xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
   exclude-result-prefixes="marc items">
     <xsl:import href="NORMARCslimUtils.xsl"/>
-    <xsl:output method = "html" indent="yes" omit-xml-declaration = "yes" />
+    <xsl:output method = "html" indent="yes" omit-xml-declaration = "yes" encoding="UTF-8"/>
     <xsl:key name="item-by-status" match="items:item" use="items:status"/>
     <xsl:key name="item-by-status-and-branch" match="items:item" use="concat(items:status, ' ', items:homebranch)"/>
 
@@ -18,6 +18,8 @@
     </xsl:template>
     <xsl:template match="marc:record">
 
+    <!-- System preferences -->
+    <xsl:variable name="UseControlNumber" select="marc:sysprefs/marc:syspref[@name='UseControlNumber']"/>
     <xsl:variable name="DisplayOPACiconsXSLT" select="marc:sysprefs/marc:syspref[@name='DisplayOPACiconsXSLT']"/>
     <xsl:variable name="singleBranchMode" select="marc:sysprefs/marc:syspref[@name='singleBranchMode']"/>
 
@@ -32,7 +34,7 @@
         <xsl:variable name="controlField008" select="marc:controlfield[@tag=008]"/>
         <xsl:variable name="field019b" select="marc:datafield[@tag=019]/marc:subfield[@code='b']"/>
         <xsl:variable name="typeOf008">
-        <!-- Codes with upper case first letter below are from the NORMARC standard, lower case first letter are made up. -->
+            <!-- The logic here should be exactly the same for NORMARCslim2intranetDetail.xsl, NORMARCslim2intranetResults.xsl, NORMARCslim2OPACDetail.xsl and NORMARCslim2OPACResults.xsl -->
             <xsl:choose>
                 <xsl:when test="$field019b='b' or $field019b='k' or $field019b='l' or $leader6='b'">Mon</xsl:when>
                 <xsl:when test="$field019b='e' or contains($field019b,'ec') or contains($field019b,'ed') or contains($field019b,'ee') or contains($field019b,'ef') or $leader6='g'">FV</xsl:when>
@@ -291,17 +293,17 @@
                      <xsl:call-template name="subfieldSelect">
                         <xsl:with-param name="codes">a</xsl:with-param>
                     </xsl:call-template>
-                    <xsl:if test="marc:subfield[@code='b']">
-                        <xsl:text> : </xsl:text>
-                        <xsl:call-template name="subfieldSelect">
-                            <xsl:with-param name="codes">b</xsl:with-param>
-                        </xsl:call-template>
-                    </xsl:if>
                     <xsl:if test="marc:subfield[@code='h']">
                         <xsl:text> </xsl:text>
                         (<xsl:call-template name="subfieldSelect">
                             <xsl:with-param name="codes">h</xsl:with-param>
                         </xsl:call-template>) 
+                    </xsl:if>
+                    <xsl:if test="marc:subfield[@code='b']">
+                        <xsl:text> : </xsl:text>
+                        <xsl:call-template name="subfieldSelect">
+                            <xsl:with-param name="codes">b</xsl:with-param>
+                        </xsl:call-template>
                     </xsl:if>
                     <xsl:text> </xsl:text>
                     <xsl:call-template name="subfieldSelect">
@@ -372,22 +374,86 @@
 	</span>
     </xsl:if>
 
+        <!-- Analytics -->
+        <xsl:if test="$leader7='s' or $leader7='c'">
+        <span class="results_summary analytics"><span class="label">Analytics: </span>
+            <a>
+            <xsl:choose>
+            <xsl:when test="$UseControlNumber = '1' and marc:controlfield[@tag=001]">
+                <xsl:attribute name="href">/cgi-bin/koha/opac-search.pl?q=rcn:<xsl:value-of select="marc:controlfield[@tag=001]"/>+and+(bib-level:a+or+bib-level:b)</xsl:attribute>
+            </xsl:when>
+            <xsl:otherwise>
+                <xsl:attribute name="href">/cgi-bin/koha/opac-search.pl?q=Host-item:<xsl:value-of select="translate(marc:datafield[@tag=245]/marc:subfield[@code='a'], '/', '')"/></xsl:attribute>
+            </xsl:otherwise>
+            </xsl:choose>
+            <xsl:text>Show analytics</xsl:text>
+            </a>
+        </span>
+        </xsl:if>
+
+        <!-- 773 - Links from child to parent -->
+        <xsl:if test="marc:datafield[@tag=773]">
+        <xsl:for-each select="marc:datafield[@tag=773]">
+        <xsl:if test="@ind1=0">
+        <span class="results_summary in"><span class="label">
+        <xsl:choose>
+        <xsl:when test="@ind2=' '">
+            In:
+        </xsl:when>
+        <xsl:when test="@ind2=8">
+            <xsl:if test="marc:subfield[@code='i']">
+                <xsl:value-of select="marc:subfield[@code='i']"/>
+            </xsl:if>
+        </xsl:when>
+        </xsl:choose>
+        </span>
+                <xsl:variable name="f773">
+                    <xsl:call-template name="chopPunctuation"><xsl:with-param name="chopString"><xsl:call-template name="subfieldSelect">
+                        <xsl:with-param name="codes">a_t</xsl:with-param>
+                    </xsl:call-template></xsl:with-param></xsl:call-template>
+                </xsl:variable>
+            <xsl:choose>
+                <xsl:when test="$UseControlNumber = '1' and marc:subfield[@code='w']">
+                    <a><xsl:attribute name="href">/cgi-bin/koha/opac-search.pl?q=Control-number:<xsl:call-template name="extractControlNumber"><xsl:with-param name="subfieldW" select="marc:subfield[@code='w']"/></xsl:call-template></xsl:attribute>
+                        <xsl:value-of select="translate($f773, '()', '')"/>
+                    </a>
+                    <xsl:if test="marc:subfield[@code='g']"><xsl:text> </xsl:text><xsl:value-of select="marc:subfield[@code='g']"/></xsl:if>
+                </xsl:when>
+                <xsl:when test="marc:subfield[@code='0']">
+                    <a><xsl:attribute name="href">/cgi-bin/koha/opac-detail.pl?biblionumber=<xsl:value-of select="marc:subfield[@code='0']"/></xsl:attribute>
+                        <xsl:value-of select="$f773"/>
+                    </a>
+                </xsl:when>
+                <xsl:otherwise>
+                    <a><xsl:attribute name="href">/cgi-bin/koha/opac-search.pl?q=ti,phr:<xsl:value-of select="translate($f773, '()', '')"/></xsl:attribute>
+                        <xsl:value-of select="$f773"/>
+                    </a>
+                    <xsl:if test="marc:subfield[@code='g']"><xsl:text> </xsl:text><xsl:value-of select="marc:subfield[@code='g']"/></xsl:if>
+                </xsl:otherwise>
+            </xsl:choose>
+        </span>
+        <xsl:if test="marc:subfield[@code='n']">
+            <span class="results_summary"><xsl:value-of select="marc:subfield[@code='n']"/></span>
+        </xsl:if>
+        </xsl:if>
+        </xsl:for-each>
+        </xsl:if>
+
 <xsl:if test="$DisplayOPACiconsXSLT!='0'">
     <span class="results_summary">
     <xsl:if test="$typeOf008!=''">
-        <span class="label">Type: </span>
-        
-            <xsl:choose>
-                <xsl:when test="$typeOf008='Mon'"><img src="/opac-tmpl/lib/famfamfam/silk/book.png" alt="Bok" title="Bok"/> Bok</xsl:when>
-                <xsl:when test="$typeOf008='Per'"><img src="/opac-tmpl/lib/famfamfam/silk/newspaper.png" alt="Periodika" title="Periodika"/> Periodika</xsl:when>
-                <xsl:when test="$typeOf008='Fil'"><img src="/opac-tmpl/lib/famfamfam/silk/computer_link.png" alt="Fil" title="Fil"/> Fil</xsl:when>
-                <xsl:when test="$typeOf008='Kar'"><img src="/opac-tmpl/lib/famfamfam/silk/map.png" alt="Kart" title="Kart"/> Kart</xsl:when>
-                <xsl:when test="$typeOf008='FV'"><img src="/opac-tmpl/lib/famfamfam/silk/film.png" alt="Film og video" title="Film og video"/> Film og video</xsl:when>
-                <xsl:when test="$typeOf008='Mus'"><img src="/opac-tmpl/lib/famfamfam/silk/sound.png" alt="Musikktrykk og lydopptak" title="Musikktrykk og lydopptak"/> Musikk</xsl:when>
-                <xsl:when test="$typeOf008='gra'"> Grafisk materiale</xsl:when>
-                <xsl:when test="$typeOf008='kom'"> Kombidokumenter</xsl:when>
-                <xsl:when test="$typeOf008='trd'"> Tre-dimensjonale gjenstander</xsl:when>
-            </xsl:choose>
+        <span class="label">Materialtype: </span>
+        <xsl:choose>
+            <xsl:when test="$typeOf008='Mon'"><img src="/opac-tmpl/lib/famfamfam/BK.png" alt="Bok" title="Bok"/> Bok</xsl:when>
+            <xsl:when test="$typeOf008='Per'"><img src="/opac-tmpl/lib/famfamfam/AR.png" alt="Periodika" title="Periodika"/> Periodika</xsl:when>
+            <xsl:when test="$typeOf008='Fil'"><img src="/opac-tmpl/lib/famfamfam/CF.png" alt="Fil" title="Fil"/> Fil</xsl:when>
+            <xsl:when test="$typeOf008='Kar'"><img src="/opac-tmpl/lib/famfamfam/MP.png" alt="Kart" title="Kart"/> Kart</xsl:when>
+            <xsl:when test="$typeOf008='FV'"><img  src="/opac-tmpl/lib/famfamfam/VM.png" alt="Film og video" title="Film og video"/> Film og video</xsl:when>
+            <xsl:when test="$typeOf008='Mus'"><img src="/opac-tmpl/lib/famfamfam/PR.png" alt="Musikktrykk og lydopptak" title="Musikktrykk og lydopptak"/> Musikk</xsl:when>
+            <xsl:when test="$typeOf008='gra'"><img src="/opac-tmpl/lib/famfamfam/GR.png" alt="Grafisk materiale" title="Grafisk materiale"/> Grafisk materiale</xsl:when>
+            <xsl:when test="$typeOf008='kom'"><img src="/opac-tmpl/lib/famfamfam/MX.png" alt="Kombidokumenter" title="Kombidokumenter"/> Kombidokumenter</xsl:when>
+            <xsl:when test="$typeOf008='trd'"><img src="/opac-tmpl/lib/famfamfam/TD.png" alt="Tre-dimensjonale gjenstander" title="Tre-dimensjonale gjenstander"/> Tre-dimensjonale gjenstander</xsl:when>
+        </xsl:choose>
     </xsl:if>
     <xsl:if test="string-length(normalize-space($physicalDescription))">
         <span class="label">; Format: </span><xsl:copy-of select="$physicalDescription"></xsl:copy-of>
@@ -707,12 +773,12 @@
 <span class="results_summary">
                         <span class="label">Availability: </span>
                         <xsl:choose>
-				   <xsl:when test="count(key('item-by-status', 'available'))=0 and count(key('item-by-status', 'reference'))=0">No copies available
+                             <xsl:when test="count(key('item-by-status', 'available'))=0 and count(key('item-by-status', 'reference'))=0">No items available
 				   </xsl:when>
 
                    <xsl:when test="count(key('item-by-status', 'available'))>0">
                    <span class="available">
-                       <b><xsl:text>Copies available for loan: </xsl:text></b>
+                       <b><xsl:text>Items available for loan: </xsl:text></b>
                        <xsl:variable name="available_items" select="key('item-by-status', 'available')"/>
                <xsl:choose>
                <xsl:when test="$singleBranchMode=1">
@@ -744,12 +810,13 @@
                    <xsl:choose>
                    <xsl:when test="count(key('item-by-status', 'reference'))>0">
                    <span class="available">
-                       <b><xsl:text>Copies available for reference: </xsl:text></b>
+                       <b><xsl:text>Items available for reference: </xsl:text></b>
                        <xsl:variable name="reference_items"
                            select="key('item-by-status', 'reference')"/>
                        <xsl:for-each select="$reference_items[generate-id() = generate-id(key('item-by-status-and-branch', concat(items:status, ' ', items:homebranch))[1])]">
-                           <xsl:value-of select="items:homebranch"/>
-
+                           <xsl:if test="$singleBranchMode=0">
+                               <xsl:value-of select="items:homebranch"/>
+                           </xsl:if>
 						   <xsl:if test="items:itemcallnumber != '' and items:itemcallnumber"> [<xsl:value-of select="items:itemcallnumber"/>]</xsl:if>
                            <xsl:text> (</xsl:text>
                            <xsl:value-of select="count(key('item-by-status-and-branch', concat(items:status, ' ', items:homebranch)))"/>

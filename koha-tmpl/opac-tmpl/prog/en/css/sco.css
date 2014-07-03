@@ -1,3 +1,6 @@
+@import url("/opac-tmpl/lib/yui/reset-fonts-grids.css");
+@import url("/opac-tmpl/lib/yui/skin.css");
+
 a {
 	font-weight : bold;
 }
@@ -138,6 +141,7 @@ div.message {
  
 .dialog input.back {
     background : #FFF url(/opac-tmpl/lib/famfamfam/silk/arrow_left.png) no-repeat 4px center;
+    border: 1px solid #BCBCBC;
 	padding : .4em .4em .4em 25px;	
  }
  
@@ -192,19 +196,6 @@ tr.highlight td, tr.highlight th, tr.odd td {
 
 tr.even td, tr.even.highlight td {
 	background-color: #FFF;
-}
-
-.header {
-    background-image:url("../../images/ascdesc.gif");
-    background-position:right center;
-    background-repeat:no-repeat;
-    cursor:pointer;
-}
-.headerSortUp {
-    background-image:url("../../images/asc.gif");
-}
-.headerSortDown {
-    background-image:url("../../images/desc.gif");
 }
 
 p {
@@ -335,4 +326,28 @@ span.lang{
 
 div.ft {
 	clear : both;
+}
+
+.inline {
+    display: inline;
+}
+
+.sorting_asc {
+    padding-right: 19px;
+    background: url("../../images/asc.gif") no-repeat scroll right center #EEEEEE;
+}
+.sorting_desc {
+    padding-right: 19px;
+    background: url("../../images/desc.gif") no-repeat scroll right center #EEEEEE;
+}
+.sorting {
+    padding-right: 19px;
+    background: url("../../images/ascdesc.gif") no-repeat scroll right center #EEEEEE;
+}
+.nosort,
+.nosort.sorting_asc,
+.nosort.sorting_desc,
+.nosort.sorting {
+    padding-right: 19px;
+    background: #EEEEEE none;
 }

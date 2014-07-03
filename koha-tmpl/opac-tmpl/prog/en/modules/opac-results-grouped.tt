@@ -1,3 +1,4 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %]
 [% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo;
 [% IF ( searchdesc ) %]
@@ -17,7 +18,7 @@ var q_array = new Array();  // will hold the search terms, if possible
 $(document).ready(function(){
     [% IF ( OpacHighlightedWords ) %]
         $('a.title').each(function() {
-            $(this).attr('href', $(this).attr('href') + '&query_desc=[% query_desc | url %]');
+            $(this).attr("href", $(this).attr("href") + "&query_desc=[% query_desc | uri %]");
         });
     [% END %]
 
@@ -40,12 +41,12 @@ $(document).ready(function(){
 			var shelfnumber = $("#addto").find("option:selected").attr("id").replace("s","");
 			[% IF ( loggedinusername ) %]if (vShelfAdd()) {
 			Dopop('/cgi-bin/koha/opac-addbybiblionumber.pl?selectedshelf='+shelfnumber+'&' + vShelfAdd());
-			}[% ELSE %] alert(_('You must be logged in to create or add to Lists')); [% END %]
+			}[% ELSE %] alert(_("You must be logged in to create or add to Lists")); [% END %]
 			return false;
 		} else if($("#addto").find("option:selected").attr("value") == "newlist"){
 			[% IF ( loggedinusername ) %]if (vShelfAdd()) {
 			Dopop('/cgi-bin/koha/opac-addbybiblionumber.pl?newshelf=1&' + vShelfAdd());
-			}[% ELSE %] alert(_('You must be logged in to create or add to Lists')); [% END %]
+			}[% ELSE %] alert(_("You must be logged in to create or add to Lists")); [% END %]
 			return false;
 		}
 		if($("#addto").find("option:selected").attr("value") == "addtocart"){
@@ -62,7 +63,7 @@ $(document).ready(function(){
         return false;
     });
     [% IF ( query_desc ) %]
-    var query_desc = "[% query_desc |replace("'", "\'") |replace('"', '\"') |replace('\n', '\\n') |replace('\r', '\\r') %]";
+    var query_desc = "[% query_desc |replace("'", "\'") |replace('\n', '\\n') |replace('\r', '\\r') |html %]";
     q_array = query_desc.split(" ");
     // ensure that we don't have "" at the end of the array, which can
     // break the highlighter
@@ -82,6 +83,7 @@ function highlightOff() {
 function highlightOn() {
     var x;
     for (x in q_array) {
+        q_array[x] = q_array[x].replace(/\w*:([\w])/, "$1");
         $("td").highlight(q_array[x]);
     }
     $(".highlight_toggle").toggle();
@@ -244,7 +246,7 @@ function highlightOn() {
         [% IF ( GROUP_RESULT.searchhighlightblob ) %]<p class="searchhighlightblob">[% GROUP_RESULT.searchhighlightblob %]</p>[% END %]
 				<p class="availability">
 					[% IF ( GROUP_RESULT.available_items_loop ) %]
-					<span class="available"><strong>Copies available at:</strong>
+                                       <span class="available"><strong>Items available at:</strong>
 					[% FOREACH available_items_loo IN GROUP_RESULT.available_items_loop %]
 					[% IF ( available_items_loo.branchname ) %][% available_items_loo.branchname %][% END %]
 					[% IF ( OPACItemsResultsDisplay ) %]
@@ -259,7 +261,7 @@ function highlightOn() {
 					[% END %]
 					<span class="unavailable">
 					[% IF ( GROUP_RESULT.onloancount ) %] Checked out ([% GROUP_RESULT.onloancount %]), [% END %]
-					[% IF ( GROUP_RESULT.wthdrawncount ) %] Withdrawn ([% GROUP_RESULT.wthdrawncount %]), [% END %]
+                                      [% IF ( GROUP_RESULT.withdrawncount ) %] Withdrawn ([% GROUP_RESULT.withdrawncount %]), [% END %]
 					[% IF ( GROUP_RESULT.itemlostcount ) %] Lost ([% GROUP_RESULT.itemlostcount %]),[% END %]
 					[% IF ( GROUP_RESULT.damagedcount ) %] Damaged ([% GROUP_RESULT.damagedcount %]),[% END %]
 					[% IF ( GROUP_RESULT.orderedcount ) %] On order ([% GROUP_RESULT.orderedcount %]),[% END %]

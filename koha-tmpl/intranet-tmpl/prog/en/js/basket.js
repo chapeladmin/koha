@@ -79,7 +79,7 @@ function openBasket() {
     if ( strCookie ) {
         var iW = 820;
         var iH = 450;
-        var optWin = "dependant=yes,status=yes,scrollbars=yes,resizable=yes,toolbar=no,location=yes,height="+iH+",width="+iW;
+        var optWin = "status=yes,scrollbars=yes,resizable=yes,toolbar=no,location=yes,height="+iH+",width="+iW;
         var loc = CGIBIN + "basket/basket.pl?" + strCookie;
         var basket = open(loc, "basket", optWin);
         if (window.focus) {basket.focus()}
@@ -153,17 +153,17 @@ function SelectAll(){
     }
 }
 
-function addMultiple(){
+function addMultiple(biblist){
     var c_value = "";
-    if(document.bookbag_form.biblionumber.length > 0) {
-        for (var i=0; i < document.bookbag_form.biblionumber.length; i++) {
-            if (document.bookbag_form.biblionumber[i].checked) {
-                c_value = c_value + document.bookbag_form.biblionumber[i].value + "/";
+    if(biblist.length > 0) {
+        for (var i=0; i < biblist.length; i++) {
+            if (biblist[i].checked) {
+                c_value = c_value + biblist[i].value + "/";
             }
         }
         addSelRecords(c_value);
     } else {
-        c_value = c_value + document.bookbag_form.biblionumber.value + "/";
+        c_value = c_value + biblist.value + "/";
         addSelRecords(c_value);
     }
 }
@@ -184,10 +184,11 @@ function addSelRecords(valSel) { // function for adding a selection of biblios t
     var msg = "";
     if (nbAdd) {
         if (i > nbAdd) {
-            msg = nbAdd+" "+MSG_NRECORDS_ADDED+", "+(i-nbAdd)+" "+MSG_NRECORDS_IN_BASKET;
+            msg = MSG_NRECORDS_ADDED.format(nbAdd);
+            msg += MSG_NRECORDS_IN_BASKET.format((i-nbAdd));
         }
         else {
-            msg = nbAdd+" "+MSG_NRECORDS_ADDED;
+            msg = MSG_NRECORDS_ADDED.format(nbAdd);
         }
     }
     else {
@@ -195,7 +196,7 @@ function addSelRecords(valSel) { // function for adding a selection of biblios t
             msg = MSG_NO_RECORD_SELECTED;
         }
         else {
-            msg = MSG_NO_RECORD_ADDED+" ("+MSG_NRECORDS_IN_BASKET+") !";
+            msg = MSG_NO_RECORD_ADDED;
         }
     }
 	showCartUpdate(msg);
@@ -335,7 +336,7 @@ function sendBasket() {
 
     var loc = CGIBIN + "basket/sendbasket.pl?" + strCookie;
 
-    var optWin="dependant=yes,scrollbars=no,resizable=no,height=300,width=450,top=50,left=100";
+    var optWin="scrollbars=no,resizable=no,height=300,width=450,top=50,left=100";
     var win_form = open(loc,"win_form",optWin);
 }
 
@@ -345,7 +346,7 @@ function downloadBasket() {
 
     var loc = CGIBIN + "basket/downloadcart.pl?" + strCookie;
 
-    open(loc,"win_form",'dependant=yes,scrollbars=no,resizable=no,height=300,width=450,top=50,left=100');
+    open(loc,"win_form",'scrollbars=no,resizable=no,height=300,width=450,top=50,left=100');
 }
 
 function printBasket() {
@@ -378,10 +379,10 @@ function showLess() {
 function updateBasket(updated_value,target) {
 	if(target){
 	target.$('#basketcount').html(" <span>("+updated_value+")</span>");
-    target.$('#cartDetails').html(MSG_IN_YOUR_CART+updated_value);
+    target.$('#cartDetails').html(MSG_IN_YOUR_CART.format(updated_value));
 	} else {
 	$('#basketcount').html(" <span>("+updated_value+")</span>");
-    $('#cartDetails').html(MSG_IN_YOUR_CART+updated_value);
+    $('#cartDetails').html(MSG_IN_YOUR_CART.format(updated_value));
 	}
 	var basketcount = updated_value;
 }
@@ -403,19 +404,19 @@ function addSelToShelf() {
 
 ///  vShelfAdd()  builds url string for multiple-biblio adds.
 
-function vShelfAdd() {
-        bibs= new Array;
-        if(document.bookbag_form.biblionumber.length > 0) {
-                for (var i=0; i < document.bookbag_form.biblionumber.length; i++) {
-                        if (document.bookbag_form.biblionumber[i].checked) {
-                                bibs.push("biblionumber=" +  document.bookbag_form.biblionumber[i].value);
+function vShelfAdd(biblist) {
+        bibs = new Array();
+        if(biblist.length > 0) {
+                for (var i=0; i < biblist.length; i++) {
+                        if (biblist[i].checked) {
+                                bibs.push("biblionumber=" +  biblist[i].value);
                         }
                 }
-	    if (bibs.length == 0) { showListsUpdate(MSG_NO_RECORD_SELECTED); }
+        if (bibs.length == 0) { showListsUpdate(MSG_NO_RECORD_SELECTED); }
             return bibs.join("&");
         } else {
-            if (document.bookbag_form.biblionumber.checked) {
-                return "biblionumber=" + document.bookbag_form.biblionumber.value;
+            if (biblist.checked) {
+                return "biblionumber=" + biblist.value;
             }
         }
 }

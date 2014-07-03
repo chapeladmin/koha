@@ -55,13 +55,12 @@ if ($^O ne 'VMS') {
 }
 my $perlVersion   = $];
 my $mysqlVersion  = `mysql -V`;
-my $apacheVersion = `httpd -v`;
-$apacheVersion = `httpd2 -v` unless $apacheVersion;
+my $apacheVersion = `httpd -v 2> /dev/null`;
+$apacheVersion = `httpd2 -v 2> /dev/null` unless $apacheVersion;
 $apacheVersion = (`/usr/sbin/apache2 -V`)[0] unless $apacheVersion;
 my $zebraVersion = `zebraidx -V`;
 
 # Additional system information for warnings
-my $prefNoZebra = C4::Context->preference('nozebra');
 my $prefAutoCreateAuthorities = C4::Context->preference('AutoCreateAuthorities');
 my $prefBiblioAddsAuthorities = C4::Context->preference('BiblioAddsAuthorities');
 my $warnPrefBiblioAddsAuthorities = ( $prefAutoCreateAuthorities && ( !$prefBiblioAddsAuthorities) );
@@ -69,10 +68,29 @@ my $warnPrefBiblioAddsAuthorities = ( $prefAutoCreateAuthorities && ( !$prefBibl
 my $prefEasyAnalyticalRecords  = C4::Context->preference('EasyAnalyticalRecords');
 my $prefUseControlNumber  = C4::Context->preference('UseControlNumber');
 my $warnPrefEasyAnalyticalRecords  = ( $prefEasyAnalyticalRecords  && $prefUseControlNumber );
+my $warnPrefAnonymousPatron = (
+    C4::Context->preference('OPACPrivacy')
+        and not C4::Context->preference('AnonymousPatron')
+);
 
 my $errZebraConnection = C4::Context->Zconn("biblioserver",0)->errcode();
 
 my $warnIsRootUser   = (! $loggedinuser);
+
+my $warnNoActiveCurrency = (! defined C4::Budgets->GetCurrency());
+my @xml_config_warnings;
+
+if ( ! defined C4::Context->config('zebra_bib_index_mode') ) {
+    push @xml_config_warnings, {
+        error => 'zebra_bib_index_mode_warn'
+    };
+}
+
+if ( ! defined C4::Context->config('zebra_auth_index_mode') ) {
+    push @xml_config_warnings, {
+        error => 'zebra_auth_index_mode_warn'
+    };
+}
 
 $template->param(
     kohaVersion   => $kohaVersion,
@@ -83,13 +101,15 @@ $template->param(
     mysqlVersion  => $mysqlVersion,
     apacheVersion => $apacheVersion,
     zebraVersion  => $zebraVersion,
-    prefNoZebra   => $prefNoZebra,
     prefBiblioAddsAuthorities => $prefBiblioAddsAuthorities,
     prefAutoCreateAuthorities => $prefAutoCreateAuthorities,
     warnPrefBiblioAddsAuthorities => $warnPrefBiblioAddsAuthorities,
     warnPrefEasyAnalyticalRecords  => $warnPrefEasyAnalyticalRecords,
+    warnPrefAnonymousPatron => $warnPrefAnonymousPatron,
     errZebraConnection => $errZebraConnection,
     warnIsRootUser => $warnIsRootUser,
+    warnNoActiveCurrency => $warnNoActiveCurrency,
+    xml_config_warnings => \@xml_config_warnings,
 );
 
 my @components = ();
@@ -145,40 +165,52 @@ $template->param( table => $table );
 ## Koha time line code
 
 #get file location
-my $dir = C4::Context->config('intranetdir');
-open( my $file, "<", "$dir" . "/docs/history.txt" );
-my $i = 0;
+my $docdir;
+if ( defined C4::Context->config('docdir') ) {
+    $docdir = C4::Context->config('docdir');
+} else {
+    # if no <docdir> is defined in koha-conf.xml, use the default location
+    # this is a work-around to stop breakage on upgraded Kohas, bug 8911
+    $docdir = C4::Context->config('intranetdir') . '/docs';
+}
 
-my @rows2 = ();
-my $row2  = [];
+if ( open( my $file, "<", "$docdir" . "/history.txt" ) ) {
 
-my @lines = <$file>;
-close($file);
+    my $i = 0;
 
-shift @lines; #remove header row
+    my @rows2 = ();
+    my $row2  = [];
 
-foreach (@lines) {
-    my ( $date, $desc, $tag ) = split(/\t/);
-    if(!$desc && $date=~ /(?<=\d{4})\s+/) {
-        ($date, $desc)= ($`, $');
-    }
-    push(
-        @rows2,
-        {
-            date => $date,
-            desc => $desc,
+    my @lines = <$file>;
+    close($file);
+
+    shift @lines; #remove header row
+
+    foreach (@lines) {
+        my ( $date, $desc, $tag ) = split(/\t/);
+        if(!$desc && $date=~ /(?<=\d{4})\s+/) {
+            ($date, $desc)= ($`, $');
         }
-    );
-}
+        push(
+            @rows2,
+            {
+                date => $date,
+                desc => $desc,
+            }
+        );
+    }
 
-my $table2 = [];
-#foreach my $row2 (@rows2) {
-foreach  (@rows2) {
-    push (@$row2, $_);
-    push( @$table2, { row2 => $row2 } );
-    $row2 = [];
-}
+    my $table2 = [];
+    #foreach my $row2 (@rows2) {
+    foreach  (@rows2) {
+        push (@$row2, $_);
+        push( @$table2, { row2 => $row2 } );
+        $row2 = [];
+    }
 
-$template->param( table2 => $table2 );
+    $template->param( table2 => $table2 );
+} else {
+    $template->param( timeline_read_error => 1 );
+}
 
 output_html_with_http_headers $query, $cookie, $template->output;

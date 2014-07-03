@@ -1,6 +1,6 @@
 [% INCLUDE 'help-top.inc' %]
 
-<h1>Patron Details</h1>
+<h1>Patron details</h1>
 
 <p>When viewing a patron record you have the option to view information from one of many tabs found on the left hand side of the record.</p>
 
@@ -15,7 +15,7 @@
 <ul>
 <li>A child patron will list their Guarantor</li>
 <li>On the Guarantor's record, all children and/or professionals will be listed</li>
-</ul> 
+</ul>
 
 <p>Below the patron's information on the details screen is a tabbed display of the items they have checked out, overdue, and on hold.</p>
 
@@ -24,6 +24,12 @@
 <h2>Fines</h2>
 
 <p>The patron's complete accounting history will appear on the Fines tab. Contrary to its name, the Fines tab does not just show fine data, it also shows membership fees, rental fees, reserve fees and any other charge you may have for patrons.</p>
+
+<h2>Routing Lists</h2>
+
+<p>A list of all of the serial routing lists the patron belongs to will be accessible via the 'Routing Lists' tab on the patron record.</p>
+
+<p>On this tab you will be able to see and edit all of the routing lists that this patron is on.</p>
 
 <h2>Circulation History</h2>
 
@@ -43,6 +49,26 @@
 <p>The patron's messaging preferences are set when adding or editing the patron. This tab will show the messages that have been sent and those that are queued to be sent</p>
 
 <p>Clicking on the message title will expand the view to show you the full text of the message that was sent.</p>
+
+<h2>Statistics</h2>
+
+<p>Depending on what you set for the values of your StatisticsFields system preference, you can see statistics for one patron's circulation actions.</p>
+
+<h2>Files</h2>
+
+<p>If you set the EnableBorrowerFiles preference to 'Do' the Files tab will be visible on the patron information page.</p>
+
+<p>From here you can upload files to attach to the patron record.</p>
+
+<p>All files that are uploaded will appear above a form where additional files can be uploaded from.</p>
+
+<h2>Purchase Suggestions</h2>
+
+<p>If the patron has made any purchase suggestions you will see a purchase suggestions tab on the patron record.</p>
+
+<p>From here you can see all suggestions made by the patron and their status, you can also create a purchase suggestion on the patron's behalf by clicking the 'New purchase suggestion' button at the top.</p>
+
+<p>Learn more about Purchase suggestions in the Acquisitions chapter of the manual.</p>
 
 <h2>Editing Patrons</h2>
 
@@ -97,6 +123,6 @@
 	<li>You will be brought to your new patron</li>
 </ul>
 
-<p><strong>See the full documentation for the Patron Details in the <a href="http://manual.koha-community.org/3.8/en/patroninformation.html">manual</a> (online).</strong></p>
+<p><strong>See the full documentation for the Patron Details in the <a href="http://manual.koha-community.org/[% helpVersion %]/en/patroninformation.html">manual</a> (online).</strong></p>
 
 [% INCLUDE 'help-bottom.inc' %]

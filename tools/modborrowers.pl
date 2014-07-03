@@ -21,7 +21,7 @@
 #
 # Batch Edit Patrons
 # Modification for patron's fields:
-# surname firstname branchcode categorycode sort1 sort2 dateenrolled dateexpiry debarred debarredcomment borrowernotes
+# surname firstname branchcode categorycode sort1 sort2 dateenrolled dateexpiry borrowernotes
 # And for patron attributes.
 
 use Modern::Perl;
@@ -34,6 +34,7 @@ use C4::Members::Attributes;
 use C4::Members::AttributeTypes qw/GetAttributeTypes_hashref/;
 use C4::Output;
 use List::MoreUtils qw /any uniq/;
+use Koha::List::Patron;
 
 my $input = new CGI;
 my $op = $input->param('op') || 'show_form';
@@ -50,12 +51,11 @@ my %cookies   = parse CGI::Cookie($cookie);
 my $sessionID = $cookies{'CGISESSID'}->value;
 my $dbh       = C4::Context->dbh;
 
-
-
 # Show borrower informations
 if ( $op eq 'show' ) {
-    my $filefh      = $input->upload('uploadfile');
-    my $filecontent = $input->param('filecontent');
+    my $filefh         = $input->upload('uploadfile');
+    my $filecontent    = $input->param('filecontent');
+    my $patron_list_id = $input->param('patron_list_id');
     my @borrowers;
     my @cardnumbers;
     my @notfoundcardnumbers;
@@ -67,6 +67,13 @@ if ( $op eq 'show' ) {
             $content =~ s/[\r\n]*$//g;
             push @cardnumbers, $content if $content;
         }
+    } elsif ( $patron_list_id ) {
+        my ($list) = GetPatronLists( { patron_list_id => $patron_list_id } );
+
+        @cardnumbers =
+          $list->patron_list_patrons()->search_related('borrowernumber')
+          ->get_column('cardnumber')->all();
+
     } else {
         if ( my $list = $input->param('cardnumberlist') ) {
             push @cardnumbers, split( /\s\n/, $list );
@@ -155,21 +162,18 @@ if ( $op eq 'show' ) {
     my @fields = (
         {
             name => "surname",
-            lib  => "Surname",
             type => "text",
             mandatory => ( grep /surname/, @mandatoryFields ) ? 1 : 0
         }
         ,
         {
             name => "firstname",
-            lib  => "Firstname",
             type => "text",
             mandatory => ( grep /surname/, @mandatoryFields ) ? 1 : 0,
         }
         ,
         {
             name => "branchcode",
-            lib  => "Branchname",
             type => "select",
             option => \@branches_option,
             mandatory => ( grep /branchcode/, @mandatoryFields ) ? 1 : 0,
@@ -177,7 +181,6 @@ if ( $op eq 'show' ) {
         ,
         {
             name => "categorycode",
-            lib  => "Category",
             type => "select",
             option => \@categories_option,
             mandatory => ( grep /categorycode/, @mandatoryFields ) ? 1 : 0,
@@ -185,7 +188,6 @@ if ( $op eq 'show' ) {
         ,
         {
             name => "sort1",
-            lib  => "Sort 1",
             type => @sort1_option ? "select" : "text",
             option => \@sort1_option,
             mandatory => ( grep /sort1/, @mandatoryFields ) ? 1 : 0,
@@ -193,7 +195,6 @@ if ( $op eq 'show' ) {
         ,
         {
             name => "sort2",
-            lib  => "Sort 2",
             type => @sort2_option ? "select" : "text",
             option => \@sort2_option,
             mandatory => ( grep /sort2/, @mandatoryFields ) ? 1 : 0,
@@ -201,35 +202,18 @@ if ( $op eq 'show' ) {
         ,
         {
             name => "dateenrolled",
-            lib  => "Date enrolled",
             type => "date",
             mandatory => ( grep /dateenrolled/, @mandatoryFields ) ? 1 : 0,
         }
         ,
         {
             name => "dateexpiry",
-            lib  => "Date expiry",
             type => "date",
             mandatory => ( grep /dateexpiry/, @mandatoryFields ) ? 1 : 0,
         }
         ,
         {
-            name => "debarred",
-            lib  => "Debarred",
-            type => "date",
-            mandatory => ( grep /debarred/, @mandatoryFields ) ? 1 : 0,
-        }
-        ,
-        {
-            name => "debarredcomment",
-            lib  => "Debarred comment",
-            type => "text",
-            mandatory => ( grep /debarredcomment/, @mandatoryFields ) ? 1 : 0,
-        }
-        ,
-        {
             name => "borrowernotes",
-            lib  => "Borrower Notes",
             type => "text",
             mandatory => ( grep /borrowernotes/, @mandatoryFields ) ? 1 : 0,
         }
@@ -239,7 +223,6 @@ if ( $op eq 'show' ) {
     $template->param('patron_attributes_values', \@patron_attributes_values);
 
     $template->param( fields => \@fields );
-    $template->param( DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar() );
 }
 
 # Process modifications
@@ -247,7 +230,7 @@ if ( $op eq 'do' ) {
 
     my @disabled = $input->param('disable_input');
     my $infos;
-    for my $field ( qw/surname firstname branchcode categorycode sort1 sort2 dateenrolled dateexpiry debarred debarredcomment borrowernotes/ ) {
+    for my $field ( qw/surname firstname branchcode categorycode sort1 sort2 dateenrolled dateexpiry borrowernotes/ ) {
         my $value = $input->param($field);
         $infos->{$field} = $value if $value;
         $infos->{$field} = "" if grep { /^$field$/ } @disabled;
@@ -326,6 +309,9 @@ if ( $op eq 'do' ) {
 
     $template->param( borrowers => \@borrowers );
     $template->param( errors => \@errors );
+} else {
+
+    $template->param( patron_lists => [ GetPatronLists() ] );
 }
 
 $template->param(
@@ -339,7 +325,7 @@ sub GetBorrowerInfos {
     my $borrower = GetMember( %info );
     if ( $borrower ) {
         $borrower->{branchname} = GetBranchName( $borrower->{branchcode} );
-        for ( qw(dateenrolled dateexpiry debarred) ) {
+        for ( qw(dateenrolled dateexpiry) ) {
             my $userdate = $borrower->{$_};
             unless ($userdate && $userdate ne "0000-00-00" and $userdate ne "9999-12-31") {
                 $borrower->{$_} = '';

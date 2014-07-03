@@ -1,6 +1,22 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: PACKAGE VERSION\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2013-05-16 03:25+0200\n"
+"PO-Revision-Date: 2013-06-16 14:18+0000\n"
+"Last-Translator: Lars Jørgen <lars@helbo.org>\n"
+"Language-Team: LANGUAGE <LL@li.org>\n"
+"Language: da\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+"X-Generator: Pootle 2.5.0\n"
+"X-POOTLE-MTIME: 1371392334.0\n"
+
 # Acquisitions
 msgid "acquisitions.pref"
-msgstr " "
+msgstr ""
 
 # Acquisitions > Policy
 msgid "acquisitions.pref Policy"
@@ -27,20 +43,36 @@ msgid "acquisitions.pref#AcqCreateItem# receiving an order."
 msgstr "en ordre modtages."
 
 # Acquisitions > Policy
+msgid "acquisitions.pref#AcqItemSetSubfieldsWhenReceived# Upon receiving items, update their subfields if they were created when placing an order (e.g. o=5|a=\"foo bar\")."
+msgstr ""
+
+# Acquisitions > Policy
 msgid "acquisitions.pref#AcqViewBaskets# Show baskets"
 msgstr "Vis kurve"
 
 # Acquisitions > Policy
-msgid "acquisitions.pref#AcqViewBaskets# created by staff member."
-msgstr "oprettet af medarbejder"
+msgid "acquisitions.pref#AcqViewBaskets# created or managed by staff member."
+msgstr ""
 
 # Acquisitions > Policy
 msgid "acquisitions.pref#AcqViewBaskets# from staff member's library."
-msgstr ""
+msgstr "fra medarbejderens bibliotek."
 
 # Acquisitions > Policy
 msgid "acquisitions.pref#AcqViewBaskets# in system, regardless of owner."
 msgstr "i system, uden hensyn til ejer."
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#AcqWarnOnDuplicateInvoice# Do not warn"
+msgstr ""
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#AcqWarnOnDuplicateInvoice# Warn"
+msgstr ""
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#AcqWarnOnDuplicateInvoice# when the librarian tries to create an invoice with a duplicate number."
+msgstr ""
 
 # Acquisitions > Policy
 msgid "acquisitions.pref#BasketConfirmations# When closing or reopening a basket,"
@@ -66,25 +98,57 @@ msgstr "360,000.00 (US)"
 msgid "acquisitions.pref#CurrencyFormat# Display currencies using the following format"
 msgstr "Vis valutaer i følgende format"
 
-# Acquisitions > Printing
-msgid "acquisitions.pref#OrderPdfFormat# Use"
-msgstr "Brug"
-
-# Acquisitions > Printing
-msgid "acquisitions.pref#OrderPdfFormat# when printing basket groups."
-msgstr "når kurv-grupper udskrives."
-
 # Acquisitions > Policy
-msgid "acquisitions.pref#UniqueItemFields# (space-separated list of fields that should be unique for items, must be valid SQL fields of items table)"
+msgid "acquisitions.pref#MarcFieldsToOrder# <br/>For example:<br/>price: 947$a|947$c<br/>quantity: 969$h<br/>budget_code: 922$a"
 msgstr ""
 
 # Acquisitions > Policy
-msgid "acquisitions.pref#gist# (enter in numeric form, 0.12 for 12%)"
-msgstr "(indtast i numerisk form, 0,12 for 12%)"
+msgid "acquisitions.pref#MarcFieldsToOrder# Set the mapping values for a new order line created from a MARC record in a staged file."
+msgstr ""
 
 # Acquisitions > Policy
-msgid "acquisitions.pref#gist# The default tax rate is"
-msgstr "Standard momssatsen er"
+msgid "acquisitions.pref#MarcFieldsToOrder# You can use the following fields: price, quantity, budget_code, discount, sort1, sort2"
+msgstr ""
+
+# Acquisitions > Printing
+msgid "acquisitions.pref#OrderPdfFormat# English 2-page"
+msgstr ""
+
+# Acquisitions > Printing
+msgid "acquisitions.pref#OrderPdfFormat# English 3-page"
+msgstr ""
+
+# Acquisitions > Printing
+msgid "acquisitions.pref#OrderPdfFormat# French 3-page"
+msgstr ""
+
+# Acquisitions > Printing
+msgid "acquisitions.pref#OrderPdfFormat# German 2-page"
+msgstr ""
+
+# Acquisitions > Printing
+msgid "acquisitions.pref#OrderPdfFormat# Use the"
+msgstr ""
+
+# Acquisitions > Printing
+msgid "acquisitions.pref#OrderPdfFormat# layout when printing basket groups."
+msgstr ""
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#UniqueItemFields# (separated by a space)"
+msgstr "(adskilt af mellemrum)"
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#UniqueItemFields# The following <a href='http://schema.koha-community.org/tables/items.html' target='blank'>database columns</a> should be unique in an item:"
+msgstr "De følgende <a href='http://schema.koha-community.org/tables/items.html' target='blank'>databasekolonner</a> skal være unikke i et eksemplar:"
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#gist# (enter in numeric form, 0.12 for 12%. First is the default. If you want more than 1 value, please separate with |)"
+msgstr "(indtast numerisk 0.12 for 12%. Den første værdi er standard. Hvis du ønsker mere end 1 værdi, skal de adskilles med |)"
+
+# Acquisitions > Policy
+msgid "acquisitions.pref#gist# Default tax rates are"
+msgstr "Standard moms er"
 
 # Administration
 msgid "admin.pref"
@@ -102,25 +166,33 @@ msgstr "Interface-optioner"
 msgid "admin.pref Login options"
 msgstr "Login-optioner"
 
+# Administration > Mozilla Persona
+msgid "admin.pref Mozilla Persona"
+msgstr "Mozilla personer"
+
+# Administration > Search Engine
+msgid "admin.pref Search Engine"
+msgstr "Søgemaskine"
+
 # Administration > CAS Authentication
 msgid "admin.pref#AllowPkiAuth# Use"
-msgstr ""
+msgstr "Benyt"
 
 # Administration > CAS Authentication
 msgid "admin.pref#AllowPkiAuth# field for SSL client certificate authentication"
-msgstr ""
+msgstr "felt til bekræftelse af SSL client certifikat"
 
 # Administration > CAS Authentication
 msgid "admin.pref#AllowPkiAuth# no"
-msgstr ""
+msgstr "nej"
 
 # Administration > CAS Authentication
 msgid "admin.pref#AllowPkiAuth# the Common Name"
-msgstr ""
+msgstr "Kaldenavnet"
 
 # Administration > CAS Authentication
 msgid "admin.pref#AllowPkiAuth# the emailAddress"
-msgstr ""
+msgstr "email adressen"
 
 # Administration > Login options
 msgid "admin.pref#AutoLocation# Don't require"
@@ -132,7 +204,7 @@ msgstr "Kræv"
 
 # Administration > Login options
 msgid "admin.pref#AutoLocation# staff to log in from a computer in the IP address range <a href=\"/cgi-bin/koha/admin/branches.pl\">specified by their library</a> (if any)."
-msgstr "at medarbejdere logger på fra en computer i IP-adresseo,rådet <a href=\"/cgi-bin/koha/admin/branches.pl\">angivet af deres bibliotek</a> (hvis nogen)."
+msgstr "at medarbejdere logger på fra en computer i IP-adresseområdet <a href=\"/cgi-bin/koha/admin/branches.pl\">angivet af deres bibliotek</a> (hvis nogen)."
 
 # Administration > Interface options
 msgid "admin.pref#DebugLevel# Show"
@@ -155,16 +227,16 @@ msgid "admin.pref#DebugLevel# some"
 msgstr "noget"
 
 # Administration > Login options
-msgid "admin.pref#IndependantBranches# Don't prevent"
-msgstr "Udeluk ikke"
+msgid "admin.pref#IndependentBranches# Don't prevent"
+msgstr ""
 
 # Administration > Login options
-msgid "admin.pref#IndependantBranches# Prevent"
-msgstr "Udeluk"
+msgid "admin.pref#IndependentBranches# Prevent"
+msgstr ""
 
 # Administration > Login options
-msgid "admin.pref#IndependantBranches# staff (but not superlibrarians) from modifying objects (holds, items, patrons, etc.) belonging to other libraries."
-msgstr "medarbejdere (men ikke superbibliotekarer) fra muligheden for at ændre objekter (reserveringer, eksemplarer, lånere, etc.) der tilhører andre biblioteker."
+msgid "admin.pref#IndependentBranches# staff (but not superlibrarians) from modifying objects (holds, items, patrons, etc.) belonging to other libraries."
+msgstr ""
 
 # Administration > Interface options
 msgid "admin.pref#KohaAdminEmailAddress# Use"
@@ -172,7 +244,31 @@ msgstr "Brug"
 
 # Administration > Interface options
 msgid "admin.pref#KohaAdminEmailAddress# as the email address for the administrator of Koha. (This is the default From: address for emails unless there is one for the particular library, and is referred to when an internal error occurs.)"
-msgstr ""
+msgstr "som e-mail adresse til Koha administratoren. (Dette er standard Fra: adresse for e-mails, medmindre der er en fra det særskilte bibliotek og som der henvises til, når en intern fejl opstår.)"
+
+# Administration > Mozilla Persona
+msgid "admin.pref#Persona# Allow"
+msgstr "Tillad"
+
+# Administration > Mozilla Persona
+msgid "admin.pref#Persona# Don't Allow"
+msgstr "Tillad ikke"
+
+# Administration > Mozilla Persona
+msgid "admin.pref#Persona# Mozilla persona for login"
+msgstr "Mozilla personer at logge ind"
+
+# Administration > Search Engine
+msgid "admin.pref#SearchEngine# Solr"
+msgstr "Solr"
+
+# Administration > Search Engine
+msgid "admin.pref#SearchEngine# Zebra"
+msgstr " Zebra"
+
+# Administration > Search Engine
+msgid "admin.pref#SearchEngine# is the search engine used."
+msgstr "er den benyttede søgemaskine."
 
 # Administration > Login options
 msgid "admin.pref#SessionStorage# Store login session information"
@@ -254,18 +350,6 @@ msgstr "skråstreger"
 msgid "admin.pref#delimiter# tabs"
 msgstr "tabulator"
 
-# Administration > Login options
-msgid "admin.pref#insecure# Allow"
-msgstr "Tillad"
-
-# Administration > Login options
-msgid "admin.pref#insecure# Don't allow"
-msgstr "Tillad ikke"
-
-# Administration > Login options
-msgid "admin.pref#insecure# staff to access the staff client without logging in. Enabling this is dangerous, and should not be done in production environments."
-msgstr "medarbejdere adgang til Intranet uden at logge på. Aktivering af dette er farligt, og bør ikke gøres i produktionsomgivelser."
-
 # Administration > Interface options
 msgid "admin.pref#noItemTypeImages# Don't show"
 msgstr "Vis ikke"
@@ -284,7 +368,7 @@ msgstr "Log automatisk brugere ud efter"
 
 # Administration > Login options
 msgid "admin.pref#timeout# seconds of inactivity. Adding d will specify it in days, e.g. 1d is timeout of one day."
-msgstr ""
+msgstr "sekunder uden aktiviteter. Tilføj d vil angide det i dage, f.eks. 1d er timeout på en dag."
 
 # Administration > Interface options
 msgid "admin.pref#virtualshelves# Allow"
@@ -304,31 +388,43 @@ msgstr "authorities.pref"
 
 # Authorities > General
 msgid "authorities.pref General"
-msgstr ""
+msgstr "authorities.pref General"
 
 # Authorities > Linker
 msgid "authorities.pref Linker"
-msgstr ""
+msgstr "authorities.pref Linker"
+
+# Authorities > General
+msgid "authorities.pref#AuthDisplayHierarchy# Display"
+msgstr "Vis"
+
+# Authorities > General
+msgid "authorities.pref#AuthDisplayHierarchy# Don't display"
+msgstr "Vis ikke"
+
+# Authorities > General
+msgid "authorities.pref#AuthDisplayHierarchy# broader term/narrower term hierarchies when viewing authorities."
+msgstr "bredere term/smallere term hierarkieer, når autoriteter vises."
 
 # Authorities > General
 msgid "authorities.pref#AutoCreateAuthorities# When editing records,"
-msgstr ""
+msgstr "Når poster redigeres,"
 
 # Authorities > General
 msgid "authorities.pref#AutoCreateAuthorities# authority records that are missing (BiblioAddsAuthorities must be set to \"allow\" for this to have any effect)."
-msgstr ""
+msgstr "autoritetsposter, som mangler (BiblioAddsAuthorities skal være sat til \"allow\" for at dette skal have nogen virkning)."
 
 # Authorities > General
 msgid "authorities.pref#AutoCreateAuthorities# do not generate"
-msgstr ""
+msgstr "opret ikke"
 
 # Authorities > General
 msgid "authorities.pref#AutoCreateAuthorities# generate"
-msgstr ""
+msgstr "opret"
 
 # Authorities > General
 msgid "authorities.pref#BiblioAddsAuthorities# When editing records,"
-msgstr "Når der editeres poster,"
+msgstr "Når der redigeres poster,"
 
 # Authorities > General
 msgid "authorities.pref#BiblioAddsAuthorities# allow"
@@ -340,75 +436,79 @@ msgstr "tillad ikke"
 
 # Authorities > General
 msgid "authorities.pref#BiblioAddsAuthorities# them to automatically create new authority records if needed, rather than having to reference existing authorities."
-msgstr "at der automatisk oprettes nye normposter, hvis det er nødvendigt, frem for at referencere eksisterende normer."
+msgstr "at der automatisk oprettes nye autoritetsposter, hvis det er nødvendigt, frem for at referere til eksisterende autoriteter."
 
 # Authorities > Linker
 msgid "authorities.pref#CatalogModuleRelink# Do"
-msgstr ""
+msgstr "Link"
 
 # Authorities > Linker
 msgid "authorities.pref#CatalogModuleRelink# Do not"
-msgstr ""
+msgstr "Link ikke"
 
 # Authorities > Linker
 msgid "authorities.pref#CatalogModuleRelink# automatically relink headings that have previously been linked when saving records in the cataloging module."
-msgstr ""
+msgstr "automatisk overskrifter, som tidligere er linket, når poster gemmes i katalogiseringsmodulet."
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerKeepStale# Do"
-msgstr ""
+msgstr "Udfør"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerKeepStale# Do not"
-msgstr ""
+msgstr "Udfør ikke"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerKeepStale# keep existing links to authority records for headings where the linker is unable to find a match."
-msgstr ""
+msgstr "behold eksisterende links til autoritetsposter for overskrifter, hvor linkeren er ude af stand til at finde et sammenfald."
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerModule# Default"
-msgstr ""
+msgstr "Standard"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerModule# First Match"
-msgstr ""
+msgstr "Første sammenfald"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerModule# Last Match"
-msgstr ""
+msgstr "Sidste sammenfald"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerModule# Use the"
-msgstr ""
+msgstr "Benyt"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerModule# linker module for matching headings to authority records."
-msgstr ""
+msgstr "linker modul til finde sammenfald til autoritetsposter."
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerOptions# (separate options with |)"
-msgstr ""
+msgstr "(adskil optioner med |)"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerOptions# Set the following options for the authority linker"
-msgstr ""
+msgstr "Sæt følgende optioner til lænkning af autoriteter"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerRelink# Do"
-msgstr ""
+msgstr "Udfør"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerRelink# Do not"
-msgstr ""
+msgstr "Udfør ikke"
 
 # Authorities > Linker
 msgid "authorities.pref#LinkerRelink# relink headings that have previously been linked to authority records."
+msgstr "forbind overskrifter, som tidligere har været forbundet til autoritetsposter."
+
+# Authorities > General
+msgid "authorities.pref#MARCAuthorityControlField008# Use the following text for the contents of MARC21 authority control field 008 position 06-39 (fixed length data elements). Do NOT include the date (position 00-05)."
 msgstr ""
 
 # Authorities > General
-msgid "authorities.pref#MARCAuthorityControlField008# Use the following text for the contents of MARC authority control field 008 position 06-39 (fixed length data elements). Do NOT include the date (position 00-05)."
-msgstr "Brug følgende tekst til indholdet af MARC norm kontrolfelt 008 position 06-39 (dataelementer med fast længde). Medtag IKKE dataene (position 00-05)."
+msgid "authorities.pref#UNIMARCAuthorityField100# Use the following text for the contents of UNIMARC authority field 100 position 08-35 (fixed length data elements). Do NOT include the date (position 00-07)."
+msgstr ""
 
 # Authorities > General
 msgid "authorities.pref#UseAuthoritiesForTracings# Don't use"
@@ -420,27 +520,31 @@ msgstr "Brug"
 
 # Authorities > General
 msgid "authorities.pref#UseAuthoritiesForTracings# authority record numbers instead of text strings for searches from subject tracings."
-msgstr "autoritetspostnumre istedet for tekster til søgning i emnesporinger."
+msgstr "autoritetspostnumre i stedet for tekststrenge til søgning i emnespor."
 
 # Authorities > General
 msgid "authorities.pref#dontmerge# Do"
-msgstr "Opdater"
+msgstr "Udfør"
 
 # Authorities > General
 msgid "authorities.pref#dontmerge# Don't"
-msgstr "Opdater ikke"
+msgstr "Udfør ikke"
 
 # Authorities > General
 msgid "authorities.pref#dontmerge# automatically update attached biblios when changing an authority record. If this is off, please ask your administrator to enable the merge_authority.pl cronjob."
-msgstr "opdater automatisk poster, når en normeret post ændres. Hvis dette er koblet fra, skal administratoren aktivere merge_authority.pl cronjobbet."
+msgstr "opdater biblioposter, når en autoritetspost ændres. Hvis dette er koblet fra, skal administratoren aktivere merge_authority.pl cronjobbet."
 
 # Cataloging
 msgid "cataloguing.pref"
-msgstr " "
+msgstr "cataloguing.pref"
 
 # Cataloging > Display
 msgid "cataloguing.pref Display"
 msgstr "Vis"
+
+# Cataloging > Importing
+msgid "cataloguing.pref Importing"
+msgstr ""
 
 # Cataloging > Interface
 msgid "cataloguing.pref Interface"
@@ -454,9 +558,37 @@ msgstr "Poststruktur"
 msgid "cataloguing.pref Spine Labels"
 msgstr "Ryg-etiketter"
 
+# Cataloging > Display
+msgid "cataloguing.pref#AcquisitionDetails# Display"
+msgstr ""
+
+# Cataloging > Display
+msgid "cataloguing.pref#AcquisitionDetails# Don't display"
+msgstr ""
+
+# Cataloging > Display
+msgid "cataloguing.pref#AcquisitionDetails# acquisition details on the biblio detail page."
+msgstr ""
+
+# Cataloging > Importing
+msgid "cataloguing.pref#AggressiveMatchOnISBN# When matching on ISBN with the record import tool,"
+msgstr ""
+
+# Cataloging > Importing
+msgid "cataloguing.pref#AggressiveMatchOnISBN# attempt to match aggressively by trying all variations of the ISBNs in the imported record as a phrase in the ISBN fields of already cataloged records.  Note that this preference has no effect if UseQueryParser is on."
+msgstr ""
+
+# Cataloging > Importing
+msgid "cataloguing.pref#AggressiveMatchOnISBN# do"
+msgstr ""
+
+# Cataloging > Importing
+msgid "cataloguing.pref#AggressiveMatchOnISBN# don't"
+msgstr ""
+
 # Cataloging > Record Structure
 msgid "cataloguing.pref#AlternateHoldingsField# ."
-msgstr " "
+msgstr " ."
 
 # Cataloging > Record Structure
 msgid "cataloguing.pref#AlternateHoldingsField# Display MARC subfield"
@@ -473,6 +605,14 @@ msgstr "Brug"
 # Cataloging > Interface
 msgid "cataloguing.pref#DefaultClassificationSource# as the default classification source."
 msgstr "som standard-klassifikationskilde."
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#DefaultLanguageField008#  Empty defaults to eng."
+msgstr "Tom giver som standard eng."
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#DefaultLanguageField008# Fill in the default language for field 008 Range 35-37 of MARC21 records (e.g. eng, nor, ger, see <a href=\"http://www.loc.gov/marc/languages/language_code.html\">MARC Code List for Languages</a>)"
+msgstr ""
 
 # Cataloging > Interface
 msgid "cataloguing.pref#EasyAnalyticalRecords# Display"
@@ -527,8 +667,8 @@ msgid "cataloguing.pref#MARCOrgCode# Fill in the <a href=\"http://www.loc.gov/ma
 msgstr "Udfyld <a href=\"http://www.loc.gov/marc/organizations/orgshome.html\">MARC-organisationskoden</a>"
 
 # Cataloging > Record Structure
-msgid "cataloguing.pref#MARCOrgCode# by default in new MARC records (leave blank to disable)."
-msgstr "som standard i nye MARC-poster (lad være tom for at deaktivere)."
+msgid "cataloguing.pref#MARCOrgCode# by default in new MARC21 records (leave blank to disable)."
+msgstr ""
 
 # Cataloging > Record Structure
 msgid "cataloguing.pref#NewItemsDefaultLocation# (should be a location code, or blank to disable)."
@@ -539,6 +679,30 @@ msgid "cataloguing.pref#NewItemsDefaultLocation# When items are created, give th
 msgstr "Når eksemplarer oprettes får de det midlertidige sted"
 
 # Cataloging > Display
+msgid "cataloguing.pref#NotesBlacklist# Don't show these"
+msgstr "Vis ikke disse"
+
+# Cataloging > Display
+msgid "cataloguing.pref#NotesBlacklist# note fields in title notes separator (OPAC record details) and in the description separator (Staff client record details). The fields should appear separated with commas and according with the Koha MARC format (eg 3.. for UNIMARC, 5.. for MARC21)"
+msgstr "notatfelter i titelnote separator (OPAC postdetaljer) og i beskrivelses-separatoren (admin-klient postdetaljer). Felterne adskilles med kommaer og i henhold til Koha MARC formatet (f.eks. 3.. for UNIMARC, 5.. for MARC21)"
+
+# Cataloging > Display
+msgid "cataloguing.pref#OpacSuppression# (Leave blank if not used. Define a range like <code>192.168.</code>.)"
+msgstr "(Lad det være tomt, hvis det ikke bruges. Definer et område som <code>192.168.</code>.)"
+
+# Cataloging > Display
+msgid "cataloguing.pref#OpacSuppression# <br />Display the following message on the redirect page for suppressed biblios"
+msgstr ""
+
+# Cataloging > Display
+msgid "cataloguing.pref#OpacSuppression# <br />Redirect the opac detail page for suppressed records to"
+msgstr ""
+
+# Cataloging > Display
+msgid "cataloguing.pref#OpacSuppression# <br />Restrict the suppression to IP adresses outside of the IP range"
+msgstr ""
+
+# Cataloging > Display
 msgid "cataloguing.pref#OpacSuppression# Don't hide"
 msgstr "Skjul ikke"
 
@@ -547,8 +711,52 @@ msgid "cataloguing.pref#OpacSuppression# Hide"
 msgstr "Skjul"
 
 # Cataloging > Display
+msgid "cataloguing.pref#OpacSuppression# an explanatory page ('This record is blocked')."
+msgstr ""
+
+# Cataloging > Display
 msgid "cataloguing.pref#OpacSuppression# items marked as suppressed from OPAC search results. Note that you must have the <code>Suppress</code> index set up in Zebra and at least one suppressed item, or your searches will be broken."
-msgstr "eksemplarer markeret som undertrykket fra OPAC søgeresultater. Bemærk at du skal have <code>Suppress</code>-indekset installeret i Zebra og mindst et undertrykt eksemplar, ellers vil dine søgninger mislykkes."
+msgstr "materialer markeret som undertrykket fra OPAC søgeresultater. Bemærk, at du skal have <code>Suppress</code> indeks installeret i Zebra og mindst et undertrykt materiale, ellers vil dine søgninger mislykkes."
+
+# Cataloging > Display
+msgid "cataloguing.pref#OpacSuppression# the 404 error page ('Not found')."
+msgstr ""
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#PrefillItem# When a new item is added,"
+msgstr "Når et nyt eksemplar tilføjes,"
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#PrefillItem# the new item is not prefilled with last created item values."
+msgstr "er det nye eksemplar ikke forud fyldt med de foregående værdier."
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#PrefillItem# the new item is prefilled with last created item values."
+msgstr "er det nye eksemplar forud fyldt med de foregående værdier."
+
+# Cataloging > Display
+msgid "cataloguing.pref#SeparateHoldings# Don't separate"
+msgstr "Adskil ikke"
+
+# Cataloging > Display
+msgid "cataloguing.pref#SeparateHoldings# Separate"
+msgstr "Adskil"
+
+# Cataloging > Display
+msgid "cataloguing.pref#SeparateHoldings# holding library"
+msgstr "bestandsbibliotek"
+
+# Cataloging > Display
+msgid "cataloguing.pref#SeparateHoldings# home library"
+msgstr "hjemmebibliotek"
+
+# Cataloging > Display
+msgid "cataloguing.pref#SeparateHoldings# is the logged in user's library. The second tab will contain all other items."
+msgstr "er det indloggede brugerbibliotek. Den anden fane vil indeholde alle andre eksemplarer."
+
+# Cataloging > Display
+msgid "cataloguing.pref#SeparateHoldings# items display into two tabs, where the first tab contains items whose"
+msgstr "eksemplarer vises i to faner, hvor første fane indeholder eksemplarer, hvis"
 
 # Cataloging > Spine Labels
 msgid "cataloguing.pref#SpineLabelAutoPrint# When using the quick spine label printer,"
@@ -560,11 +768,11 @@ msgstr "skal en udskriftsdialog automatisk poppe op."
 
 # Cataloging > Spine Labels
 msgid "cataloguing.pref#SpineLabelAutoPrint# do"
-msgstr "ja"
+msgstr " ja"
 
 # Cataloging > Spine Labels
 msgid "cataloguing.pref#SpineLabelAutoPrint# don't"
-msgstr "nej"
+msgstr " nej"
 
 # Cataloging > Spine Labels
 msgid "cataloguing.pref#SpineLabelFormat# (Enter in columns from the <code>biblio</code>, <code>biblioitems</code> or <code>items</code> tables, surrounded by &lt; and &gt;.)"
@@ -576,7 +784,7 @@ msgstr "Medtag følgende felter i en hurtigt udskrevet ryg-etiket:"
 
 # Cataloging > Spine Labels
 msgid "cataloguing.pref#SpineLabelShowPrintOnBibDetails# Display"
-msgstr "Vis"
+msgstr " Vis"
 
 # Cataloging > Spine Labels
 msgid "cataloguing.pref#SpineLabelShowPrintOnBibDetails# Don't display"
@@ -586,9 +794,21 @@ msgstr "Vis ikke"
 msgid "cataloguing.pref#SpineLabelShowPrintOnBibDetails# buttons on the bib details page to print item spine labels."
 msgstr "knapper på bib detaljesiden til hurtig udskrivning af ryg-etiketter."
 
+# Cataloging > Record Structure
+msgid "cataloguing.pref#SubfieldsToUseWhenPrefill# Define a list of subfields to use when prefilling items (separated by space)"
+msgstr "Definer en liste med underfelter til brug ved forud fyldning af eksemplarer (adskilles med mellemrum)"
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#UNIMARCField100Language# Use the languague (ISO 690-2)"
+msgstr "Brug sproget (ISO 690-2)"
+
+# Cataloging > Record Structure
+msgid "cataloguing.pref#UNIMARCField100Language# as default language in the UNIMARC field 100 when creating a new record or in the field plugin."
+msgstr "som standardsprog i UNIMARC felt 100 når der oprettes en ny post eller i felt plugin."
+
 # Cataloging > Display
 msgid "cataloguing.pref#URLLinkText# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Cataloging > Display
 msgid "cataloguing.pref#URLLinkText# as the text of links embedded in MARC records."
@@ -608,7 +828,7 @@ msgstr "post kontrolnummer ($w underfelt) og kontrolnummer (001) til at linke bi
 
 # Cataloging > Interface
 msgid "cataloguing.pref#advancedMARCeditor# Display"
-msgstr "Vis"
+msgstr " Vis"
 
 # Cataloging > Interface
 msgid "cataloguing.pref#advancedMARCeditor# Don't display"
@@ -620,7 +840,7 @@ msgstr "beskrivelser af felter og underfelter i MARC-editoren."
 
 # Cataloging > Display
 msgid "cataloguing.pref#authoritysep# ."
-msgstr "."
+msgstr " ."
 
 # Cataloging > Display
 msgid "cataloguing.pref#authoritysep# Separate multiple displayed authors, series or subjects with "
@@ -643,12 +863,16 @@ msgid "cataloguing.pref#autoBarcode# generated in the form 1, 2, 3."
 msgstr "lavet efter formen 1, 2, 3."
 
 # Cataloging > Record Structure
+msgid "cataloguing.pref#autoBarcode# incremental EAN-13 barcodes"
+msgstr "stigende EAN-13 stregkoder"
+
+# Cataloging > Record Structure
 msgid "cataloguing.pref#autoBarcode# not generated automatically."
 msgstr "ikke lavet automatisk."
 
 # Cataloging > Display
 msgid "cataloguing.pref#hide_marc# Display"
-msgstr "Vis"
+msgstr " Vis"
 
 # Cataloging > Display
 msgid "cataloguing.pref#hide_marc# Don't display"
@@ -663,8 +887,8 @@ msgid "cataloguing.pref#item-level_itypes# Use the item type of the"
 msgstr "Brug medietypen for"
 
 # Cataloging > Record Structure
-msgid "cataloguing.pref#item-level_itypes# as the authoritative item type (for determining circulation and fines rules, etc)."
-msgstr "som den normerede medietype (til at fastlægge udlåns- og bøderegler, etc)."
+msgid "cataloguing.pref#item-level_itypes# as the authoritative item type (for determining circulation and fines rules, for displaying an item type icon on either opac detail or results page, etc)."
+msgstr ""
 
 # Cataloging > Record Structure
 msgid "cataloguing.pref#item-level_itypes# biblio record"
@@ -679,8 +903,8 @@ msgid "cataloguing.pref#itemcallnumber# Map the MARC subfield"
 msgstr "Forbind et MARC underfelt"
 
 # Cataloging > Record Structure
-msgid "cataloguing.pref#itemcallnumber# to an item's callnumber. (This can contain multiple subfields to look in; for instance <code>082ab</code> would look in 082 subfields a and b.)<br />Examples: <strong>Dewey</strong>: <code>082ab</code> or <code>092ab</code>; <strong>LOC</strong>: <code>050ab</code> or <code>090ab</code>; <strong>from the item record</strong>: <code>852hi</code>"
-msgstr "med et eksemplars kaldenummer. (Det kan indeholder flere underfelter til at se i; f.eks. <code>082ab</code> ville kigge i 082 underfelter a og b.)<br />Eksempler: <strong>Dewey</strong>: <code>082ab</code> eller <code>092ab</code>; <strong>LOC</strong>: <code>050ab</code> eller <code>090ab</code>; <strong>fra eksemplarposten</strong>: <code>852hi</code>"
+msgid "cataloguing.pref#itemcallnumber# to an item's callnumber. (This can contain multiple subfields to look in; for instance <code>082ab</code> would look in 082 subfields a and b.)<br />Examples (for MARC21 records): <strong>Dewey</strong>: <code>082ab</code> or <code>092ab</code>; <strong>LOC</strong>: <code>050ab</code> or <code>090ab</code>; <strong>from the item record</strong>: <code>852hi</code>"
+msgstr ""
 
 # Cataloging > Record Structure
 msgid "cataloguing.pref#marcflavour# Interpret and store MARC records in the"
@@ -720,11 +944,19 @@ msgstr "felter (adskilt af kommaer) til det korrekte forfatterfelt, når der imp
 
 # Circulation
 msgid "circulation.pref"
-msgstr " "
+msgstr "circulation.pref"
+
+# Circulation > Checkin Policy
+msgid "circulation.pref Checkin Policy"
+msgstr "Afleverings-politik"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref Checkout Policy"
 msgstr "Udlånspolitik"
+
+# Circulation > Course Reserves
+msgid "circulation.pref Course Reserves"
+msgstr ""
 
 # Circulation > Fines Policy
 msgid "circulation.pref Fines Policy"
@@ -743,12 +975,32 @@ msgid "circulation.pref Self Checkout"
 msgstr "Selvudlån"
 
 # Circulation > Checkout Policy
+msgid "circulation.pref#AgeRestrictionMarker# E.g. enter target audience keyword(s) split by | (bar) FSK|PEGI|Age| (No white space near |). Be sure to map agerestriction in Koha to MARC mapping (e.g. 521$a). A MARC field value of FSK 12 or PEGI 12 would mean: Borrower must be 12 years old. Leave empty to not apply an age restriction."
+msgstr "Indtast f.eks. målgruppe nøgleord adskilt af | (bjælke) FSK|PEGI|alder| (ingen mellemrum ved |). Husk at tilordne aldersbegrænsning i Koha til MARC tilordning (f.eks. 521$a). En MARC- feltværdi på FSK 12 eller PEGI 12 betyder: Låneren skal være 12 år gammel. Lad være tomt for ingen begrænsning."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AgeRestrictionMarker# Restrict patrons with the following target audience values from checking out inappropriate materials:"
+msgstr "Begræns lånere med følgende nålgruppe-værdier fra at udlåne upassende materialer:"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AgeRestrictionOverride# Allow"
+msgstr "Tillad"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AgeRestrictionOverride# Don't allow"
+msgstr "Tillad ikke"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AgeRestrictionOverride# staff to check out an item with age restriction."
+msgstr "personalet at udlåne et eksemplar med aldersbegrænsning."
+
+# Circulation > Checkout Policy
 msgid "circulation.pref#AllFinesNeedOverride# Don't require"
 msgstr "Kræv ikke"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#AllFinesNeedOverride# Require"
-msgstr "Kræv"
+msgstr " Kræv"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#AllFinesNeedOverride# staff to manually override all fines, even fines less than noissuescharge."
@@ -811,8 +1063,20 @@ msgid "circulation.pref#AllowHoldsOnDamagedItems# Don't allow"
 msgstr "Tillad ikke"
 
 # Circulation > Holds Policy
-msgid "circulation.pref#AllowHoldsOnDamagedItems# hold requests to be placed on damaged items."
-msgstr "at beskadigede eksemplarer reserveres."
+msgid "circulation.pref#AllowHoldsOnDamagedItems# hold requests to be placed on and filled by damaged items."
+msgstr ""
+
+# Circulation > Holds Policy
+msgid "circulation.pref#AllowHoldsOnPatronsPossessions# Allow"
+msgstr "Tillad"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#AllowHoldsOnPatronsPossessions# Don't allow"
+msgstr "Tillad ikke"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#AllowHoldsOnPatronsPossessions# a patron to place a hold on a record where the patron already has one or more items attached to that record checked out."
+msgstr "at en låner reserverer en post, hvorfra låneren allerede har en eller flere eksemplarer udlånt."
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#AllowItemsOnHoldCheckout# Allow"
@@ -823,8 +1087,20 @@ msgid "circulation.pref#AllowItemsOnHoldCheckout# Don't allow"
 msgstr "Tillad ikke"
 
 # Circulation > Checkout Policy
-msgid "circulation.pref#AllowItemsOnHoldCheckout# checkouts of items items reserved to someone else. If allowed do not generate RESERVE_WAITING and RESERVED warning. This allows self checkouts for those items."
-msgstr "udlån af eksemplarer reserveret til nogen anden. Hvis det er tilladt, udløses ikke nogen RESERVE_WAITING og RESERVED advarsel. Dermed er det muligt, at lave selvbetjent udlån af disse eksemplarer."
+msgid "circulation.pref#AllowItemsOnHoldCheckout# checkouts of items reserved to someone else. If allowed do not generate RESERVE_WAITING and RESERVED warning. This allows self checkouts for those items."
+msgstr "udlån af eksemplarer, som er reserveret til andre. Hvis tilladt udgives ikke RESERVE_WAITING og RESERVED advarsler. Det tillader udlån af disse eksemplarer."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowMultipleIssuesOnABiblio# Allow"
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowMultipleIssuesOnABiblio# Don't allow"
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowMultipleIssuesOnABiblio# patrons to check out multiple items from the same record, except for records with subscriptions."
+msgstr ""
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#AllowNotForLoanOverride# Allow"
@@ -837,6 +1113,18 @@ msgstr "Tillad ikke"
 # Circulation > Checkout Policy
 msgid "circulation.pref#AllowNotForLoanOverride# staff to override and check out items that are marked as not for loan."
 msgstr "medarbejdere at udlåne eksemplarer, der er markerede som ikke til udlån."
+
+# Circulation > Interface
+msgid "circulation.pref#AllowOfflineCirculation# Do not enable"
+msgstr ""
+
+# Circulation > Interface
+msgid "circulation.pref#AllowOfflineCirculation# Enable"
+msgstr ""
+
+# Circulation > Interface
+msgid "circulation.pref#AllowOfflineCirculation# offline circulation on regular circulation computers. (NOTE: This system preference does not affect the Firefox plugin or the desktop application)"
+msgstr ""
 
 # Circulation > Holds Policy
 msgid "circulation.pref#AllowOnShelfHolds# Allow"
@@ -859,8 +1147,28 @@ msgid "circulation.pref#AllowRenewalLimitOverride# Don't allow"
 msgstr "Tillad ikke"
 
 # Circulation > Checkout Policy
-msgid "circulation.pref#AllowRenewalLimitOverride# staff to manually override the renewal limit and renew a checkout when it would go over the renewal limit."
-msgstr "medarbejdere at tilsidesætte reglerne for fornyelse og udlåne et eksemplar, der normalt ikke længere ville kunne forlænges."
+msgid "circulation.pref#AllowRenewalLimitOverride# staff to manually override renewal blocks and renew a checkout when it would go over the renewal limit or be premature with respect to the \"no renew before\" setting in the circulation policy."
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowReturnToBranch# Allow materials to be returned to"
+msgstr "Tillad at materialer returneres til"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowReturnToBranch# either the library the item is from or the library it was checked out from."
+msgstr "enten det bibliotek, som eksemplaret kommer fra eller det bibliotek, hvorfra det er udlånt."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowReturnToBranch# only the library the item is from."
+msgstr "kun det bibliotek, hvor eksemplaret kommer fra."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowReturnToBranch# only the library the item was checked out from."
+msgstr "kun det bibliotek, hvorfra eksemplaret er udlånt."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowReturnToBranch# to any library."
+msgstr "til ethvert biblitek."
 
 # Circulation > Self Checkout
 msgid "circulation.pref#AllowSelfCheckReturns# Allow"
@@ -874,21 +1182,45 @@ msgstr "Tillad ikke"
 msgid "circulation.pref#AllowSelfCheckReturns# patrons to return items through web-based self checkout system."
 msgstr "lånere at aflevere medier gennem web-baseret selvudlånssystem."
 
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowTooManyOverride# Allow"
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowTooManyOverride# Don't allow"
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AllowTooManyOverride# staff to override and check out items when the patron has reached the maximum number of allowed checkouts."
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AutoRemoveOverduesRestrictions# Do"
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AutoRemoveOverduesRestrictions# Do not"
+msgstr ""
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#AutoRemoveOverduesRestrictions# allow OVERDUES restrictions triggered by sent notices to be cleared automatically when all overdue items are returned by a patron."
+msgstr ""
+
 # Circulation > Holds Policy
 msgid "circulation.pref#AutoResumeSuspendedHolds# Allow"
-msgstr ""
+msgstr "Tillad"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#AutoResumeSuspendedHolds# Don't allow"
-msgstr ""
+msgstr "Tillad ikke"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#AutoResumeSuspendedHolds# suspended holds to be automatically resumed by a set date."
-msgstr ""
+msgstr "suspenderede reserveringer at blive genoptaget automatisk på en fast dato."
 
 # Circulation > Self Checkout
 msgid "circulation.pref#AutoSelfCheckAllowed# ."
-msgstr "."
+msgstr " ."
 
 # Circulation > Self Checkout
 msgid "circulation.pref#AutoSelfCheckAllowed# Allow"
@@ -916,22 +1248,54 @@ msgstr "Overfør ikke"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#AutomaticItemReturn# automatically transfer items to their home library when they are returned."
-msgstr ""
+msgstr "overfør automatisk eksemplarer til deres hjemmebibliotek når de afleveres."
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#BlockReturnOfWithdrawnItems# Block"
+msgstr "Bloker"
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#BlockReturnOfWithdrawnItems# Don't block"
+msgstr "Bloker ikke"
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#BlockReturnOfWithdrawnItems# returning of items that have been withdrawn."
+msgstr "returnerede eksemplarer, der er trukket tilbage."
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#CalculateFinesOnReturn# <br /><b>NOTE If you are doing hourly loans then you should have this on.</b>"
+msgstr "<br /><b>BEMÆRK Hvis du udlåner timevis skal denne være til.</b>"
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#CalculateFinesOnReturn# Do"
+msgstr "Beregn og opdater"
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#CalculateFinesOnReturn# Don't"
+msgstr "Beregn og opdater ikke"
+
+# Circulation > Checkin Policy
+msgid "circulation.pref#CalculateFinesOnReturn# calculate and update overdue charges when an item is returned."
+msgstr "forsinkelses-gebyrer, når et eksemplar afleveres."
 
 # Circulation > Interface
 msgid "circulation.pref#CircAutoPrintQuickSlip# ."
-msgstr ""
+msgstr "."
 
 # Circulation > Interface
 msgid "circulation.pref#CircAutoPrintQuickSlip# When an empty barcode field is submitted in circulation"
-msgstr ""
+msgstr "Når en tom stregkode er afsendt i udlån"
 
 # Circulation > Interface
 msgid "circulation.pref#CircAutoPrintQuickSlip# clear the screen"
-msgstr ""
+msgstr "slet skærmen"
 
 # Circulation > Interface
 msgid "circulation.pref#CircAutoPrintQuickSlip# open a print quick slip window"
+msgstr "åbn et vindue til hurtig seddeludskrivning"
+
+# Circulation > Interface
+msgid "circulation.pref#CircAutoPrintQuickSlip# open a print slip window"
 msgstr ""
 
 # Circulation > Interface
@@ -966,13 +1330,21 @@ msgstr "det bibliotek, som låneren kommer fra."
 msgid "circulation.pref#CircControl# the library you are logged in at."
 msgstr "det bibliotek, hvor du er logget ind."
 
+# Circulation > Holds Policy
+msgid "circulation.pref#ConfirmFutureHolds# Confirm future hold requests (starting no later than"
+msgstr ""
+
+# Circulation > Holds Policy
+msgid "circulation.pref#ConfirmFutureHolds# days from now) at checkin time. Note that this number of days will be used too in calculating the default end date for the Holds to pull-report. But it does not interfere with issuing, renewing or transferring books."
+msgstr ""
+
 # Circulation > Interface
 msgid "circulation.pref#DisplayClearScreenButton# Don't show"
 msgstr "Vis ikke"
 
 # Circulation > Interface
 msgid "circulation.pref#DisplayClearScreenButton# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Circulation > Interface
 msgid "circulation.pref#DisplayClearScreenButton# a button to clear the current patron from the screen on the circulation screen."
@@ -992,19 +1364,35 @@ msgstr "muligheden til at lave flere reserveringer ud fra søgeresultaterne"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#ExpireReservesMaxPickUpDelay# Allow"
-msgstr ""
+msgstr "Tillad"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#ExpireReservesMaxPickUpDelay# Don't allow"
-msgstr ""
+msgstr "Tillad ikke"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#ExpireReservesMaxPickUpDelay# holds to expire automatically if they have not been picked by within the time period specified in ReservesMaxPickUpDelay"
-msgstr ""
+msgstr "reserveringer at udløbe automatisk hvis de ikke er afhentet indenfor den periode, der er angivet i ReservesMaxPickUpDelay"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#ExpireReservesMaxPickUpDelayCharge# If using ExpireReservesMaxPickUpDelay, charge a borrower who allows his or her waiting hold to expire a fee of"
-msgstr ""
+msgstr "hvis der bruges ExpireReservesMaxPickUpDelay, afkræv den låner, der lader sin reservering udløbe et gebyr på"
+
+# Circulation > Interface
+msgid "circulation.pref#ExportRemoveFields# (separate fields with space, e.g. 100a 200b 300c)"
+msgstr "(adskil felter med mellemrum, f.eks. 100a 200b 300c)"
+
+# Circulation > Interface
+msgid "circulation.pref#ExportRemoveFields# The following fields should be excluded from the patron checkout history CSV or iso2709 export"
+msgstr "Følgende felter skal ekskluderes fra låner udlåns-historikken ved CSV eller iso2709 eksport"
+
+# Circulation > Interface
+msgid "circulation.pref#ExportWithCsvProfile# CSV profile when exporting patron checkout history (enter CSV Profile name)"
+msgstr "CSV-profil under eksport af låner udlåns-historik (indtast CSV profilenavn)"
+
+# Circulation > Interface
+msgid "circulation.pref#ExportWithCsvProfile# Use the"
+msgstr "Brug"
 
 # Circulation > Interface
 msgid "circulation.pref#FilterBeforeOverdueReport# Don't require"
@@ -1012,7 +1400,7 @@ msgstr "Kræv ikke"
 
 # Circulation > Interface
 msgid "circulation.pref#FilterBeforeOverdueReport# Require"
-msgstr "Kræv"
+msgstr " Kræv"
 
 # Circulation > Interface
 msgid "circulation.pref#FilterBeforeOverdueReport# staff to choose which checkouts to show before running the overdues report."
@@ -1024,11 +1412,31 @@ msgstr "Giv ikke"
 
 # Circulation > Interface
 msgid "circulation.pref#FineNotifyAtCheckin# Notify"
-msgstr "Giv"
+msgstr " Giv"
 
 # Circulation > Interface
 msgid "circulation.pref#FineNotifyAtCheckin# librarians of overdue fines on the items they are checking in."
 msgstr "besked til bibliotekarerne om udestående bøder på medier, som de låner ud."
+
+# Circulation > Fines Policy
+msgid "circulation.pref#FinesIncludeGracePeriod# Don't include"
+msgstr "Medtag ikke"
+
+# Circulation > Fines Policy
+msgid "circulation.pref#FinesIncludeGracePeriod# Include"
+msgstr "Medtag"
+
+# Circulation > Fines Policy
+msgid "circulation.pref#FinesIncludeGracePeriod# the grace period when calculating the fine for an overdue item."
+msgstr "nådeperioden, når der beregnes en bøde for et forsinket eksemplar."
+
+# Circulation > Interface
+msgid "circulation.pref#HoldsToPullStartDate# Set the default start date for the Holds to pull list to"
+msgstr "Sæt standard-startdato for listen med reserveringer til hentning til"
+
+# Circulation > Interface
+msgid "circulation.pref#HoldsToPullStartDate# day(s) ago. Note that the default end date is controlled by preference ConfirmFutureHolds."
+msgstr ""
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#HomeOrHoldingBranch# Use the checkout and fines rules of"
@@ -1056,7 +1464,7 @@ msgstr "det bibliotek, som eksemplaret var udlånt fra."
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#InProcessingToShelvingCart# Don't move"
-msgstr "Flyt"
+msgstr " Flyt ikke"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#InProcessingToShelvingCart# Move"
@@ -1065,6 +1473,26 @@ msgstr "Flyt ikke"
 # Circulation > Checkout Policy
 msgid "circulation.pref#InProcessingToShelvingCart# items that have the location PROC to the location CART when they are checked in."
 msgstr "eksemplarer fra placeringen PROC til placeringen CART når de afleveres."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#IssueLostItem# ."
+msgstr "."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#IssueLostItem# When issuing an item that has been marked as lost, "
+msgstr "Når der udgives et eksemplar, der er markeret som tabt, "
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#IssueLostItem# display a message"
+msgstr "vis en besked"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#IssueLostItem# do nothing"
+msgstr "gør ingenting"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#IssueLostItem# require confirmation"
+msgstr "kræv beskræftelse"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#IssuingInProcess# Don't prevent"
@@ -1078,13 +1506,25 @@ msgstr "Forbyd"
 msgid "circulation.pref#IssuingInProcess# patrons from checking out an item whose rental charge would take them over the limit."
 msgstr "lånere, at låne et eksemplar, hvis lånegebyr ville bringe dem over grænsen."
 
+# Circulation > Checkout Policy
+msgid "circulation.pref#ManInvInNoissuesCharge# Don't include"
+msgstr "Medtag ikke"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#ManInvInNoissuesCharge# Include"
+msgstr "Medtag"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#ManInvInNoissuesCharge# MANUAL_INV charges when summing up charges for noissuescharge."
+msgstr "MANUAL_INV gebyrer når gebyrerne talles sammen for ikkeudgivelsesgebyrer."
+
 # Circulation > Interface
 msgid "circulation.pref#NoticeCSS# Include the stylesheet at"
-msgstr ""
+msgstr "Medtag stylesheetet på"
 
 # Circulation > Interface
 msgid "circulation.pref#NoticeCSS# on Notices. (This should be a complete URL, starting with <code>http://</code>)"
-msgstr ""
+msgstr "beskeder. (Dette skal være en komplet URL, som begynder med <code>http://</code>)"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#OPACAllowHoldDateInFuture# Allow"
@@ -1108,7 +1548,7 @@ msgstr "Tillad ikke"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#OPACAllowUserToChooseBranch# a user to choose the library to pick up a hold from."
-msgstr ""
+msgstr "en bruger at vælge det bibliotek, hvor der skal afhentes reserveringer."
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#OverdueNoticeBcc# Send all notices as a BCC to this email address"
@@ -1136,7 +1576,7 @@ msgstr "Medtag op til"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#PrintNoticesMaxLines# item lines in a printed overdue notice. If the number of items is greater than this number, the notice will end with a warning asking the borrower to check their online account for a full list of overdue items.  Set to 0 to include all overdue items in the notice, no matter how many there are."
-msgstr "eksemplarlinjer i en udskrevet rykker. Hvis antallet er større end dette tal, vil rykkeren slutte med en besked til låneren om at kontrollere den komplette liste med udlån. Sæt til 0 for at medtage alle udestående eksemplarer i en besked, uanset hvor mange det er."
+msgstr "circulation.pref#PrintNitcesMaxLines# eksemplarlinjer i en udskrevet rykker. Hvis antallet er større end dette tal, vil rykkeren slutte med en besked til låneren om at kontrollere den komplette liste med udlån.    Sæt til 0 for at medtage alle udestående eksemplarer i en besked, uanset hvor mange det er."
 
 # Circulation > Interface
 msgid "circulation.pref#RecordLocalUseOnReturn# Don't record"
@@ -1150,6 +1590,18 @@ msgstr "Optag"
 msgid "circulation.pref#RecordLocalUseOnReturn# local use when an unissued item is checked in."
 msgstr "lokalt brug, når et ikke udgivet eksemplar afleveres."
 
+# Circulation > Fines Policy
+msgid "circulation.pref#RefundLostItemFeeOnReturn# Don't refund"
+msgstr "Erstat ikke"
+
+# Circulation > Fines Policy
+msgid "circulation.pref#RefundLostItemFeeOnReturn# Refund"
+msgstr "Erstat"
+
+# Circulation > Fines Policy
+msgid "circulation.pref#RefundLostItemFeeOnReturn# lost item fees charged to a borrower when the lost item is returned."
+msgstr "gebyr for tabte eksemplarer til en låner, når det tabte eksemplar returneres."
+
 # Circulation > Checkout Policy
 msgid "circulation.pref#RenewalPeriodBase# When renewing checkouts, base the new due date on"
 msgstr "Når der foretages forlængelser, baser den nye afleveringsdato på"
@@ -1161,6 +1613,30 @@ msgstr "den aktuelle dato."
 # Circulation > Checkout Policy
 msgid "circulation.pref#RenewalPeriodBase# the old due date of the checkout."
 msgstr "den gamle afleveringsdato."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#RenewalSendNotice# Don't send"
+msgstr "Send ikke"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#RenewalSendNotice# Send"
+msgstr "Send"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#RenewalSendNotice# a renewal notice according to patron checkout alert preferences."
+msgstr "en fornyelsesbesked i henhold til låner udlånsbesked-indstillingen."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#RentalsInNoissuesCharge# Don't include"
+msgstr "Medtag ikke"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#RentalsInNoissuesCharge# Include"
+msgstr "Medtag"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#RentalsInNoissuesCharge# rental charges when summing up charges for noissuescharge."
+msgstr "lånergebyrer ved sammentælling af gebyrer til noissuescharge."
 
 # Circulation > Holds Policy
 msgid "circulation.pref#ReservesControlBranch# Check the"
@@ -1195,12 +1671,12 @@ msgid "circulation.pref#ReservesNeedReturns# Don't automatically"
 msgstr "Marker ikke automatisk"
 
 # Circulation > Holds Policy
-msgid "circulation.pref#ReservesNeedReturns# mark holds as found and waiting when a hold is placed specifically on them and they are already checked in."
-msgstr "reserveringer som fundet og afventende, når en reservering placeres specifikt på dem og de allerede er afleveret."
+msgid "circulation.pref#ReservesNeedReturns# mark a hold as found and waiting when a hold is placed on a specific item and that item is already checked in."
+msgstr ""
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#ReturnBeforeExpiry# Don't require"
-msgstr "Kræv"
+msgstr " Kræv ikke"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#ReturnBeforeExpiry# Require"
@@ -1216,15 +1692,35 @@ msgstr "Flyt ikke"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#ReturnToShelvingCart# Move"
-msgstr "Flyt"
+msgstr " Flyt"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#ReturnToShelvingCart# all items to the location CART when they are checked in."
 msgstr "alle eksemplarer til placeringen CART når de afleveres."
 
 # Circulation > Self Checkout
+msgid "circulation.pref#SCOUserCSS# Include the following CSS on all pages in the web-based self checkout:"
+msgstr "Medtag følgende CSS på alle sider i det webbaserede selvudlån:"
+
+# Circulation > Self Checkout
+msgid "circulation.pref#SCOUserJS# Include the following JavaScript on all pages in the web-based self checkout:"
+msgstr "Medtag følgende JavaScript på alle sider i det webbaserede selvudlån:"
+
+# Circulation > Self Checkout
 msgid "circulation.pref#SelfCheckHelpMessage# Include the following HTML in the Help page of the web-based self checkout system:"
 msgstr "Indsæt følgende HTML på hjælpesiden i det webbaserede udlånssystem:"
+
+# Circulation > Self Checkout
+msgid "circulation.pref#SelfCheckReceiptPrompt# Don't show"
+msgstr ""
+
+# Circulation > Self Checkout
+msgid "circulation.pref#SelfCheckReceiptPrompt# Show"
+msgstr ""
+
+# Circulation > Self Checkout
+msgid "circulation.pref#SelfCheckReceiptPrompt# the print receipt popup dialog when self checkout is finished"
+msgstr ""
 
 # Circulation > Self Checkout
 msgid "circulation.pref#SelfCheckTimeout# Time out the current patron's web-based self checkout system login after"
@@ -1232,7 +1728,7 @@ msgstr "Lad den aktuelle brugers webbaserede udlånssystem løbe ud efter"
 
 # Circulation > Self Checkout
 msgid "circulation.pref#SelfCheckTimeout# seconds."
-msgstr "sekunder"
+msgstr "sekunder."
 
 # Circulation > Self Checkout
 msgid "circulation.pref#SelfCheckoutByLogin# Barcode"
@@ -1252,7 +1748,7 @@ msgstr "Vis ikke"
 
 # Circulation > Self Checkout
 msgid "circulation.pref#ShowPatronImageInWebBasedSelfCheck# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Circulation > Self Checkout
 msgid "circulation.pref#ShowPatronImageInWebBasedSelfCheck# the patron's picture (if one has been added) when they use the web-based self checkout."
@@ -1269,6 +1765,18 @@ msgstr "Tillad ikke"
 # Circulation > Interface
 msgid "circulation.pref#SpecifyDueDate# staff to specify a due date for a checkout."
 msgstr "medarbejdere et angive en afleveringsdag for et udlån."
+
+# Circulation > Interface
+msgid "circulation.pref#SpecifyReturnDate# Allow"
+msgstr ""
+
+# Circulation > Interface
+msgid "circulation.pref#SpecifyReturnDate# Don't allow"
+msgstr ""
+
+# Circulation > Interface
+msgid "circulation.pref#SpecifyReturnDate# staff to specify a return date for a check in."
+msgstr ""
 
 # Circulation > Holds Policy
 msgid "circulation.pref#StaticHoldsQueueWeight# (as branchcodes, separated by commas; if empty, uses all libraries)"
@@ -1287,16 +1795,40 @@ msgid "circulation.pref#StaticHoldsQueueWeight# in that order."
 msgstr "i denne rækkefølge."
 
 # Circulation > Holds Policy
+msgid "circulation.pref#SuspendHoldsIntranet# Allow"
+msgstr "Tillad"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#SuspendHoldsIntranet# Don't allow"
+msgstr "Tillad ikke"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#SuspendHoldsIntranet# holds to be suspended from the intranet."
+msgstr "at reserveringer suspenderes fra intranet."
+
+# Circulation > Holds Policy
+msgid "circulation.pref#SuspendHoldsOpac# Allow"
+msgstr "Tillad"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#SuspendHoldsOpac# Don't allow"
+msgstr "Tillad ikke"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#SuspendHoldsOpac# holds to be suspended from the OPAC."
+msgstr "at reserveringer suspenderes fra OPAC."
+
+# Circulation > Holds Policy
 msgid "circulation.pref#TransferWhenCancelAllWaitingHolds# Don't transfer"
-msgstr ""
+msgstr "Overfør ikke"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#TransferWhenCancelAllWaitingHolds# Transfer"
-msgstr ""
+msgstr "Overfør"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#TransferWhenCancelAllWaitingHolds# items when cancelling all waiting holds."
-msgstr ""
+msgstr "eksemplarer, når alle ventende reserveringer annulleres."
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#TransfersMaxDaysWarning# Show a warning on the \"Transfers to Receive\" screen if the transfer has not been received"
@@ -1306,9 +1838,21 @@ msgstr "Vis en advarsel på skærmen \"Overførsler til modtagelse\", hvis overf
 msgid "circulation.pref#TransfersMaxDaysWarning# days after it was sent."
 msgstr "dage efter, den blev sendt."
 
+# Circulation > Interface
+msgid "circulation.pref#UpdateTotalIssuesOnCirc# Do"
+msgstr "Opdater"
+
+# Circulation > Interface
+msgid "circulation.pref#UpdateTotalIssuesOnCirc# Do not"
+msgstr "Opdater ikke"
+
+# Circulation > Interface
+msgid "circulation.pref#UpdateTotalIssuesOnCirc# update a bibliographic record's total issues count whenever an item is issued (WARNING! This increases server load significantly; if performance is a concern, use the update_totalissues.pl cron job to update the total issues count)."
+msgstr "en bibliografisk post's samlede antal eksemplarer, når et eksemplar udgives (ADVARSEL! Dette øger serverbelastningen betydeligt; hvis ydelse er et problem, brug cron-jobbet update_totalissues.pl til at opdatere antallet af udgaver)."
+
 # Circulation > Checkout Policy
 msgid "circulation.pref#UseBranchTransferLimits# ."
-msgstr "."
+msgstr " ."
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#UseBranchTransferLimits# Don't enforce"
@@ -1328,6 +1872,18 @@ msgstr "medietype"
 
 # Circulation > Checkout Policy
 msgid "circulation.pref#UseBranchTransferLimits# library transfer limits based on"
+msgstr "biblioteksoverførselsbegrænsning baseret på"
+
+# Circulation > Course Reserves
+msgid "circulation.pref#UseCourseReserves# Don't use"
+msgstr ""
+
+# Circulation > Course Reserves
+msgid "circulation.pref#UseCourseReserves# Use"
+msgstr ""
+
+# Circulation > Course Reserves
+msgid "circulation.pref#UseCourseReserves# course reserves"
 msgstr ""
 
 # Circulation > Interface
@@ -1341,6 +1897,18 @@ msgstr "Aktiver"
 # Circulation > Interface
 msgid "circulation.pref#UseTablesortForCirc# the sorting of current patron checkouts on the circulation screen. <br/>NOTE: Enabling this function may slow down circulation time for patrons with many checkouts."
 msgstr "sortering af den aktuelle låners udlån på udlånsskærmen. <br/>BEMÆRK: Aktivering af denne funktion kan gøre udlån langsommere ved lånere med mange udlån."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#UseTransportCostMatrix# Don't use"
+msgstr "Brug ikke"
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#UseTransportCostMatrix# Transport Cost Matrix for calculating optimal holds filling between branches."
+msgstr "Transportomkostningsmatriks til beregning af den optimale reserveringsbestand mellem afdelinger."
+
+# Circulation > Checkout Policy
+msgid "circulation.pref#UseTransportCostMatrix# Use"
+msgstr "Brug"
 
 # Circulation > Interface
 msgid "circulation.pref#WaitingNotifyAtCheckin# Don't notify"
@@ -1366,6 +1934,30 @@ msgstr "Aktiver"
 msgid "circulation.pref#WebBasedSelfCheck# the web-based self checkout system. (available at: /cgi-bin/koha/sco/sco-main.pl)"
 msgstr "det webbaserede selvudlåns-system. (findes i: /cgi-bin/koha/sco/sco-main.pl)"
 
+# Circulation > Fines Policy
+msgid "circulation.pref#WhenLostChargeReplacementFee# Charge"
+msgstr ""
+
+# Circulation > Fines Policy
+msgid "circulation.pref#WhenLostChargeReplacementFee# Don't Charge"
+msgstr ""
+
+# Circulation > Fines Policy
+msgid "circulation.pref#WhenLostChargeReplacementFee# the replacement price when a patron loses an item."
+msgstr ""
+
+# Circulation > Fines Policy
+msgid "circulation.pref#WhenLostForgiveFine# Don't Forgive"
+msgstr ""
+
+# Circulation > Fines Policy
+msgid "circulation.pref#WhenLostForgiveFine# Forgive"
+msgstr ""
+
+# Circulation > Fines Policy
+msgid "circulation.pref#WhenLostForgiveFine# the fines on an item when it is lost."
+msgstr ""
+
 # Circulation > Holds Policy
 msgid "circulation.pref#canreservefromotherbranches# Allow"
 msgstr "Tillad"
@@ -1377,6 +1969,26 @@ msgstr "Tillad ikke (ved selvstændige afdelinger)"
 # Circulation > Holds Policy
 msgid "circulation.pref#canreservefromotherbranches# a user from one library to place a hold on an item from another library"
 msgstr "en låner fra bibliotek, at placere en reservering for et eksemplar fra et andet bibliotek"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#decreaseLoanHighHolds# Don't enable"
+msgstr "Aktiver ikke"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#decreaseLoanHighHolds# Enable"
+msgstr "Aktiver"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#decreaseLoanHighHolds# days for items with more than"
+msgstr "dage for eksemplarer med mere end"
+
+# Circulation > Holds Policy
+msgid "circulation.pref#decreaseLoanHighHolds# holds."
+msgstr "reserveringer."
+
+# Circulation > Holds Policy
+msgid "circulation.pref#decreaseLoanHighHolds# the reduction of loan period to"
+msgstr "reduktionen af udlånsperioden til"
 
 # Circulation > Holds Policy
 msgid "circulation.pref#emailLibrarianWhenHoldIsPlaced# Don't enable"
@@ -1419,6 +2031,18 @@ msgid "circulation.pref#finesMode# fines (when <code>misc/cronjobs/fines.pl</cod
 msgstr "bøder (når <code>misc/cronjobs/fines.pl</code> køres)."
 
 # Circulation > Interface
+msgid "circulation.pref#itemBarcodeFallbackSearch# Don't enable"
+msgstr ""
+
+# Circulation > Interface
+msgid "circulation.pref#itemBarcodeFallbackSearch# Enable"
+msgstr ""
+
+# Circulation > Interface
+msgid "circulation.pref#itemBarcodeFallbackSearch# the automatic use of a keyword catalog search if the phrase entered as a barcode on the checkout page does not turn up any results during an item barcode search."
+msgstr ""
+
+# Circulation > Interface
 msgid "circulation.pref#itemBarcodeInputFilter# Convert from CueCat form"
 msgstr "Konverter fra CueCat formularen"
 
@@ -1429,6 +2053,10 @@ msgstr "Konverter fra Libsuite8 formular"
 # Circulation > Interface
 msgid "circulation.pref#itemBarcodeInputFilter# Don't filter"
 msgstr "Filtrer ikke"
+
+# Circulation > Interface
+msgid "circulation.pref#itemBarcodeInputFilter# EAN-13 or zero-padded UPC-A from"
+msgstr "EAN-13 eller nul-opfyldt UPC-A fra"
 
 # Circulation > Interface
 msgid "circulation.pref#itemBarcodeInputFilter# Remove spaces from"
@@ -1536,7 +2164,7 @@ msgstr "kalenderen skal springe over alle lukkede dage."
 
 # Creators
 msgid "creators.pref"
-msgstr " "
+msgstr "creators.pref"
 
 # Creators > Patron Cards
 msgid "creators.pref Patron Cards"
@@ -1552,7 +2180,7 @@ msgstr "billeder."
 
 # Enhanced Content
 msgid "enhanced_content.pref"
-msgstr " "
+msgstr "enhanced_content.pref"
 
 # Enhanced Content > All
 msgid "enhanced_content.pref All"
@@ -1574,13 +2202,21 @@ msgstr "Baker and Taylor"
 msgid "enhanced_content.pref Google"
 msgstr "Google"
 
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref HTML5 Media"
+msgstr "HTML5 medie"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref IDreamLibraries"
+msgstr "IDreamLibraries"
+
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref Library Thing"
 msgstr "Library Thing"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref Local Cover Images"
-msgstr ""
+msgstr "Lokale titelbilleder"
 
 # Enhanced Content > Novelist Select
 msgid "enhanced_content.pref Novelist Select"
@@ -1594,6 +2230,14 @@ msgstr "OCLC"
 msgid "enhanced_content.pref Open Library"
 msgstr "Open Library"
 
+# Enhanced Content > OverDrive
+msgid "enhanced_content.pref OverDrive"
+msgstr ""
+
+# Enhanced Content > Plugins
+msgid "enhanced_content.pref Plugins"
+msgstr "Plugins"
+
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref Syndetics"
 msgstr "Syndetics"
@@ -1602,33 +2246,17 @@ msgstr "Syndetics"
 msgid "enhanced_content.pref Tagging"
 msgstr "Mærkning"
 
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AWSAccessKeyID# (free, at <a href=\"http://aws.amazon.com/\">http://aws.amazon.com/</a>)."
-msgstr "(gratis på <a href=\"http://aws.amazon.com/\">http://aws.amazon.com/</a>)."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AWSAccessKeyID# Access Amazon content using the access key"
-msgstr "Få adgang til Amazon-indhold med en adgangsnøgle"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AWSPrivateKey# (free, at <a href=\"http://aws.amazon.com/\">http://aws.amazon.com/</a>)."
-msgstr "(gratis på <a href=\"http://aws.amazon.com/\">http://aws.amazon.com/</a>)."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AWSPrivateKey# Access Amazon content (other than book jackets) using the private key"
-msgstr "Få adgang til Amazon-indhold (andet end bogomslag) med en privat nøgle"
-
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#AllowMultipleCovers# Allow"
-msgstr ""
+msgstr "Tillad"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#AllowMultipleCovers# Don't allow"
-msgstr ""
+msgstr "Tillad ikke"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#AllowMultipleCovers# multiple images to be attached to each bibliographic record."
-msgstr ""
+msgstr "at flere billeder tilknyttes til hver bibliografiske post."
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonAssocTag# Put the associate tag"
@@ -1644,23 +2272,11 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonCoverImages# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonCoverImages# cover images from Amazon on search results and item detail pages on the staff interface."
 msgstr "omslagsbilleder fra Amazon på søgeresultater og eksemplarsider i admin-interfacen."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonEnabled# Don't use"
-msgstr "Brug ikke"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonEnabled# Use"
-msgstr "Brug"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonEnabled# data from Amazon on the staff interface (including reviews and \"Search Inside\" links on item detail pages). This requires that you have signed up for and entered an access key."
-msgstr "data fra Amazon på admin-interfacen (herunder anmeldelser og \"Søg i\" links på eksemplarsider). Det kræver abonnement på en adgangsnøgle."
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonLocale# American"
@@ -1680,7 +2296,7 @@ msgstr "Fransk"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonLocale# German"
-msgstr "Tysk"
+msgstr " Tysk"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonLocale# Japanese"
@@ -1692,31 +2308,7 @@ msgstr "Brug Amazon-data fra dets"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#AmazonLocale# website."
-msgstr "webside"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonReviews# Don't show"
-msgstr "Vis ikke"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonReviews# Show"
-msgstr "Vis"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonReviews# reviews from Amazon on item detail pages on the staff interface."
-msgstr "anmeldelser fra Amazon på eksemplar-detaljesider i admin-interfacen."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonSimilarItems# Don't show"
-msgstr "Vis ikke"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonSimilarItems# Show"
-msgstr "Vis"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#AmazonSimilarItems# similar items, as determined by Amazon, on item detail pages on the staff interface."
-msgstr "lignende eksemplarer, som valgt af Amazon, på eksemplar-detaljesider i admin-interfacen."
+msgstr "hjemmeside."
 
 # Enhanced Content > Babelthèque
 msgid "enhanced_content.pref#Babeltheque# Do"
@@ -1732,11 +2324,11 @@ msgstr "information (som anmeldelser og citater) fra Babelthèque på eksemplar-
 
 # Enhanced Content > Babelthèque
 msgid "enhanced_content.pref#Babeltheque_url_js# Defined the url for the Babeltheque javascript file (eg. http://www.babeltheque.com/bw_XX.js)"
-msgstr ""
+msgstr "Definerede url til Babeltheque javascript filen (f.eks. http://www.babeltheque.com/bw_XX.js)"
 
 # Enhanced Content > Babelthèque
 msgid "enhanced_content.pref#Babeltheque_url_update# Defined the url for the Babeltheque update periodically (eq. http://www.babeltheque.com/.../file.csv.bz2)."
-msgstr ""
+msgstr "Definerede url til Babeltheque periodisk opdatering (f.eks. http://www.babeltheque.com/.../file.csv.bz2)."
 
 # Enhanced Content > Baker and Taylor
 msgid "enhanced_content.pref#BakerTaylorBookstoreURL# <em>isbn</em></code> (this should be filled in with something like <code>ocls.mylibrarybookstore.com/MLB/actions/searchHandler.do?nextPage=bookDetails&amp;parentNum=10923&amp;key=</code>). Leave it blank to disable these links."
@@ -1760,7 +2352,7 @@ msgstr "Tilføj ikke"
 
 # Enhanced Content > Baker and Taylor
 msgid "enhanced_content.pref#BakerTaylorUsername# ."
-msgstr "."
+msgstr " ."
 
 # Enhanced Content > Baker and Taylor
 msgid "enhanced_content.pref#BakerTaylorUsername# Access Baker and Taylor using username"
@@ -1776,7 +2368,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > All
 msgid "enhanced_content.pref#FRBRizeEditions# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > All
 msgid "enhanced_content.pref#FRBRizeEditions# other editions of an item on the staff client (if found by one of the services below)."
@@ -1794,6 +2386,70 @@ msgstr "Tilføj ikke"
 msgid "enhanced_content.pref#GoogleJackets# cover images from Google Books to search results and item detail pages on the OPAC."
 msgstr "titelbilleder fra Google Books til søgeresultater og eksemplarsider på OPAC."
 
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaEnabled# Show a tab with a HTML5 media player for files catalogued in field 856"
+msgstr "Vis en fane med en HTML5 mediaplayer til filer katalogiseret i felt 856"
+
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaEnabled# in OPAC and staff client."
+msgstr "i OPAC og intranet klient."
+
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaEnabled# in the OPAC."
+msgstr "i OPAC."
+
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaEnabled# in the staff client."
+msgstr "i intranetklient."
+
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaEnabled# not at all."
+msgstr "slet ikke."
+
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaExtensions# (separated with |)."
+msgstr "(adskilt med |)."
+
+# Enhanced Content > HTML5 Media
+msgid "enhanced_content.pref#HTML5MediaExtensions# Media file extensions"
+msgstr "Mediefil-endelser"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksReadometer# Add"
+msgstr "Tilføj"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksReadometer# Don't add"
+msgstr "Tilføj ikke"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksReadometer# a \"Readometer\" that summarizes the reviews gathered by <a href='http://idreambooks.com/'>IDreamBooks.com</a> to the OPAC details page."
+msgstr "et \"Læsemeter\" som opsummerer de anmeldelser, der samles af <a href='http://idreambooks.com/'>IDreamBooks.com</a> til OPAC detaljesiden."
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksResults# Add"
+msgstr "Tilføj"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksResults# Don't add"
+msgstr "Tilføj ikke"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksResults# the rating from <a href='http://idreambooks.com/'>IDreamBooks.com</a> to OPAC search results."
+msgstr "vurderingen fra <a href='http://idreambooks.com/'>IDreamBooks.com</a> til OPAC søgeresultater."
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksReviews# Add"
+msgstr "Tilføj"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksReviews# Don't add"
+msgstr "Tilføj ikke"
+
+# Enhanced Content > IDreamLibraries
+msgid "enhanced_content.pref#IDreamBooksReviews# a tab on the OPAC details with book reviews from critics aggregated by <a href='http://idreambooks.com/'>IDreamBooks.com</a>."
+msgstr "en fane under OPAC detaljer med boganmeldelser fra kritikker samlet af <a href='http://idreambooks.com/'>IDreamBooks.com</a>."
+
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref#LibraryThingForLibrariesEnabled# <a href=\"http://www.librarything.com/forlibraries/\">sign up</a>, then enter in your ID below."
 msgstr "<a href=\"http://www.librarything.com/forlibraries/\">abonner</a>, og indtast så din ID herunder."
@@ -1804,7 +2460,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref#LibraryThingForLibrariesEnabled# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref#LibraryThingForLibrariesEnabled# reviews, similar items, and tags from Library Thing for Libraries on item detail pages on the OPAC. If you've enabled this, you need to "
@@ -1812,7 +2468,7 @@ msgstr "anmeldelser, lignende emner, og mærker fra Library Thing for Libraries 
 
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref#LibraryThingForLibrariesID# ."
-msgstr "."
+msgstr " ."
 
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref#LibraryThingForLibrariesID# Access Library Thing for Libraries using the customer ID"
@@ -1832,15 +2488,15 @@ msgstr "i faneblade."
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#LocalCoverImages# Display"
-msgstr ""
+msgstr "Vis"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#LocalCoverImages# Don't display"
-msgstr ""
+msgstr "Vis ikke"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#LocalCoverImages# local cover images on intranet search and details pages."
-msgstr ""
+msgstr "lokale titelbilleder i intranet-søgninger og -detaljesider."
 
 # Enhanced Content > Novelist Select
 msgid "enhanced_content.pref#NovelistSelectEnabled# Add"
@@ -1856,7 +2512,7 @@ msgstr "Forfattervalg-indhold til OPAC (kræver at der er indtastet en brugerpro
 
 # Enhanced Content > Novelist Select
 msgid "enhanced_content.pref#NovelistSelectProfile# ."
-msgstr "."
+msgstr " ."
 
 # Enhanced Content > Novelist Select
 msgid "enhanced_content.pref#NovelistSelectProfile# Access Novelist Select using user profile"
@@ -1868,7 +2524,7 @@ msgstr "og password"
 
 # Enhanced Content > Novelist Select
 msgid "enhanced_content.pref#NovelistSelectView# ."
-msgstr "."
+msgstr " ."
 
 # Enhanced Content > Novelist Select
 msgid "enhanced_content.pref#NovelistSelectView# Display Novelist Select content"
@@ -1904,47 +2560,11 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#OPACAmazonCoverImages# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Amazon
 msgid "enhanced_content.pref#OPACAmazonCoverImages# cover images from Amazon on search results and item detail pages on the OPAC."
 msgstr "titelbilleder fra Amazon i søgeresultater og eksemplarsider i OPAC."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonEnabled# Don't use"
-msgstr "Brug ikke"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonEnabled# Use"
-msgstr "Brug"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonEnabled# data from Amazon on the OPAC (including reviews and \"Search Inside\" links on item detail pages). This requires that you have signed up for and entered an access key."
-msgstr "data fra Amazon i OPAC (herunder anmeldelser og \"Søg inde i\" links på detaljesider). Dette kræver at man har fået og indtaster en adgangsnøgle."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonReviews# Don't show"
-msgstr "Vis ikke"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonReviews# Show"
-msgstr "Vis"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonReviews# reviews from Amazon on item detail pages on the OPAC."
-msgstr "anmeldelser fra Amazon på eksemplarsider i OPAC."
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonSimilarItems# Don't show"
-msgstr "Vis ikke"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonSimilarItems# Show"
-msgstr "Vis"
-
-# Enhanced Content > Amazon
-msgid "enhanced_content.pref#OPACAmazonSimilarItems# similar items, as determined by Amazon, on item detail pages on the OPAC."
-msgstr "lignende emner, som fundet af Amazon, på detaljesider i OPAC."
 
 # Enhanced Content > All
 msgid "enhanced_content.pref#OPACFRBRizeEditions# Don't show"
@@ -1952,7 +2572,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > All
 msgid "enhanced_content.pref#OPACFRBRizeEditions# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > All
 msgid "enhanced_content.pref#OPACFRBRizeEditions# other editions of an item on the OPAC."
@@ -1960,15 +2580,15 @@ msgstr "andre udgaver af medier i OPAC."
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#OPACLocalCoverImages# Display"
-msgstr ""
+msgstr "Vis"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#OPACLocalCoverImages# Don't display"
-msgstr ""
+msgstr "Vis ikke"
 
 # Enhanced Content > Local Cover Images
 msgid "enhanced_content.pref#OPACLocalCoverImages# local cover images on OPAC search and details pages."
-msgstr ""
+msgstr "lokale titelbilleder i OPAC-søgninger og detaljesider."
 
 # Enhanced Content > Open Library
 msgid "enhanced_content.pref#OpenLibraryCovers# Add"
@@ -1982,13 +2602,33 @@ msgstr "Tilføj ikke"
 msgid "enhanced_content.pref#OpenLibraryCovers# cover images from Open Library to search results and item detail pages on the OPAC."
 msgstr "titel billeder fra Open Library til søgeresultater og eksemplardetaljesider i OPAC."
 
+# Enhanced Content > OverDrive
+msgid "enhanced_content.pref#OverDriveClientKey# ."
+msgstr ""
+
+# Enhanced Content > OverDrive
+msgid "enhanced_content.pref#OverDriveClientKey# Include OverDrive availability information with the client key"
+msgstr ""
+
+# Enhanced Content > OverDrive
+msgid "enhanced_content.pref#OverDriveClientKey# and client secret"
+msgstr ""
+
+# Enhanced Content > OverDrive
+msgid "enhanced_content.pref#OverDriveLibraryID# ."
+msgstr ""
+
+# Enhanced Content > OverDrive
+msgid "enhanced_content.pref#OverDriveLibraryID# Show items from the OverDrive catalog of library #"
+msgstr ""
+
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsAuthorNotes# Don't show"
 msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsAuthorNotes# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsAuthorNotes# notes about the author of a title from Syndetics on item detail pages on the OPAC."
@@ -2000,7 +2640,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsAwards# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsAwards# information from Syndetics about the awards a title has won on item detail pages on the OPAC."
@@ -2020,7 +2660,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsCoverImages# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsCoverImages# cover images from Syndetics on search results and item detail pages on the OPAC in a"
@@ -2028,7 +2668,7 @@ msgstr "titelbilleder fra Syndetics i søgeresultater og detaljesider i OPAC i e
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsCoverImages# large"
-msgstr "stor"
+msgstr " stor"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsCoverImages# medium"
@@ -2044,7 +2684,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsEditions# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsEditions# information about other editions of a title from Syndetics on item detail pages on the OPAC (when OPACFRBRizeEditions is on)."
@@ -2056,7 +2696,7 @@ msgstr "Brug ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsEnabled# Use"
-msgstr "Brug"
+msgstr " Brug"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsEnabled# content from Syndetics. Note that this requires that you have signed up for the service and entered in your client code below."
@@ -2068,7 +2708,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsExcerpt# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsExcerpt# excerpts from of a title from Syndetics on item detail pages on the OPAC."
@@ -2080,7 +2720,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsReviews# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsReviews# reviews of a title from Syndetics on item detail pages on the OPAC."
@@ -2092,7 +2732,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsSeries# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsSeries# information on other books in a title's series from Syndetics on item detail pages on the OPAC."
@@ -2104,7 +2744,7 @@ msgstr "Vis ikke"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsSummary# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Syndetics
 msgid "enhanced_content.pref#SyndeticsSummary# a summary of a title from Syndetics on item detail pages on the OPAC."
@@ -2172,15 +2812,15 @@ msgstr "Kræv ikke"
 
 # Enhanced Content > Tagging
 msgid "enhanced_content.pref#TagsModeration# Require"
-msgstr "Kræv"
+msgstr " Kræv"
 
 # Enhanced Content > Tagging
 msgid "enhanced_content.pref#TagsModeration# that tags submitted by patrons be reviewed by a staff member before being shown."
-msgstr "at mærker indtastet af lånere godkendes af en medarbejder."
+msgstr "at mærker indsendt af lånere godkendes af en medarbejder, før de vises."
 
 # Enhanced Content > Tagging
 msgid "enhanced_content.pref#TagsShowOnDetail# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Tagging
 msgid "enhanced_content.pref#TagsShowOnDetail# tags on item detail pages on the OPAC."
@@ -2188,7 +2828,7 @@ msgstr "mærker på eksemplarsider i OPAC."
 
 # Enhanced Content > Tagging
 msgid "enhanced_content.pref#TagsShowOnList# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Enhanced Content > Tagging
 msgid "enhanced_content.pref#TagsShowOnList# tags on search results on the OPAC."
@@ -2205,6 +2845,18 @@ msgstr "Brug"
 # Enhanced Content > Library Thing
 msgid "enhanced_content.pref#ThingISBN# the ThingISBN service to show other editions of a title (when either FRBRizeEditions or OPACFRBRizeEditions is on). This is separate from Library Thing for Libraries."
 msgstr "ThingISBN service ttil at vise andre udgaver af en titel (når enten FRBRizeEditions eller OPACFRBRizeEditions er slået til). Det er noget andet end Library Thing for Libraries."
+
+# Enhanced Content > Plugins
+msgid "enhanced_content.pref#UseKohaPlugins# Don't enable"
+msgstr "Aktiver ikke"
+
+# Enhanced Content > Plugins
+msgid "enhanced_content.pref#UseKohaPlugins# Enable"
+msgstr "Aktiver"
+
+# Enhanced Content > Plugins
+msgid "enhanced_content.pref#UseKohaPlugins# the ability to use Koha Plugins. Note, the plugin system must also be enabled in the Koha configuration file to be fully enabled."
+msgstr "muligheden for at bruge Koha plugins. Bemærk, pluginsystemet skal aktiveres i Koha-konfigurationsfilen for at være helt aktiveret."
 
 # Enhanced Content > OCLC
 msgid "enhanced_content.pref#XISBN# Don't use"
@@ -2228,27 +2880,51 @@ msgstr "gange om dagen. Medmindre der betales for xISBN service, Dette bør stå
 
 # I18N/L10N
 msgid "i18n_l10n.pref"
-msgstr " "
+msgstr "i18n_l10n.pref"
 
 # I18N/L10N
 msgid "i18n_l10n.pref#CalendarFirstDayOfWeek# Monday"
-msgstr ""
+msgstr "Mandag"
 
 # I18N/L10N
 msgid "i18n_l10n.pref#CalendarFirstDayOfWeek# Sunday"
-msgstr ""
+msgstr "Søndag"
 
 # I18N/L10N
 msgid "i18n_l10n.pref#CalendarFirstDayOfWeek# Use"
-msgstr ""
+msgstr "Brug"
 
 # I18N/L10N
 msgid "i18n_l10n.pref#CalendarFirstDayOfWeek# as the first day of week in the calendar."
-msgstr ""
+msgstr "som ugens første dag i kalenderen."
+
+# I18N/L10N
+msgid "i18n_l10n.pref#TimeFormat# ."
+msgstr "."
+
+# I18N/L10N
+msgid "i18n_l10n.pref#TimeFormat# 12 hour format ( e.g. \"02:18 PM\" )"
+msgstr "12 timers format ( f.eks. \"02:18 PM\" )"
+
+# I18N/L10N
+msgid "i18n_l10n.pref#TimeFormat# 24 hour format ( e.g. \"14:18\" )"
+msgstr "24 timers format ( f.eks. \"14:18\" )"
+
+# I18N/L10N
+msgid "i18n_l10n.pref#TimeFormat# Format times in"
+msgstr "Formater tider i"
+
+# I18N/L10N
+msgid "i18n_l10n.pref#alphabet# Use the alphabet"
+msgstr "Brug alfabetet"
+
+# I18N/L10N
+msgid "i18n_l10n.pref#alphabet# for lists of browsable letters. This should be a space separated list of uppercase letters."
+msgstr "til lister med bogstaver, som kan bladres. Dette skal være en liste med store bogstaver adskilt af mellemrum."
 
 # I18N/L10N
 msgid "i18n_l10n.pref#dateformat# ."
-msgstr " "
+msgstr " ."
 
 # I18N/L10N
 msgid "i18n_l10n.pref#dateformat# Format dates like"
@@ -2264,7 +2940,7 @@ msgstr "mm/dd/åååå"
 
 # I18N/L10N
 msgid "i18n_l10n.pref#dateformat# yyyy-mm-dd"
-msgstr ""
+msgstr "åååå-mm-dd"
 
 # I18N/L10N
 msgid "i18n_l10n.pref#language# Enable the following languages on the staff interface:"
@@ -2288,11 +2964,11 @@ msgstr "lånere at ændre det sprog, de ser i OPAC."
 
 # Local Use
 msgid "local_use.pref"
-msgstr " "
+msgstr "local_use.pref"
 
 # Logging
 msgid "logs.pref"
-msgstr " "
+msgstr "logs.pref"
 
 # Logging
 msgid "logs.pref#AuthoritiesLog# Don't log"
@@ -2339,8 +3015,8 @@ msgid "logs.pref#FinesLog# Log"
 msgstr "Log"
 
 # Logging
-msgid "logs.pref#FinesLog# when overdue fines are charged or automatically forgiven."
-msgstr "når bøder opkræves eller eftergives automatisk."
+msgid "logs.pref#FinesLog# when fines are charged, paid, or forgiven."
+msgstr "når bøder pålægges, betales eller eftergives."
 
 # Logging
 msgid "logs.pref#IssueLog# Don't log"
@@ -2392,23 +3068,27 @@ msgstr "når tidsskrifter tilføjes, slettes eller ændres."
 
 # OPAC
 msgid "opac.pref"
-msgstr " "
+msgstr "opac.pref"
 
 # OPAC > Appearance
 msgid "opac.pref Appearance"
-msgstr "."
+msgstr "opac.pref Appearance"
 
 # OPAC > Features
 msgid "opac.pref Features"
-msgstr "."
+msgstr "opac.pref Features"
 
 # OPAC > Policy
 msgid "opac.pref Policy"
-msgstr "."
+msgstr "opac.pref Policy"
 
 # OPAC > Privacy
 msgid "opac.pref Privacy"
-msgstr "."
+msgstr "opac.pref Privacy"
+
+# OPAC > Self Registration
+msgid "opac.pref Self Registration"
+msgstr "Selvregistrering"
 
 # OPAC > Shelf Browser
 msgid "opac.pref Shelf Browser"
@@ -2424,7 +3104,7 @@ msgstr "Tillad ikke"
 
 # OPAC > Policy
 msgid "opac.pref#AllowPurchaseSuggestionBranchChoice# patrons to select library when making a purchase suggestion"
-msgstr ""
+msgstr "lånere at vælge bibliotek, når de laver et indkøbsforslag"
 
 # OPAC > Privacy
 msgid "opac.pref#AnonSuggestions# Allow"
@@ -2452,7 +3132,7 @@ msgstr "Vis ikke"
 
 # OPAC > Appearance
 msgid "opac.pref#AuthorisedValueImages# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Appearance
 msgid "opac.pref#AuthorisedValueImages# images for <a href=\"/cgi-bin/koha/admin/authorised_values.pl\">authorized values</a> (such as lost statuses and locations) in search results and item detail pages on the OPAC."
@@ -2474,9 +3154,21 @@ msgstr "i simpel form."
 msgid "opac.pref#BiblioDefaultView# in their MARC form."
 msgstr "i deres MARC-form."
 
+# OPAC > Policy
+msgid "opac.pref#BlockExpiredPatronOpacActions# Block"
+msgstr ""
+
+# OPAC > Policy
+msgid "opac.pref#BlockExpiredPatronOpacActions# Don't block"
+msgstr ""
+
+# OPAC > Policy
+msgid "opac.pref#BlockExpiredPatronOpacActions# expired patrons from OPAC actions such as placing a hold or renewing.  Note that the setting for a patron category takes priority over this system preference."
+msgstr ""
+
 # OPAC > Appearance
 msgid "opac.pref#COinSinOPACResults# COinS / OpenURL / Z39.88 in OPAC search results.  <br/>Warning: Enabling this feature will slow OPAC search response times."
-msgstr "COinS / OpenURL / Z39.88 i OPAC søgeresultater. <br/>Advarsel: Aktivering af denne funktion vil gøre OPAC søgninger langsommere."
+msgstr "opac.pref#COinS / OpenURL / Z39.88 i OPAC søgeresultater.     <br/>Advarsel: Aktivering af denne funktion vil gøre OPAC søgninger langsommere."
 
 # OPAC > Appearance
 msgid "opac.pref#COinSinOPACResults# Don't include"
@@ -2487,20 +3179,16 @@ msgid "opac.pref#COinSinOPACResults# Include"
 msgstr "Medtag"
 
 # OPAC > Appearance
-msgid "opac.pref#DisplayOPACiconsXSLT# On pages displayed with XSLT stylesheets on the OPAC,"
-msgstr "På sider vist med XSLT stylesheets i OPAC,"
+msgid "opac.pref#DisplayOPACiconsXSLT# Don't show"
+msgstr "Vis ikke"
 
 # OPAC > Appearance
-msgid "opac.pref#DisplayOPACiconsXSLT# don't show"
-msgstr "vis ikke"
+msgid "opac.pref#DisplayOPACiconsXSLT# Show"
+msgstr "Vis"
 
 # OPAC > Appearance
-msgid "opac.pref#DisplayOPACiconsXSLT# icons for itemtype and authorized values."
-msgstr "ikoner for medietype og normerede værdier."
-
-# OPAC > Appearance
-msgid "opac.pref#DisplayOPACiconsXSLT# show"
-msgstr "vis"
+msgid "opac.pref#DisplayOPACiconsXSLT# the format, audience, and material type icons in XSLT MARC21 results and detail pages in the OPAC."
+msgstr "formatet, publikum og materialetype ikoner i XSLT MARC21 resultater og detaljesider i OPAC."
 
 # OPAC > Privacy
 msgid "opac.pref#EnableOpacSearchHistory# Don't keep"
@@ -2512,7 +3200,31 @@ msgstr "Behold"
 
 # OPAC > Privacy
 msgid "opac.pref#EnableOpacSearchHistory# patron search history in the OPAC."
-msgstr "lånerens søgehistorik i OPAC"
+msgstr "lånerers søgehistorik i OPAC."
+
+# OPAC > Appearance
+msgid "opac.pref#HighlightOwnItemsOnOPAC#  by moving the results to the front and increasing the size or highlighting the rows for those results. (Non-XSLT Only)"
+msgstr " ved at flytte resultaterne til fronten og forøge størrelsen eller markere rækkerne for disse resultater. (kun ikke-XSLT)"
+
+# OPAC > Appearance
+msgid "opac.pref#HighlightOwnItemsOnOPAC# Don't emphasize"
+msgstr "Fremhæv ikke"
+
+# OPAC > Appearance
+msgid "opac.pref#HighlightOwnItemsOnOPAC# Emphasize"
+msgstr "Fremhæv"
+
+# OPAC > Appearance
+msgid "opac.pref#HighlightOwnItemsOnOPAC# OPAC's branch via the URL"
+msgstr "OPAC's afdeling via URL"
+
+# OPAC > Appearance
+msgid "opac.pref#HighlightOwnItemsOnOPAC# patron's home branch"
+msgstr "lånerens hjemmeafdeling"
+
+# OPAC > Appearance
+msgid "opac.pref#HighlightOwnItemsOnOPAC# results from the "
+msgstr "resultater fra "
 
 # OPAC > Appearance
 msgid "opac.pref#LibraryName# Show"
@@ -2523,8 +3235,12 @@ msgid "opac.pref#LibraryName# as the name of the library on the OPAC."
 msgstr "som navnet på biblioteket i OPAC."
 
 # OPAC > Appearance
-msgid "opac.pref#OPACBaseURL# . (This must be filled in correctly for RSS, unAPI, and search plugins to work.)"
-msgstr ". (Det skal udfyldes korrekt for at RSS, unAPI, og søgeplugins kan fungere.)"
+msgid "opac.pref#NoLoginInstructions# Show the following HTML on the OPAC login form when a patron is not logged in:"
+msgstr ""
+
+# OPAC > Appearance
+msgid "opac.pref#OPACBaseURL# . Do not include a trailing slash in the URL. (This must be filled in correctly for RSS, unAPI, and search plugins to work.)"
+msgstr ""
 
 # OPAC > Appearance
 msgid "opac.pref#OPACBaseURL# The OPAC is located at http://"
@@ -2540,7 +3256,7 @@ msgstr "Kun detaljesider"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACDisplay856uAsImage# Display the URI in the 856u field as an image on: "
-msgstr "Vis URL i 856u felter som et villede på: "
+msgstr "Vis URL i 856u felter som et billede på: "
 
 # OPAC > Appearance
 msgid "opac.pref#OPACDisplay856uAsImage# Neither Details or Results pages"
@@ -2554,25 +3270,13 @@ msgstr "Bemærk: Den tilhørende OPACXSLT-option skal være slået til."
 msgid "opac.pref#OPACDisplay856uAsImage# Results page only"
 msgstr "Kun resultatsider"
 
-# OPAC > Appearance
-msgid "opac.pref#OPACDisplayRequestPriority# Don't show"
-msgstr "Vis ikke"
-
-# OPAC > Appearance
-msgid "opac.pref#OPACDisplayRequestPriority# Show"
-msgstr "Vis"
-
-# OPAC > Appearance
-msgid "opac.pref#OPACDisplayRequestPriority# patrons the priority level of their holds in the OPAC."
-msgstr "lånerne prioriteten af deres reserveringer i OPAC."
-
 # OPAC > Policy
 msgid "opac.pref#OPACFineNoRenewals# Only allow patrons to renew their own books on the OPAC if they have less than"
 msgstr "Tillad kun lånere at forlænge deres bøger i OPAC, hvis de har mindre end"
 
 # OPAC > Policy
 msgid "opac.pref#OPACFineNoRenewals# [% local_currency %] in fines (leave blank to disable)."
-msgstr ""
+msgstr " [% local_currency %] i bøder (blank for deaktivering)."
 
 # OPAC > Features
 msgid "opac.pref#OPACFinesTab# Allow"
@@ -2599,12 +3303,24 @@ msgid "opac.pref#OPACItemHolds# patrons to place holds on specific items in the 
 msgstr "lånerne at reservere et bestemt eksemplar i OPAC. Hvis dette er deaktiveret, kan lånerne kun reservere næste tilgængelige eksemplar."
 
 # OPAC > Appearance
+msgid "opac.pref#OPACMobileUserCSS# Include the following CSS for the mobile view on all pages in the OPAC:"
+msgstr "Medtag følgende CSS til mobil visning på alle sider i OPAC:"
+
+# OPAC > Appearance
 msgid "opac.pref#OPACMySummaryHTML# <br />Note: The placeholders {BIBLIONUMBER}, {TITLE}, {ISBN} and {AUTHOR} will be replaced with information from the displayed record."
 msgstr "<br />Bemærk: Pladsholdere {BIBLIONUMBER}, {TITLE}, {ISBN} og {AUTHOR} erstattes med information fra de viste poster."
 
 # OPAC > Appearance
-msgid "opac.pref#OPACMySummaryHTML# Include a \"Links\" column on the \"my summary\" tab when a user is logged in to the OPAC, with the following HTML (leave blank to disable):"
-msgstr "Medtag en \"Links\" kolonne på \"min oversigt\" fanen når en bruger logger ind i OPAC, med følgende HTML (blank for at deaktivere):"
+msgid "opac.pref#OPACMySummaryHTML# Include a \"Links\" column on the \"my summary\" and \"my reading history\" tabs when a user is logged in to the OPAC, with the following HTML (leave blank to disable):"
+msgstr "Medtag en \"Links\" spalte på fanerne \"min oversigt\" og \"min læsehistorik\", når en læser er logget ind i OPAC, med følgende HTML (blank for at deaktivere):"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACMySummaryNote# Note to display on the patron summary page. This note only appears if the patron is logged in:"
+msgstr ""
+
+# OPAC > Appearance
+msgid "opac.pref#OPACNoResultsFound# <br />Note: You can insert placeholders {QUERY_KW} that will be replaced with the keywords of the query."
+msgstr "<br />Bemærk: Du kan indsætte pladsholdere {QUERY_KW} som vil blive erstattet af nøgleordene i forespørgslen."
 
 # OPAC > Appearance
 msgid "opac.pref#OPACNoResultsFound# Display this HTML when no results are found for a search in the OPAC:"
@@ -2622,6 +3338,18 @@ msgstr "Tillad ikke"
 msgid "opac.pref#OPACPatronDetails# patrons to notify the library of changes to their contact information from the OPAC."
 msgstr "lånere, at informere biblioteket om ændringer i deres kontaktinformation gennem OPAC."
 
+# OPAC > Features
+msgid "opac.pref#OPACPopupAuthorsSearch# Display"
+msgstr "Vis"
+
+# OPAC > Features
+msgid "opac.pref#OPACPopupAuthorsSearch# Don't display"
+msgstr "Vis ikke"
+
+# OPAC > Features
+msgid "opac.pref#OPACPopupAuthorsSearch# the list of authors/subjects in a popup for a combined search on OPAC detail pages."
+msgstr "listen med forfattere/emner i en popup til en kombineret søgning i OPAC detaljesiderne."
+
 # OPAC > Privacy
 msgid "opac.pref#OPACPrivacy# Allow"
 msgstr "Tillad"
@@ -2632,7 +3360,7 @@ msgstr "Tillad ikke"
 
 # OPAC > Privacy
 msgid "opac.pref#OPACPrivacy# patrons to choose their own privacy settings for their reading history.  This requires opacreadinghistory and AnonymousPatron"
-msgstr "lånere at vælge deres egne privatlivsindstillinger for deres læsehistorik. Kræver opacreadinghistory og AnonymousPatron"
+msgstr "opac.pref#OPACPrivacy# lånere at vælge deres egne privatlivsindstillinger for deres læsehistorik.    Kræver opacreadinghistory og AnonymousPatron"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACResultsSidebar# Include the following HTML under the facets in OPAC search results:"
@@ -2640,7 +3368,7 @@ msgstr "Medtag følgende HTML under facetterne i OPAC søgeresultater:"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACSearchForTitleIn# <br />Note: The placeholders {BIBLIONUMBER}, {CONTROLNUMBER}, {TITLE}, {ISBN}, {ISSN} and {AUTHOR} will be replaced with information from the displayed record."
-msgstr ""
+msgstr "<br />Bemærk: Pladsholderne {BIBLIONUMBER}, {CONTROLNUMBER}, {TITLE}, {ISBN}, {ISSN} og {AUTHOR} erstattes med information fra den viste post."
 
 # OPAC > Appearance
 msgid "opac.pref#OPACSearchForTitleIn# Include a \"More Searches\" box on the detail pages of items on the OPAC, with the following HTML (leave blank to disable):"
@@ -2652,11 +3380,23 @@ msgstr "Vis ikke"
 
 # OPAC > Shelf Browser
 msgid "opac.pref#OPACShelfBrowser# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Shelf Browser
 msgid "opac.pref#OPACShelfBrowser# a shelf browser on item details pages, allowing patrons to see what's near that item on the shelf. Note that this uses up a fairly large amount of resources on your server, and should be avoided if your collection has a large number of items."
 msgstr "en hyldebrowser på eksemplar-detaljesiden, så lånere kan se, hvad der står i nærheden af dette eksemplar på hylden. Bemærk, at det bruger temmelig mange ressourcer på serveren, og bør undgås, hvis samlingen indholder mange eksemplarer."
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowBarcode# Don't show"
+msgstr "Vis ikke"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowBarcode# Show"
+msgstr "Vis"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowBarcode# the item's barcode on the holdings tab."
+msgstr "eksemplarets stregkode på reserveringsfanen."
 
 # OPAC > Appearance
 msgid "opac.pref#OPACShowCheckoutName# Don't show"
@@ -2664,11 +3404,43 @@ msgstr "Vis ikke"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACShowCheckoutName# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACShowCheckoutName# the name of the patron that has an item checked out on item detail pages on the OPAC."
 msgstr "navnet på den låner, der har lånt et eksemplar på eksemplar-detaljesiden i OPAC."
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowHoldQueueDetails# Don't show any hold details"
+msgstr "Vis ingen reserveringsdetaljer"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowHoldQueueDetails# Show holds"
+msgstr "Vis reserveringer"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowHoldQueueDetails# Show holds and their priority level"
+msgstr "Vis reserveringer og deres prioritering"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowHoldQueueDetails# Show priority level"
+msgstr "Vis prioritetsniveau"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowHoldQueueDetails# to patrons in the OPAC."
+msgstr "til lånere i OPAC."
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowUnusedAuthorities# Do not show"
+msgstr "Vis ikke"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowUnusedAuthorities# Show"
+msgstr "Vis"
+
+# OPAC > Appearance
+msgid "opac.pref#OPACShowUnusedAuthorities# unused authorities in the OPAC authority browser."
+msgstr "ubenyttede autoriteter i OPAC autoritetsbrowser."
 
 # OPAC > Appearance
 msgid "opac.pref#OPACURLOpenInNewWindow# When patrons click on a link to another website from your OPAC (like Amazon or OCLC),"
@@ -2676,7 +3448,7 @@ msgstr "Når lånere klikker på et link til en anden webside fra din OPAC (som 
 
 # OPAC > Appearance
 msgid "opac.pref#OPACURLOpenInNewWindow# do"
-msgstr "åbn"
+msgstr " åbn"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACURLOpenInNewWindow# don't"
@@ -2696,39 +3468,39 @@ msgstr "Vis ikke"
 
 # OPAC > Policy
 msgid "opac.pref#OPACViewOthersSuggestions# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Policy
 msgid "opac.pref#OPACViewOthersSuggestions# purchase suggestions from other patrons on the OPAC."
 msgstr "anskaffelsesforslag fra andre lånere i OPAC."
 
 # OPAC > Appearance
-msgid "opac.pref#OPACXSLTDetailsDisplay# <br />Options:<br />- leave empty for \"no xslt\"<br />- enter \"default\" for the default one<br />- put a path to define a xslt file<br />- put an URL for an external specific stylesheet.<br />{langcode} will be replaced with current interface language"
-msgstr ""
+msgid "opac.pref#OPACXSLTDetailsDisplay# <br />Options:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTDetailsDisplay\" data-value=\"\">Leave empty</a> for \"no xslt\"</li><li>enter \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTDetailsDisplay\" data-value=\"default\">default</a>\" for the default one</li><li>put a path to define a xslt file</li><li>put an URL for an external specific stylesheet.</li></ul>{langcode} will be replaced with current interface language"
+msgstr "<br />Optioner:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTDetailsDisplay\" data-value=\"\">Lad være tom</a> for \"no xslt\"</li><li>indtast \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTDetailsDisplay\" data-value=\"default\">default</a>\" for standarden</li><li>angiv en sti for at defnere en xslt-fil</li><li>giv en URL for et eksternt specifikt stylesheet.</li></ul>{langcode} erstattes med det aktuelle interface-sprog"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACXSLTDetailsDisplay# Display OPAC details using XSLT stylesheet at: "
-msgstr ""
+msgstr "Vis OPAC-detaljer med XSLT-stylesheet på: "
 
 # OPAC > Appearance
-msgid "opac.pref#OPACXSLTResultsDisplay# <br />Options:<br />- leave empty for \"no xslt\"<br />- enter \"default\" for the default one<br />- put a path to define a xslt file<br />- put an URL for an external specific stylesheet.<br />{langcode} will be replaced with current interface language"
-msgstr ""
+msgid "opac.pref#OPACXSLTResultsDisplay# <br />Options:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTResultsDisplay\" data-value=\"\">Leave empty</a> for \"no xslt\"</li><li>enter \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTResultsDisplay\" data-value=\"default\">default</a>\" for the default one</li><li> put a path to define a xslt file</li><li>put an URL for an external specific stylesheet.</li></ul>{langcode} will be replaced with current interface language"
+msgstr "<br />Optioner:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTResultsDisplay\" data-value=\"\">Lad være tom</a>for \"ingen xslt\"</li><li>indtast<a href=\"#\" class=\"set_syspref\" data-syspref=\"OPACXSLTResultsDisplay\" data-value=\"default\">default</a>\" for standarden</li><li>angiv stien for at definere en xslt-fil</li><li>sæt en URL til et eksternt  specifikt stylesheet.</li></ul>{langcode} erstattes med det aktuelle interfacesprog"
 
 # OPAC > Appearance
 msgid "opac.pref#OPACXSLTResultsDisplay# Display OPAC results using XSLT stylesheet at: "
-msgstr ""
+msgstr "Vis OPAC-resultater med XSLT-stylesheet på: "
 
 # OPAC > Features
 msgid "opac.pref#OPACpatronimages# Don't show"
-msgstr ""
+msgstr "Vis ikke"
 
 # OPAC > Features
 msgid "opac.pref#OPACpatronimages# Show"
-msgstr ""
+msgstr "Vis"
 
 # OPAC > Features
 msgid "opac.pref#OPACpatronimages# patron images on the patron information page in the OPAC."
-msgstr ""
+msgstr "lånerbilleder på låner-informationsiden i OPAC."
 
 # OPAC > Appearance
 msgid "opac.pref#OpacAddMastheadLibraryPulldown# Add"
@@ -2744,26 +3516,26 @@ msgstr "en biblioteks-valgmenu på OPAC."
 
 # OPAC > Policy
 msgid "opac.pref#OpacAllowPublicListCreation# Allow"
-msgstr ""
+msgstr "Tillad"
 
 # OPAC > Policy
 msgid "opac.pref#OpacAllowPublicListCreation# Don't allow"
-msgstr ""
+msgstr "Tillad ikke"
 
 # OPAC > Policy
 msgid "opac.pref#OpacAllowPublicListCreation# opac users to create public lists"
-msgstr ""
+msgstr "opac-brugere at lave offentlige lister"
 
 # OPAC > Policy
 msgid "opac.pref#OpacAllowSharingPrivateLists# Allow"
-msgstr ""
+msgstr "Tillad"
 
 # OPAC > Policy
 msgid "opac.pref#OpacAllowSharingPrivateLists# Don't allow"
-msgstr ""
+msgstr "Tillad ikke"
 
 # OPAC > Policy
-msgid "opac.pref#OpacAllowSharingPrivateLists# opac users to share private lists with other patrons. This feature is not active yet but will be released soon"
+msgid "opac.pref#OpacAllowSharingPrivateLists# opac users to share private lists with other patrons."
 msgstr ""
 
 # OPAC > Features
@@ -2776,19 +3548,19 @@ msgstr "Tillad ikke"
 
 # OPAC > Features
 msgid "opac.pref#OpacAuthorities# patrons to search your authority records."
-msgstr "lånere at søge i normposter."
+msgstr "lånere at søge i autoritetsposter."
 
 # OPAC > Features
 msgid "opac.pref#OpacBrowseResults# Disable"
-msgstr ""
+msgstr "Deaktiver"
 
 # OPAC > Features
 msgid "opac.pref#OpacBrowseResults# Enable"
-msgstr ""
+msgstr "Aktiver"
 
 # OPAC > Features
 msgid "opac.pref#OpacBrowseResults# browsing and paging search results from the OPAC detail page."
-msgstr ""
+msgstr "bradring i søgeresultater fra OPAC detaljesiden."
 
 # OPAC > Features
 msgid "opac.pref#OpacBrowser# Allow"
@@ -2800,23 +3572,35 @@ msgstr "Tillad ikke"
 
 # OPAC > Features
 msgid "opac.pref#OpacBrowser# patrons to browse subject authorities on OPAC (run misc/cronjobs/build_browser_and_cloud.pl to create the browser list)"
-msgstr "lånere at bladre i emnenormer på OPAC (kør misc/cronjobs/build_browser_and_cloud.pl for at lave browserlisten)"
+msgstr "lånere at bladre i emneautoriteter på OPAC (kør misc/cronjobs/build_browser_and_cloud.pl for at lave bladringslisten)"
+
+# OPAC > Features
+msgid "opac.pref#OpacCloud# Don't show"
+msgstr "Vis ikke"
+
+# OPAC > Features
+msgid "opac.pref#OpacCloud# Show"
+msgstr "Vis"
+
+# OPAC > Features
+msgid "opac.pref#OpacCloud# a subject cloud on OPAC (run misc/cronjobs/build_browser_and_cloud.pl to build)"
+msgstr "en emnesky i OPAC (kør misc/cronjobs/build_browser_and_cloud.pl to build)"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacExportOptions# <br />Note: Available options are: BIBTEX (<code>bibtex</code>), Dublin Core (<code>dc</code>),"
-msgstr ""
+msgstr "<br />Bemærk: Tilgængelige optioner er: BIBTEX (<code>bibtex</code>), Dublin Core (<code>dc</code>),"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacExportOptions# List export options that should be available from OPAC detail page separated by |:"
-msgstr ""
+msgstr "Anfør eksport-optioner, som skal være tilgængelige i OPAC-detaljesiden, adskilt af |:"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacExportOptions# MARCXML (<code>marcxml</code>), MARC-8 encoded MARC (<code>marc8</code>), Unicode/UTF-8 encoded MARC (<code>utf8</code>),"
-msgstr ""
+msgstr "MARCXML (<code>marcxml</code>), MARC-8 kodet MARC (<code>marc8</code>), Unicode/UTF-8 kodet MARC (<code>utf8</code>),"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacExportOptions# Unicode/UTF-8 encoded MARC without local use -9xx, x9x, xx9- fields and subfields (<code>marcstd</code>), MODS (<code>mods</code>), RIS (<code>ris</code>)"
-msgstr ""
+msgstr "Unicode/UTF-8 encoded MARC uden lokalt brug -9xx, x9x, xx9- felter og underfelter (<code>marcstd</code>), MODS (<code>mods</code>), RIS (<code>ris</code>)"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacFavicon# Use the image at"
@@ -2828,7 +3612,7 @@ msgstr "som OPAC's favicon. (Dette skal være en komplet URL, begyndende med <co
 
 # OPAC > Policy
 msgid "opac.pref#OpacHiddenItems# Allows to define custom rules for hiding specific items at opac. See docs/opac/OpacHiddenItems.txt for more informations"
-msgstr ""
+msgstr "Tillader definition af tilpassede refler for særlige eksemplarer i opac. Se docs/opac/OpacHiddenItems.txt for mere information"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacHighlightedWords# Don't highlight"
@@ -2839,8 +3623,40 @@ msgid "opac.pref#OpacHighlightedWords# Highlight"
 msgstr "Marker"
 
 # OPAC > Appearance
-msgid "opac.pref#OpacHighlightedWords# words the patron searched for in their search results."
-msgstr "ord som låneren søgte efter, i hans søgeresultater."
+msgid "opac.pref#OpacHighlightedWords# words the patron searched for in their search results and detail pages."
+msgstr "ord som låneren søgte efter i søgeresultater og detaljesider."
+
+# OPAC > Features
+msgid "opac.pref#OpacHoldNotes# Allow"
+msgstr ""
+
+# OPAC > Features
+msgid "opac.pref#OpacHoldNotes# Do not allow"
+msgstr ""
+
+# OPAC > Features
+msgid "opac.pref#OpacHoldNotes# users to add a note when placing a hold."
+msgstr ""
+
+# OPAC > Features
+msgid "opac.pref#OpacItemLocation# Show"
+msgstr "Vis"
+
+# OPAC > Features
+msgid "opac.pref#OpacItemLocation# call number only"
+msgstr "kun signatur"
+
+# OPAC > Features
+msgid "opac.pref#OpacItemLocation# collection code"
+msgstr "samlingskode"
+
+# OPAC > Features
+msgid "opac.pref#OpacItemLocation# for items on the OPAC search results."
+msgstr "for eksemplarer i OPAC søgeresultater."
+
+# OPAC > Features
+msgid "opac.pref#OpacItemLocation# location"
+msgstr "placering"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacKohaUrl# 'Powered by Koha' text on OPAC footer."
@@ -2859,16 +3675,28 @@ msgid "opac.pref#OpacMainUserBlock# Show the following HTML in its own column on
 msgstr "Vis følgende HTML i dets egen kolonne på hovedsiden af OPAC:"
 
 # OPAC > Appearance
+msgid "opac.pref#OpacMainUserBlockMobile# Show the following HTML in its own column on the main page of the OPAC (mobile version):"
+msgstr "Vis følgende HTML i dets egen kolonne på hovedsiden i OPAC (mobil version):"
+
+# OPAC > Appearance
 msgid "opac.pref#OpacMaintenance# Don't show"
 msgstr "Vis ikke"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacMaintenance# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacMaintenance# a warning that the OPAC is under maintenance, instead of the OPAC itself. Note: this shows the same warning as when the database needs to be upgraded, but unconditionally."
 msgstr "en advarsel om at OPAC er under vedligeholdelse, istedet for OPAC selv. Bemærk: det viser samme advarsel, som når databasen skal opdateres, men betingelsesløst."
+
+# OPAC > Appearance
+msgid "opac.pref#OpacMaxItemsToDisplay# Display up to"
+msgstr ""
+
+# OPAC > Appearance
+msgid "opac.pref#OpacMaxItemsToDisplay# items on the biblio detail page (if the biblio has more items than this, a link is displayed instead that allows the user to choose to display all items)."
+msgstr ""
 
 # OPAC > Appearance
 msgid "opac.pref#OpacNav# Show the following HTML on the left hand column of the main page and patron account on the OPAC (generally navigation links):"
@@ -2877,6 +3705,10 @@ msgstr "Vis følgende HTML i venstre spalte af hovedsiden og lånerkontoen i OPA
 # OPAC > Appearance
 msgid "opac.pref#OpacNavBottom# Show the following HTML on the left hand column of the main page and patron account on the OPAC, after OpacNav, and before patron account links if available:"
 msgstr "Vis følgende HTML i spalten til venstre på hovedsiden i OPAC, efter OpacNav, og før lånerkontoens link, hvis de findes:"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacNavRight# Show the following HTML in the right hand column of the main page under the main login form:"
+msgstr "Vis følgende HTML i højre kolonne på hovedsiden under hoved-login formularen:"
 
 # OPAC > Features
 msgid "opac.pref#OpacPasswordChange# Allow"
@@ -2912,7 +3744,7 @@ msgstr "Tillad ikke"
 
 # OPAC > Policy
 msgid "opac.pref#OpacRenewalAllowed# patrons to renew their own books on the OPAC."
-msgstr "lånere, at forlænge deres egne bøger via OPAC."
+msgstr "lånere at forlænge deres egne bøger via OPAC."
 
 # OPAC > Policy
 msgid "opac.pref#OpacRenewalBranch# 'OPACRenew'"
@@ -2932,15 +3764,63 @@ msgstr "som afdelingskode til at gemme i statistiktabellen."
 
 # OPAC > Policy
 msgid "opac.pref#OpacRenewalBranch# the item's home library"
-msgstr ""
+msgstr "eksemplarets hjemmebibliotek"
 
 # OPAC > Policy
 msgid "opac.pref#OpacRenewalBranch# the library the item was checked out from"
-msgstr ""
+msgstr "biblioteket hvorfra eksemplaret blev udlånt"
 
 # OPAC > Policy
 msgid "opac.pref#OpacRenewalBranch# the patron's home library"
-msgstr ""
+msgstr "lånerens hjemmebibliotek"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSeparateHoldings# Don't separate"
+msgstr "Adskil ikke"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSeparateHoldings# Separate"
+msgstr "Adskil"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSeparateHoldings# holding library"
+msgstr "placerings-bibliotek"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSeparateHoldings# home library"
+msgstr "hjemmebibliotek"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSeparateHoldings# is the logged in user's library. The second tab will contain all other items."
+msgstr "er den indloggede låners bibliotek. Den anden fane indeholder alle andre eksemplarer."
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSeparateHoldings# items display into two tabs, where the first tab contains items whose"
+msgstr "Eksemplarer vises i to faner, hvor den første fane indeholder eksemplarer som"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacShowFiltersPulldownMobile# Don't show"
+msgstr "Vis ikke"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacShowFiltersPulldownMobile# Show"
+msgstr "Vis"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacShowFiltersPulldownMobile# the search filters pulldown on the mobile version of the OPAC."
+msgstr "søgefilter-menuen i den mobile version af OPAC."
+
+# OPAC > Appearance
+msgid "opac.pref#OpacShowLibrariesPulldownMobile# Don't show"
+msgstr "Vis ikke"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacShowLibrariesPulldownMobile# Show"
+msgstr "Vis"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacShowLibrariesPulldownMobile# the libraries pulldown on the mobile version of the OPAC."
+msgstr "biblioteks-menuen i den mobile version af OPAC."
 
 # OPAC > Appearance
 msgid "opac.pref#OpacShowRecentComments# Don't show"
@@ -2948,7 +3828,7 @@ msgstr "Vis ikke"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacShowRecentComments# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacShowRecentComments# a link to recent comments in the OPAC masthead."
@@ -2956,22 +3836,34 @@ msgstr "et link til nye kommentarer i OPAC masthovedet."
 
 # OPAC > Appearance
 msgid "opac.pref#OpacStarRatings# Show star-ratings on"
-msgstr ""
+msgstr "Vis stjerne-ratings på"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacStarRatings# no"
-msgstr ""
+msgstr "ingen"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacStarRatings# only details"
-msgstr ""
+msgstr "kun detaljer"
 
 # OPAC > Appearance
 msgid "opac.pref#OpacStarRatings# pages."
-msgstr ""
+msgstr "sider."
 
 # OPAC > Appearance
 msgid "opac.pref#OpacStarRatings# results and details"
+msgstr "resultater og detaljer"
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSuggestionManagedBy# Don't show"
+msgstr ""
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSuggestionManagedBy# Show"
+msgstr ""
+
+# OPAC > Appearance
+msgid "opac.pref#OpacSuggestionManagedBy# the name of the staff member who managed a suggestion in OPAC."
 msgstr ""
 
 # OPAC > Features
@@ -2985,6 +3877,78 @@ msgstr "Tillad ikke"
 # OPAC > Features
 msgid "opac.pref#OpacTopissue# patrons to access a list of the most checked out items on the OPAC. Note that this is somewhat experimental, and should be avoided if your collection has a large number of items."
 msgstr "lånere adgang til en liste med de mest udlånte bøger via OPAC. Bemærk at dette er noget eksperimenterende, og bør undgås, hvis samlingen er meget stor."
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistration# Allow"
+msgstr "Tillad"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistration# Don't allow"
+msgstr "Tillad ikke"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistration# library patrons to register an account via the OPAC."
+msgstr "bibliotekslånere at registrere en konto via OPAC."
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationAdditionalInstructions# Display the following additional instructions for patrons who self register via the OPAC ( HTML is allowed ):"
+msgstr "Vis følgende yderligere vejledning for lånere, som selv registrerer sig via OPAC ( HTML er tilladt ):"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationBorrowerMandatoryField# (separate columns with |)"
+msgstr "(adskil kolonner med |)"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationBorrowerMandatoryField# The following <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database columns</a> must be filled in on the patron entry screen:"
+msgstr "Følgende <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database-kolonner</a> skal udfyldes på lånerindtastningsskærmen:"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationBorrowerUnwantedField# (separate columns with |)"
+msgstr "(adskil kolonner med |)"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationBorrowerUnwantedField# The following <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database columns</a> will not appear on the patron entry screen:"
+msgstr "Følgende <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database-kolonner</a> vises ikke på låner indtastningsskærmen:"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationDefaultCategory# Use the patron category code"
+msgstr "Brug låner kategorikoden"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationDefaultCategory# as the default patron category for patrons registered via the OPAC."
+msgstr "som standard lånerkategori for lånere registreret via OPAC."
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationExpireTemporaryAccountsDelay# Delete patrons registered via the OPAC, but not yet verified after"
+msgstr "Slet lånere, som er registreret via OPAC, men ikke verificeret efter"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationExpireTemporaryAccountsDelay# days."
+msgstr "dage."
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationVerifyByEmail# Don't require"
+msgstr "Forlang ikke"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationVerifyByEmail# Require"
+msgstr "Forlang"
+
+# OPAC > Self Registration
+msgid "opac.pref#PatronSelfRegistrationVerifyByEmail# that a self-registering patron verify his or herself via email."
+msgstr "at en selv-registreret låner verificerer sig selv via email."
+
+# OPAC > Features
+msgid "opac.pref#QuoteOfTheDay# Disable"
+msgstr "Deaktiver"
+
+# OPAC > Features
+msgid "opac.pref#QuoteOfTheDay# Enable"
+msgstr "Aktiver"
+
+# OPAC > Features
+msgid "opac.pref#QuoteOfTheDay# Quote of the Day display on OPAC home page"
+msgstr "dagens citat til visning på OPAC-hjemmesiden"
 
 # OPAC > Features
 msgid "opac.pref#RequestOnOpac# Allow"
@@ -3008,7 +3972,7 @@ msgstr "Begræns"
 
 # OPAC > Policy
 msgid "opac.pref#SearchMyLibraryFirst# patrons' searches to the library they are registered at."
-msgstr "låneres' søgning til det bibliotek, hvor de er registreret."
+msgstr "låneres søgning til det bibliotek, hvor de er registreret."
 
 # OPAC > Shelf Browser
 msgid "opac.pref#ShelfBrowserUsesCcode# Don't use"
@@ -3020,7 +3984,7 @@ msgstr "Brug"
 
 # OPAC > Shelf Browser
 msgid "opac.pref#ShelfBrowserUsesCcode# the item collection code when finding items for the shelf browser."
-msgstr "шифр зібрання"
+msgstr "eksemplar-samlings-koden, når der findes eksemplarer til hyldebrowseren."
 
 # OPAC > Shelf Browser
 msgid "opac.pref#ShelfBrowserUsesHomeBranch# Don't use"
@@ -3028,11 +3992,11 @@ msgstr "Brug ikke"
 
 # OPAC > Shelf Browser
 msgid "opac.pref#ShelfBrowserUsesHomeBranch# Use"
-msgstr "Brug"
+msgstr " Brug"
 
 # OPAC > Shelf Browser
 msgid "opac.pref#ShelfBrowserUsesHomeBranch# the item home library when finding items for the shelf browser."
-msgstr ""
+msgstr "eksemplarets hjemmebibliotek, når der findes eksemplarer til hyldebrowseren."
 
 # OPAC > Shelf Browser
 msgid "opac.pref#ShelfBrowserUsesLocation# Don't use"
@@ -3052,31 +4016,31 @@ msgstr "Vis"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# first name"
-msgstr ""
+msgstr "fornavn"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# first name and last name initial"
-msgstr ""
+msgstr "fornavn og forbogstav af efternavn"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# full name"
-msgstr ""
+msgstr "hele navnet"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# last name"
-msgstr ""
+msgstr "efternavnet"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# no name"
-msgstr ""
+msgstr "intet navn"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# of commenter with comments in OPAC."
-msgstr ""
+msgstr "på kommentator ved kommentarer i OPAC."
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewer# username"
-msgstr ""
+msgstr "brugernavn"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewerPhoto# Hide"
@@ -3084,7 +4048,7 @@ msgstr "Skjul"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewerPhoto# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Features
 msgid "opac.pref#ShowReviewerPhoto# reviewer's photo beside comments in OPAC."
@@ -3092,15 +4056,31 @@ msgstr "anmelderens foto ved siden af kommentarer i OPAC"
 
 # OPAC > Features
 msgid "opac.pref#SocialNetworks# Disable"
-msgstr ""
+msgstr "Deaktiver"
 
 # OPAC > Features
 msgid "opac.pref#SocialNetworks# Enable"
-msgstr ""
+msgstr "Aktiver"
 
 # OPAC > Features
 msgid "opac.pref#SocialNetworks# social network links in opac detail pages"
-msgstr ""
+msgstr "sociale netværklinks på opac detaljesider"
+
+# OPAC > Privacy
+msgid "opac.pref#TrackClicks# Don't track"
+msgstr "Spor ikke"
+
+# OPAC > Privacy
+msgid "opac.pref#TrackClicks# Track"
+msgstr "Spor"
+
+# OPAC > Privacy
+msgid "opac.pref#TrackClicks# Track anonymously"
+msgstr "Spor anonymt"
+
+# OPAC > Privacy
+msgid "opac.pref#TrackClicks# links that patrons click on"
+msgstr "links, som lånere klikker på"
 
 # OPAC > Appearance
 msgid "opac.pref#hidelostitems# Don't show"
@@ -3116,7 +4096,7 @@ msgstr "mistede eksemplarer på søgnings- og detaljesider."
 
 # OPAC > Features
 msgid "opac.pref#numSearchRSSResults# Display"
-msgstr "Vis"
+msgstr " Vis"
 
 # OPAC > Features
 msgid "opac.pref#numSearchRSSResults# search results in the RSS feed."
@@ -3139,8 +4119,8 @@ msgid "opac.pref#opaccolorstylesheet# Include the additional CSS stylesheet"
 msgstr "Medtag det ekstra CSS stylesheet"
 
 # OPAC > Appearance
-msgid "opac.pref#opaccolorstylesheet# to override specified settings from the default stylesheet (leave blank to disable). Enter a filename or a complete URL beginning with <code>http://</code> (if the file lives on a remote server). Please note that if you enter a filename, the file should be in the css subdirectory for each active theme and language within the Koha templates directory."
-msgstr ""
+msgid "opac.pref#opaccolorstylesheet# to override specified settings from the default stylesheet (leave blank to disable). Enter just a filename, a full local path or a complete URL starting with <code>http://</code> (if the file lives on a remote server). Please note that if you just enter a filename, the file should be in the css subdirectory for each active theme and language within the Koha templates directory. A full local path is expected to start from your HTTP document root."
+msgstr "overskriver angivne indstillinger fra standard stylesheet (lad være tom for at deaktivere). Indtast bare et filnavn, en hel lokal sti eller en komplet URL begyndende med <code>http://</code> (hvis filerne ligger på en fjern server). Bemærk at hvis der bare angives et filnavn, skal filen være i css underfolderen for hvert aktivt tema og sprog i Koha skabelon-folderen. En komplet lokal sti skal starte fra din  HTTP dokument root."
 
 # OPAC > Appearance
 msgid "opac.pref#opaccredits# Include the following HTML in the footer of all pages in the OPAC:"
@@ -3152,11 +4132,11 @@ msgstr "Medtag følgende HTML i toppen af alle sider i OPAC:"
 
 # OPAC > Appearance
 msgid "opac.pref#opaclayoutstylesheet# Use the CSS stylesheet"
-msgstr ""
+msgstr "Brug CSS stylesheet"
 
 # OPAC > Appearance
-msgid "opac.pref#opaclayoutstylesheet# on all pages in the OPAC, instead of the default (leave blank to disable). Please enter filename only. The file should be in the css subdirectory for each active theme and language within the Koha templates directory."
-msgstr ""
+msgid "opac.pref#opaclayoutstylesheet# on all pages in the OPAC, instead of the default css (used when leaving this field blank). Enter just a filename, a full local path or a complete URL starting with <code>http://</code> (if the file lives on a remote server). Please note that if you just enter a filename, the file should be in the css subdirectory for each active theme and language within the Koha templates directory. A full local path is expected to start from your HTTP document root."
+msgstr "på alle sider i OPAC, i stedet for standard css (bruges hvis feltet er tomt). Indtast bare et filnavn, en komplat lokal sti eller en komplet URL begyndende med <code>http://</code> (hvis filerne ligger på en fjern server). Bemærk at hvis der bare angives et filnavn, skal filen være i css underfolderen for hvert aktivt tema og sprog i Koha skabelon-folderen. En komplet lokal sti skal starte fra din HTTP dokument root."
 
 # OPAC > Privacy
 msgid "opac.pref#opacreadinghistory# Allow"
@@ -3177,14 +4157,6 @@ msgstr "Brug billedet på"
 # OPAC > Appearance
 msgid "opac.pref#opacsmallimage# in the OPAC header, instead of the Koha logo. If this image is a different size than the Koha logo, you will need to customize the CSS. (This should be a complete URL, starting with <code>http://</code>.)"
 msgstr "i OPAC-overskriften, istedet for Koha-logoet. Hvis billedet er en anden størrelse end Koha-logoet, skal CSS tilpasses. (Det skal være en komplet URL, begyndende med <code>http://</code>.)"
-
-# OPAC > Appearance
-msgid "opac.pref#opacstylesheet# Use the remote CSS stylesheet"
-msgstr "Brug det fjerne CSS-stylesheet"
-
-# OPAC > Appearance
-msgid "opac.pref#opacstylesheet# on all pages in the OPAC, instead of the default. (This should be a complete URL, starting with <code>http://</code>.)"
-msgstr "på alle sider i OPAC, istedet for standard. (Det skal være en komplet URL, begyndende med <code>http://</code>.)"
 
 # OPAC > Appearance
 msgid "opac.pref#opacthemes# Use the"
@@ -3231,8 +4203,8 @@ msgid "opac.pref#singleBranchMode# Don't allow"
 msgstr "Tillad ikke"
 
 # OPAC > Policy
-msgid "opac.pref#singleBranchMode# patrons to select their library on the OPAC."
-msgstr ""
+msgid "opac.pref#singleBranchMode# patrons to select their branch on the OPAC or show branch names with callnumbers."
+msgstr "lånere at vælge deres afdeling i OPAC eller vise afdelingsnumre med hyldesignaturer."
 
 # OPAC > Features
 msgid "opac.pref#suggestion# Allow"
@@ -3248,7 +4220,7 @@ msgstr "lånere at lave indkøbsforslag i OPAC."
 
 # Patrons
 msgid "patrons.pref"
-msgstr " "
+msgstr "patrons.pref"
 
 # Patrons
 msgid "patrons.pref#AddPatronLists# List"
@@ -3264,7 +4236,7 @@ msgstr "specielle kategorier"
 
 # Patrons
 msgid "patrons.pref#AddPatronLists# under the new patron menu."
-msgstr "under den nye lånermenu."
+msgstr "under menuen Ny låner."
 
 # Patrons
 msgid "patrons.pref#AutoEmailOpacUser# Don't send"
@@ -3280,15 +4252,19 @@ msgstr "en email til nyoprettede lånere med deres kontodetaljer."
 
 # Patrons
 msgid "patrons.pref#AutoEmailPrimaryAddress# Use"
-msgstr "Brug"
+msgstr " Brug"
 
 # Patrons
 msgid "patrons.pref#AutoEmailPrimaryAddress# alternate"
 msgstr "alternativ"
 
 # Patrons
+msgid "patrons.pref#AutoEmailPrimaryAddress# cardnumber as"
+msgstr "kortnummer som"
+
+# Patrons
 msgid "patrons.pref#AutoEmailPrimaryAddress# first valid"
-msgstr "første fyldige"
+msgstr "første gyldige"
 
 # Patrons
 msgid "patrons.pref#AutoEmailPrimaryAddress# home"
@@ -3308,27 +4284,27 @@ msgstr "(adskil spalter med |)"
 
 # Patrons
 msgid "patrons.pref#BorrowerMandatoryField# The following <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database columns</a> must be filled in on the patron entry screen:"
-msgstr ""
+msgstr "Følgende <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database-kolonner</a> skal udfyldes på låner-indtastningsskærmen:"
 
 # Patrons
 msgid "patrons.pref#BorrowerRenewalPeriodBase# When renewing borrowers, base the new expiry date on"
-msgstr ""
+msgstr "Når udlån fornys baseres udløbsdagen på"
 
 # Patrons
 msgid "patrons.pref#BorrowerRenewalPeriodBase# current date."
-msgstr ""
+msgstr "nuværende dato."
 
 # Patrons
 msgid "patrons.pref#BorrowerRenewalPeriodBase# current membership expiry date."
-msgstr ""
+msgstr "udløbsdato for nuværende medlemskab."
 
 # Patrons
 msgid "patrons.pref#BorrowerUnwantedField# (separate columns with |)"
-msgstr ""
+msgstr "(adskil spalter med |)"
 
 # Patrons
 msgid "patrons.pref#BorrowerUnwantedField# The following <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database columns</a> will not appear on the patron entry screen:"
-msgstr ""
+msgstr "Følgende <a href='http://schema.koha-community.org/tables/borrowers.html' target='blank'>database-kolonner</a> vises ikke på låner indtastningsskærmen:"
 
 # Patrons
 msgid "patrons.pref#BorrowersTitles# (separate multiple choices with |)"
@@ -3337,6 +4313,30 @@ msgstr "(adskil forskellige muligheder med |)"
 # Patrons
 msgid "patrons.pref#BorrowersTitles# Borrowers can have the following titles:"
 msgstr "Lånere kan have følgende titler:"
+
+# Patrons
+msgid "patrons.pref#CardnumberLength# Card numbers for patrons must be"
+msgstr ""
+
+# Patrons
+msgid "patrons.pref#CardnumberLength# If 'cardnumber' is included in the BorrowerMandatoryField list, the minimum length, if not specified here, defaults to one."
+msgstr ""
+
+# Patrons
+msgid "patrons.pref#CardnumberLength# characters long. The length can be a single number to specify an exact length, a range separated by a comma (i.e., 'Min,Max'), or a maximum with no minimum (i.e., ',Max')."
+msgstr ""
+
+# Patrons
+msgid "patrons.pref#EnableBorrowerFiles# Do"
+msgstr "Aktiver"
+
+# Patrons
+msgid "patrons.pref#EnableBorrowerFiles# Don't"
+msgstr "Aktiver ikke"
+
+# Patrons
+msgid "patrons.pref#EnableBorrowerFiles# enable the ability to upload and attach arbitrary files to a borrower record."
+msgstr "muligheden for at vedhæfte og oploade tilfældige filer til en lånerpost."
 
 # Patrons
 msgid "patrons.pref#EnhancedMessagingPreferences# Allow"
@@ -3348,7 +4348,7 @@ msgstr "Tillad ikke"
 
 # Patrons
 msgid "patrons.pref#EnhancedMessagingPreferences# patrons to choose which notices they receive and when they receive them. Note that this only applies to certain kinds of notices."
-msgstr "lånere skal vælge de beskeder, de vil have og hvornår de skal sendes. Bemærk at det kun gælder for bestemte beskeder."
+msgstr "lånere, at vælge de beskeder, de vil have og hvornår de skal sendes. Bemærk at det kun gælder for bestemte beskeder."
 
 # Patrons
 msgid "patrons.pref#ExtendedPatronAttributes# Don't enable"
@@ -3360,19 +4360,23 @@ msgstr "Aktiver"
 
 # Patrons
 msgid "patrons.pref#ExtendedPatronAttributes# searching, editing and display of custom attributes on patrons."
-msgstr "søgning, visning og editering af tilpasse egenskaber for lånere."
+msgstr "søgning, visning og redigering af tilpassede egenskaber for lånere."
 
 # Patrons
-msgid "patrons.pref#MaxFine# The late fine for a specific checkout will only go up to"
-msgstr "Udestående bøder for et bestemt udlån, går kun op til"
+msgid "patrons.pref#MaxFine# Empty value means no limit. Single item caps are specified in the circulation rules matrix."
+msgstr "Tom værdi betyder ingen begrænsning. Enkelt eksemplar-grænse angives i udlånsregel-matriksen."
+
+# Patrons
+msgid "patrons.pref#MaxFine# The late fine for all checkouts will only go up to"
+msgstr "Bøden for for sent aflevering vil kun gå op til"
 
 # Patrons
 msgid "patrons.pref#MaxFine# [% local_currency %]."
 msgstr "[% local_currency %]."
 
 # Patrons
-msgid "patrons.pref#NotifyBorrowerDeparture# Show a notice that a patron is about to expire"
-msgstr "Vis en besked, at en lånerkonto er ved at udløbe"
+msgid "patrons.pref#NotifyBorrowerDeparture# Show a notice if the patron is about to expire or has expired"
+msgstr ""
 
 # Patrons
 msgid "patrons.pref#NotifyBorrowerDeparture# days beforehand."
@@ -3392,7 +4396,27 @@ msgstr "Brug SMS::Send::"
 
 # Patrons
 msgid "patrons.pref#SMSSendDriver# driver to send SMS messages."
-msgstr "driver til at sende SMS-beskeder"
+msgstr "driver til at sende SMS-beskeder."
+
+# Patrons
+msgid "patrons.pref#StatisticsFields# (separate fields with |)"
+msgstr "(adskil felter med |)"
+
+# Patrons
+msgid "patrons.pref#StatisticsFields# Show the following fields from the items database table as columns on the statistics tab on the patron record: "
+msgstr "Vis følgende felter fra eksemplar-databasetabellen som spalter på statistik-fanen i låner-posten: "
+
+# Patrons
+msgid "patrons.pref#TalkingTechItivaPhoneNotification# Disable"
+msgstr "Deaktiver"
+
+# Patrons
+msgid "patrons.pref#TalkingTechItivaPhoneNotification# Enable"
+msgstr "Aktiver"
+
+# Patrons
+msgid "patrons.pref#TalkingTechItivaPhoneNotification# patron phone notifications using Talking Tech i-tiva (overdues, predues and holds notices currently supported)."
+msgstr "lånerens telefonbeskeder med Talking Tech i-tiva (forsinkede, rykkere og reserveringsbeskeder er pt. understøttet)."
 
 # Patrons
 msgid "patrons.pref#autoMemberNum# Do"
@@ -3408,7 +4432,7 @@ msgstr "som standard lånernummeret på tilføj lånerskærmen være det næste 
 
 # Patrons
 msgid "patrons.pref#borrowerRelationship# (input multiple choices separated by |). Leave empty to deactivate"
-msgstr ""
+msgstr "(input flere valg adskilt af |). Tom for at deaktivere"
 
 # Patrons
 msgid "patrons.pref#borrowerRelationship# Guarantors can be the following of those they guarantee:"
@@ -3437,18 +4461,6 @@ msgstr "Tillad ikke"
 # Patrons
 msgid "patrons.pref#intranetreadinghistory# staff to access a patron's checkout history (it is stored regardless)."
 msgstr "medarbejdere adgang til en låners udlånshistorik (den gemmes alligevel)."
-
-# Patrons
-msgid "patrons.pref#memberofinstitution# Do"
-msgstr "Tillad"
-
-# Patrons
-msgid "patrons.pref#memberofinstitution# Don't"
-msgstr "Tillad ikke"
-
-# Patrons
-msgid "patrons.pref#memberofinstitution# allow patrons to be linked to institutions (which must be set up as Institution patrons)."
-msgstr "lånere at være linkede til institutioner (som skal være sat op som institutionslånere)."
 
 # Patrons
 msgid "patrons.pref#minPasswordLength# Login passwords for staff and patrons must be at least"
@@ -3484,7 +4496,7 @@ msgstr "efternavne med store bogstaver."
 
 # Searching
 msgid "searching.pref"
-msgstr " "
+msgstr "searching.pref"
 
 # Searching > Features
 msgid "searching.pref Features"
@@ -3499,15 +4511,55 @@ msgid "searching.pref Search Form"
 msgstr "Søgeformular"
 
 # Searching > Search Form
-msgid "searching.pref#AdvancedSearchTypes# <em>Currently supported values</em>: Item types (<strong>itemtypes</strong>), Collection Codes (<strong>ccode</strong>) and Shelving Location (<strong>loc</strong>)."
+msgid "searching.pref#AdvancedSearchLanguages# For example, to limit listing to French and Italian, enter <em>ita|fre</em>."
 msgstr ""
+
+# Searching > Search Form
+msgid "searching.pref#AdvancedSearchLanguages# ISO 639-2 language codes (separate values with | or ,)."
+msgstr ""
+
+# Searching > Search Form
+msgid "searching.pref#AdvancedSearchLanguages# Limit the languages listed in the advanced search drop-down to the"
+msgstr ""
+
+# Searching > Search Form
+msgid "searching.pref#AdvancedSearchTypes# <em>Currently supported values</em>: Item types (<strong>itemtypes</strong>), Collection Codes (<strong>ccode</strong>) and Shelving Location (<strong>loc</strong>)."
+msgstr "searching.pref#AdvancedSearchTypes# <em>Nuværende understøttede værdier</em>: Materialetyper (<strong>itemtypes</strong>), Samlingskoder (<strong>ccode</strong>) og Reollokation (<strong>loc</strong>)."
 
 # Searching > Search Form
 msgid "searching.pref#AdvancedSearchTypes# Show tabs in OPAC and staff-side advanced search for limiting searches on the"
-msgstr ""
+msgstr "Viser faner i OPAC og udvidet søgning for medarbejdere til begrænsning af søgninger i"
 
 # Searching > Search Form
 msgid "searching.pref#AdvancedSearchTypes# fields (separate values with |). Tabs appear in the order listed.<br/>"
+msgstr "felter (adskil værdier med |). Faner vises i den listede orden.<br/>"
+
+# Searching > Results Display
+msgid "searching.pref#DisplayLibraryFacets# Show facets for"
+msgstr ""
+
+# Searching > Results Display
+msgid "searching.pref#DisplayLibraryFacets# both home and holding library"
+msgstr ""
+
+# Searching > Results Display
+msgid "searching.pref#DisplayLibraryFacets# holding library"
+msgstr ""
+
+# Searching > Results Display
+msgid "searching.pref#DisplayLibraryFacets# home library"
+msgstr ""
+
+# Searching > Features
+msgid "searching.pref#EnableSearchHistory# Don't keep"
+msgstr ""
+
+# Searching > Features
+msgid "searching.pref#EnableSearchHistory# Keep"
+msgstr ""
+
+# Searching > Features
+msgid "searching.pref#EnableSearchHistory# patron search history in the staff client."
 msgstr ""
 
 # Searching > Results Display
@@ -3519,16 +4571,32 @@ msgid "searching.pref#FacetLabelTruncationLength# characters, in OPAC/staff inte
 msgstr "karakterer i OPAC/admin-interface."
 
 # Searching > Features
-msgid "searching.pref#NoZebra# Don't use"
-msgstr "Brug ikke"
+msgid "searching.pref#IncludeSeeFromInSearches# <i>see from</i> (non-preferred form) headings in bibliographic searches. Please note: you will need to reindex your bibliographic database when changing this preference."
+msgstr "<i>se fra</i> (ikke-foretrukket form) overskrifter i bibliografiske søgninger. Bemærk venligst: den bibliografiske database skal indekseres igen, når dette ændres."
 
 # Searching > Features
-msgid "searching.pref#NoZebra# Use"
-msgstr "Brug"
+msgid "searching.pref#IncludeSeeFromInSearches# Don't include"
+msgstr "Medtag ikke"
 
 # Searching > Features
-msgid "searching.pref#NoZebra# the Zebra search engine.  It is recommended to use Zebra; the option to not use Zebra is deprecated and is not guaranteed to work."
-msgstr "Zebra søgemaskine. Det anbefales at bruge Zebra; optionen til ikke at bruge Zebra er forældet og virker ikke med sikkerhed."
+msgid "searching.pref#IncludeSeeFromInSearches# Include"
+msgstr "Medtag"
+
+# Searching > Search Form
+msgid "searching.pref#IntranetNumbersPreferPhrase# By default,"
+msgstr "Som standard,"
+
+# Searching > Search Form
+msgid "searching.pref#IntranetNumbersPreferPhrase# don't use"
+msgstr "brug ikke"
+
+# Searching > Search Form
+msgid "searching.pref#IntranetNumbersPreferPhrase# the operator \"phr\" in the callnumber and standard number staff client searches"
+msgstr "operatoren \"phr\" i hyldesignaturer og standard nummer intranetsøgninger"
+
+# Searching > Search Form
+msgid "searching.pref#IntranetNumbersPreferPhrase# use"
+msgstr "brug"
 
 # Searching > Results Display
 msgid "searching.pref#OPACItemsResultsDisplay# Don't show"
@@ -3536,15 +4604,31 @@ msgstr "Vis ikke"
 
 # Searching > Results Display
 msgid "searching.pref#OPACItemsResultsDisplay# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Searching > Results Display
 msgid "searching.pref#OPACItemsResultsDisplay# an item's library, location and call number in OPAC search results."
-msgstr ""
+msgstr "et eksemplars bibliotek, placering og hyldesignatur i OPAC søgeresultater."
+
+# Searching > Search Form
+msgid "searching.pref#OPACNumbersPreferPhrase# By default,"
+msgstr "Som standard"
+
+# Searching > Search Form
+msgid "searching.pref#OPACNumbersPreferPhrase# don't use"
+msgstr "brug ikke"
+
+# Searching > Search Form
+msgid "searching.pref#OPACNumbersPreferPhrase# the operator \"phr\" in the callnumber and standard number OPAC searches"
+msgstr "operatoren \"phr\" i hyldesignatur og standardnummer OPAC søgninger."
+
+# Searching > Search Form
+msgid "searching.pref#OPACNumbersPreferPhrase# use"
+msgstr "brug"
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# ,"
-msgstr ","
+msgstr " ,"
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# By default, sort search results in the OPAC by"
@@ -3552,7 +4636,7 @@ msgstr "Som standard, sorter søgeresultater i OPAC efter"
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# ascending."
-msgstr "stigende"
+msgstr "stigende."
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# author"
@@ -3572,15 +4656,15 @@ msgstr "udgivelsesdato"
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# descending."
-msgstr "faldende"
+msgstr "faldende."
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# from A to Z."
-msgstr "fra A til Å"
+msgstr "fra A til Å."
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# from Z to A."
-msgstr "fra Å til A"
+msgstr "fra Å til A."
 
 # Searching > Results Display
 msgid "searching.pref#OPACdefaultSortField# relevance"
@@ -3624,7 +4708,7 @@ msgstr "Udfør søgning med wildcards (hvor f.eks. <cite>Har</cite> ville svare 
 
 # Searching > Features
 msgid "searching.pref#QueryAutoTruncate# automatically."
-msgstr "automatisk"
+msgstr "automatisk."
 
 # Searching > Features
 msgid "searching.pref#QueryAutoTruncate# only if * is added."
@@ -3641,18 +4725,6 @@ msgstr "Prøv"
 # Searching > Features
 msgid "searching.pref#QueryFuzzy# to match similarly spelled words in a search (for example, a search for <cite>flang</cite> would also match <cite>flange</cite> and <cite>fang</cite>; REQUIRES ZEBRA)."
 msgstr "at sammenligne ord stavet på samme måde i en søgning (f.eks., en søgning efter <cite>flang</cite> ville også finde <cite>flange</cite> og <cite>fang</cite>; KRÆVER ZEBRA)."
-
-# Searching > Features
-msgid "searching.pref#QueryRemoveStopwords# Don't ignore"
-msgstr "Ignorer ikke"
-
-# Searching > Features
-msgid "searching.pref#QueryRemoveStopwords# Ignore"
-msgstr "Ignorer"
-
-# Searching > Features
-msgid "searching.pref#QueryRemoveStopwords# stopwords specified in Koha when searching. (Only applies when Zebra is off)."
-msgstr "stopord angivet i Koha under søgning (Gælder kun når Zebra er slået fra)."
 
 # Searching > Features
 msgid "searching.pref#QueryStemming# Don't try"
@@ -3702,21 +4774,37 @@ msgstr "Medtag"
 msgid "searching.pref#TraceSubjectSubdivisions# subdivisions for searches generated by clicking on subject tracings."
 msgstr "dele til søgninger started med klik på emnespor."
 
+# Searching > Results Display
+msgid "searching.pref#UNIMARCAuthorsFacetsSeparator# Use the following text as separator for UNIMARC authors facets"
+msgstr "Brug følgende tekst som separator for UNIMARC forfatter-facetter"
+
 # Searching > Features
 msgid "searching.pref#UseICU# ICU Zebra indexing. Please note: This setting will not affect Zebra indexing, it should only be used to tell Koha that you have activated ICU indexing if you have actually done so, since there is no way for Koha to figure this out on its own."
-msgstr ""
+msgstr "ICU Zebra indeksering. Bemærk: Indstillinegn påvirker ikke Zebra indeksering, den skal kun bruges for at fortælle Koha, at ICU indeksering er aktiveret, hvis du har gjort det, da Koha ellers ikke kan finde ud af det på andre måder."
 
 # Searching > Features
 msgid "searching.pref#UseICU# Not using"
-msgstr ""
+msgstr "Bruger ikke"
 
 # Searching > Features
 msgid "searching.pref#UseICU# Using"
-msgstr ""
+msgstr "Bruger"
+
+# Searching > Features
+msgid "searching.pref#UseQueryParser# Do not try"
+msgstr "Prøv ikke"
+
+# Searching > Features
+msgid "searching.pref#UseQueryParser# Try"
+msgstr "Prøv"
+
+# Searching > Features
+msgid "searching.pref#UseQueryParser# to use the QueryParser module for parsing queries. Please note: enabling this will have no impact if you do not have QueryParser installed, and everything will continue to work as usual."
+msgstr "at bruge QueryParser modulet til at tolke forespørgsler. Bemærk: aktivering af dette har ingen virkning, hvis du ikke har QueryParser installeret, og alting vil fortsætte som normalt."
 
 # Searching > Results Display
 msgid "searching.pref#defaultSortField# ,"
-msgstr ","
+msgstr " ,"
 
 # Searching > Results Display
 msgid "searching.pref#defaultSortField# By default, sort search results in the staff client by"
@@ -3772,7 +4860,7 @@ msgstr "Vis ikke"
 
 # Searching > Results Display
 msgid "searching.pref#displayFacetCount# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Searching > Results Display
 msgid "searching.pref#displayFacetCount# facet counts. The relevance of these numbers highly depends on the value of the maxRecordsForFacets preference. Applies to OPAC and staff interface."
@@ -3780,7 +4868,7 @@ msgstr "sidetal. Relevancen af disse tal afhænger i høj grad af indstillingen 
 
 # Searching > Search Form
 msgid "searching.pref#expandedSearchOption# \"More options\" on the OPAC and staff advanced search pages."
-msgstr "\"Flere optioner\" i OPAC og Intranet avancerede søgesider."
+msgstr "\"Flere optioner\" i OPAC og Intranet udvidede søgesider."
 
 # Searching > Search Form
 msgid "searching.pref#expandedSearchOption# By default,"
@@ -3792,11 +4880,11 @@ msgstr "vis ikke"
 
 # Searching > Search Form
 msgid "searching.pref#expandedSearchOption# show"
-msgstr "vis"
+msgstr " vis"
 
 # Searching > Results Display
 msgid "searching.pref#maxItemsInSearchResults# Show up to"
-msgstr "Показати до "
+msgstr "searching.pref#maxItemsInSearchResults# Vis op til"
 
 # Searching > Results Display
 msgid "searching.pref#maxItemsInSearchResults# items per biblio in the search results"
@@ -3808,7 +4896,7 @@ msgstr "Byg sider efter"
 
 # Searching > Results Display
 msgid "searching.pref#maxRecordsForFacets# records from the search results."
-msgstr "poster fra søgeresultater"
+msgstr "poster fra søgeresultaterne."
 
 # Searching > Results Display
 msgid "searching.pref#numSearchResults# By default, show"
@@ -3820,11 +4908,11 @@ msgstr "resultater pr side i Intranet"
 
 # Serials
 msgid "serials.pref"
-msgstr " "
+msgstr "serials.pref"
 
 # Serials
 msgid "serials.pref#OPACSerialIssueDisplayCount# Show the"
-msgstr "Vis"
+msgstr " Vis"
 
 # Serials
 msgid "serials.pref#OPACSerialIssueDisplayCount# previous issues of a serial on the OPAC."
@@ -3856,7 +4944,7 @@ msgstr "modtagne tidsskrifter på reservering, hvis de står på en omløbsliste
 
 # Serials
 msgid "serials.pref#RoutingListNote# Include following note on all routing lists:"
-msgstr ""
+msgstr "Includer følgende note på alle omløbslister:"
 
 # Serials
 msgid "serials.pref#RoutingSerials# Add"
@@ -3872,7 +4960,7 @@ msgstr "modtagne tidsskrifter til omløbslisten."
 
 # Serials
 msgid "serials.pref#StaffSerialIssueDisplayCount# Show the"
-msgstr "Vis"
+msgstr " Vis"
 
 # Serials
 msgid "serials.pref#StaffSerialIssueDisplayCount# previous issues of a serial on the staff client."
@@ -3880,23 +4968,23 @@ msgstr "forrige udgaver af et tidsskrift i admin."
 
 # Serials
 msgid "serials.pref#SubscriptionDuplicateDroppedInput# List of fields which must not be rewritten when a subscription is duplicated (Separated by pipe |)"
-msgstr ""
+msgstr "Liste med felter, som ikke skal skrives om, når et abonnement kopieres (adskilt af lodret streg |)"
 
 # Serials
 msgid "serials.pref#SubscriptionHistory# When showing the subscription information for a bibliographic record, preselect"
-msgstr ""
+msgstr "Når abonnementsinformationen vises for en bibliografisk post, sæt som forvalg"
 
 # Serials
 msgid "serials.pref#SubscriptionHistory# brief history"
-msgstr ""
+msgstr "kort historik"
 
 # Serials
 msgid "serials.pref#SubscriptionHistory# full history"
-msgstr ""
+msgstr "hele historikken"
 
 # Serials
 msgid "serials.pref#SubscriptionHistory# view of serial issues."
-msgstr ""
+msgstr "vise tidsskriftsudgaver"
 
 # Serials
 msgid "serials.pref#opacSerialDefaultTab# Holdings tab"
@@ -3908,7 +4996,7 @@ msgstr "Seriesamling fane"
 
 # Serials
 msgid "serials.pref#opacSerialDefaultTab# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Serials
 msgid "serials.pref#opacSerialDefaultTab# Subscriptions tab"
@@ -3916,11 +5004,11 @@ msgstr "Abonnementsfane"
 
 # Serials
 msgid "serials.pref#opacSerialDefaultTab# as default tab for serials in OPAC. Please note that the Serial Collection tab is currently available only for UNIMARC."
-msgstr "som standardfane for serier i OPAC. Bemærk at seriefanen pt. kun er tilgængelig for UNIMARC."
+msgstr "som standardfane for tidsskrifter i OPAC. Bemærk at fanen for tidsskriftsamlinger pt. kun er tilgængelig for UNIMARC."
 
 # Staff Client
 msgid "staff_client.pref"
-msgstr " "
+msgstr "staff_client.pref"
 
 # Staff Client > Appearance
 msgid "staff_client.pref Appearance"
@@ -3940,7 +5028,7 @@ msgstr "Kun detaljesider"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#Display856uAsImage# Display the URI in the 856u field as an image on: "
-msgstr "Vis URL som billede i 856u felter på:"
+msgstr "staff_client.pref#Display856uAsImage# Vis URI som billede i 856u feltet på: "
 
 # Staff Client > Appearance
 msgid "staff_client.pref#Display856uAsImage# Neither Details or Results pages"
@@ -3954,17 +5042,29 @@ msgstr "Bemærk: Den tilhørende XSLT-option skal være koblet til."
 msgid "staff_client.pref#Display856uAsImage# Results page (for future use, Results XSLT not functional at this time)."
 msgstr "Resultatside (til fremtidig brug, Resultat-XSLT fungerer ikke pt.)."
 
+# Staff Client > Appearance
+msgid "staff_client.pref#DisplayIconsXSLT# Don't show"
+msgstr "Vis ikke"
+
+# Staff Client > Appearance
+msgid "staff_client.pref#DisplayIconsXSLT# Show"
+msgstr "Vis"
+
+# Staff Client > Appearance
+msgid "staff_client.pref#DisplayIconsXSLT# the format, audience, and material type icons in XSLT MARC21 results and detail pages in the staff client."
+msgstr "formatet, publikum og materialetype-ikoner i XSLT MARC21 resultater og detaljesider i intranet-klienten."
+
 # Staff Client > Options
 msgid "staff_client.pref#HidePatronName# Don't show"
 msgstr "Vis ikke"
 
 # Staff Client > Options
 msgid "staff_client.pref#HidePatronName# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Staff Client > Options
 msgid "staff_client.pref#HidePatronName# the names of patrons that have items checked out or on hold on detail pages or the \"Place Hold\" screen."
-msgstr "navne på lånere, som har lånt eller reserveret eksemplarer på detaljesider på \"Reserver\"-skærmen."
+msgstr "navne på lånere, som har lånt eller reserveret matrialer på detaljesider på \"Reserver\"-skærmen."
 
 # Staff Client > Appearance
 msgid "staff_client.pref#IntranetFavicon# Use the image at"
@@ -3979,6 +5079,10 @@ msgid "staff_client.pref#IntranetNav# Show the following HTML to the left of the
 msgstr "Vis følgende HTML til venstre for menuen Mere øverst på hver side i admin-panelet (skal være en liste med links eller tom):"
 
 # Staff Client > Appearance
+msgid "staff_client.pref#IntranetSlipPrinterJS# Use the following JavaScript for printing slips. Define at least function printThenClose(). For use e.g. with Firefox PlugIn jsPrintSetup, see http://jsprintsetup.mozdev.org/:"
+msgstr "Brug følgende JavaScript til udskrivning af sedler. Definer mindst funktionen printThenClose(). Til brug f.eks. med Firefox PlugIn jsPrintSetup, se http://jsprintsetup.mozdev.org/:"
+
+# Staff Client > Appearance
 msgid "staff_client.pref#IntranetUserCSS# Include the following CSS on all pages in the staff client:"
 msgstr "Indsæt følgende CSS på alle sider i admin-klienten:"
 
@@ -3988,11 +5092,11 @@ msgstr "Vis følgende HTML i dets egen spalte på hovedsiden i admin-klienten:"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#SlipCSS# Include the stylesheet at"
-msgstr ""
+msgstr "Medtag stylesheet på"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#SlipCSS# on Issue and Reserve Slips. (This should be a complete URL, starting with <code>http://</code>.)"
-msgstr ""
+msgstr "på udgivelses- og reserveringssedler. (Dette skal være en komplet URL, begyndende med <code>http://</code>.)"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#StaffAuthorisedValueImages# Don't show"
@@ -4000,27 +5104,39 @@ msgstr "Vis ikke"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#StaffAuthorisedValueImages# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#StaffAuthorisedValueImages# images for <a href=\"/cgi-bin/koha/admin/authorised_values.pl\">authorized values</a> (such as lost statuses and locations) in search results."
 msgstr "billeder for <a href=\"/cgi-bin/koha/admin/authorised_values.pl\">autoriserede værdier</a> (så som mistet status og placering) i søgeresultater."
 
-# Staff Client > Appearance
-msgid "staff_client.pref#XSLTDetailsDisplay# <br />Options:<br />- leave empty for \"no xslt\"<br />- enter \"default\" for the default one<br />- put a path to define a xslt file<br />- put an URL for an external specific stylesheet.<br />{langcode} will be replaced with current interface language"
+# Staff Client > Options
+msgid "staff_client.pref#StaffDetailItemSelection# Disable"
 msgstr ""
+
+# Staff Client > Options
+msgid "staff_client.pref#StaffDetailItemSelection# Enable"
+msgstr ""
+
+# Staff Client > Options
+msgid "staff_client.pref#StaffDetailItemSelection# item selection in record detail page."
+msgstr ""
+
+# Staff Client > Appearance
+msgid "staff_client.pref#XSLTDetailsDisplay# <br />Options:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTDetailsDisplay\" data-value=\"\">Leave empty</a> for \"no xslt\"</li><li>enter \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTDetailsDisplay\" data-value=\"default\">default</a>\" for the default one</li><li>put a path to define a xslt file</li><li>put an URL for an external specific stylesheet.</li></ul>{langcode} will be replaced with current interface language"
+msgstr "<br />Optioner:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTDetailsDisplay\" data-value=\"\">Lad være tom</a> for \"ingen xslt\"</li><li>indtast \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTDetailsDisplay\" data-value=\"default\">default</a>\" for standarden</li><li>angiv en sti for at definere en xslt-fil</li><li>angiv en URL for et eksternt specifikt stylesheet.</li></ul>{langcode} erstattes med det aktuelle interfacesprog"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#XSLTDetailsDisplay# Display details in the staff client using XSLT stylesheet at: "
-msgstr ""
+msgstr "Vis detaljer i intranetklienten med XSLT stylesheet på: "
 
 # Staff Client > Appearance
-msgid "staff_client.pref#XSLTResultsDisplay# <br />Options:<br />- leave empty for \"no xslt\"<br />- enter \"default\" for the default one<br />- put a path to define a xslt file<br />- put an URL for an external specific stylesheet.<br />{langcode} will be replaced with current interface language"
-msgstr ""
+msgid "staff_client.pref#XSLTResultsDisplay# <br />Options:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTResultsDisplay\" data-value=\"\">Leave empty</a> for \"no xslt\"</li><li>enter \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTResultsDisplay\" data-value=\"default\">default</a>\" for the default one</li><li> put a path to define a xslt file</li><li>put an URL for an external specific stylesheet.</li></ul>{langcode} will be replaced with current interface language"
+msgstr "<br />Optioner:<ul><li><a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTResultsDisplay\" data-value=\"\">Lad være tom</a> for \"ingen xslt\"</li><li>indtast \"<a href=\"#\" class=\"set_syspref\" data-syspref=\"XSLTResultsDisplay\" data-value=\"default\">default</a>\" for standarden</li><li> angiv en sti for at definere en xslt-fil</li><li>angiv en URL for et eksternt specifikt stylesheet.</li></ul>{langcode} erstattes af det aktuelle interfacesprog"
 
 # Staff Client > Appearance
 msgid "staff_client.pref#XSLTResultsDisplay# Display results in the staff client using XSLT stylesheet at: "
-msgstr ""
+msgstr "Vis resultater i intranetklienten med XSLT stylesheet på: "
 
 # Staff Client > Appearance
 msgid "staff_client.pref#intranet_includes# Use include files from the"
@@ -4036,35 +5152,35 @@ msgstr "Vis ikke"
 
 # Staff Client > Options
 msgid "staff_client.pref#intranetbookbag# Show"
-msgstr "Vis"
+msgstr " Vis"
 
 # Staff Client > Options
 msgid "staff_client.pref#intranetbookbag# the cart option in the staff client."
 msgstr "vogn-optionen i admin-klienten."
 
 # Staff Client > Appearance
-msgid "staff_client.pref#intranetcolorstylesheet# Include the stylesheet <code><!-- TMPL_VAR NAME=\"themelang\" -->/css/</code>"
-msgstr "Medtag stylesheet <code><!-- TMPL_VAR NAME=\"themelang\" -->/css/</code>"
+msgid "staff_client.pref#intranetcolorstylesheet# Include the additional CSS stylesheet"
+msgstr ""
 
 # Staff Client > Appearance
-msgid "staff_client.pref#intranetcolorstylesheet# on all pages in the staff interface. (Leave blank to disable.)"
-msgstr "på alle sider i admin-interfacen. (blank for at deaktivere.)"
+msgid "staff_client.pref#intranetcolorstylesheet# to override specified settings from the default stylesheet (leave blank to disable.) Enter just a filename, a full local path or a complete URL starting with <code>http://</code> (if the file lives on a remote server). Please note that if you just enter a filename, the file should be in the css subdirectory for each active theme and language within the Koha templates directory. A full local path is expected to start from your HTTP document root."
+msgstr ""
 
 # Staff Client > Appearance
-msgid "staff_client.pref#intranetstylesheet# Include the stylesheet at"
-msgstr "Medtag stylesheet på"
+msgid "staff_client.pref#intranetstylesheet# Use the CSS stylesheet"
+msgstr ""
 
 # Staff Client > Appearance
-msgid "staff_client.pref#intranetstylesheet# on all pages in the staff interface, instead of the default. (This should be a complete URL, starting with <code>http://</code>.)"
-msgstr "på alle sider i admin-interfacen, istedet for standard. (Dette skal være en komplet URL, begyndende med <code>http://</code>.)"
+msgid "staff_client.pref#intranetstylesheet# on all pages in the staff interface, instead of the default css (used when leaving this field blank). Enter just a filename, a full local path or a complete URL starting with <code>http://</code> (if the file lives on a remote server). Please note that if you just enter a filename, the file should be in the css subdirectory for each active theme and language within the Koha templates directory. A full local path is expected to start from your HTTP document root."
+msgstr ""
 
 # Staff Client > Appearance
-msgid "staff_client.pref#intranetuserjs# Include the following JavaScript on all pages in the staff clien:"
-msgstr "Medtag følgende JavaScript på alle sider i admin-klienten:"
+msgid "staff_client.pref#intranetuserjs# Include the following JavaScript on all pages in the staff client:"
+msgstr "Medtag følgende JavaScript på alle sider i intranet:"
 
 # Staff Client > Appearance
-msgid "staff_client.pref#staffClientBaseURL# ."
-msgstr "."
+msgid "staff_client.pref#staffClientBaseURL# . Do not include a trailing slash in the URL."
+msgstr ""
 
 # Staff Client > Appearance
 msgid "staff_client.pref#staffClientBaseURL# The staff client is located at http://"
@@ -4126,75 +5242,111 @@ msgstr "fra Yahoo's egne servere (mindre belastning på dine servere)."
 msgid "staff_client.pref#yuipath# included with Koha (faster, will work if internet goes down)."
 msgstr "medtaget i Koha (hurtigere, virker selv om Internet svigter)."
 
-# Web Services
-msgid "web_services.pref"
-msgstr " "
+# Tools
+msgid "tools.pref"
+msgstr ""
 
-# Web Services > ILS-DI
+# Tools
+msgid "tools.pref#MaxItemsForBatch# Process up to"
+msgstr ""
+
+# Tools
+msgid "tools.pref#MaxItemsForBatch# items in a single modification or deletion batch."
+msgstr ""
+
+# Web services
+msgid "web_services.pref"
+msgstr "web_services.pref"
+
+# Web services > ILS-DI
 msgid "web_services.pref ILS-DI"
 msgstr "ILS-DI"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref OAI-PMH"
 msgstr "OAI-PMH"
 
-# Web Services > ILS-DI
+# Web services > Reporting
+msgid "web_services.pref Reporting"
+msgstr "Rapportering"
+
+# Web services > ILS-DI
 msgid "web_services.pref#ILS-DI# Disable"
 msgstr "Deaktiver"
 
-# Web Services > ILS-DI
+# Web services > ILS-DI
 msgid "web_services.pref#ILS-DI# Enable"
 msgstr "Aktiver"
 
-# Web Services > ILS-DI
+# Web services > ILS-DI
 msgid "web_services.pref#ILS-DI# ILS-DI services for OPAC users"
 msgstr "ILS-DI tjenester for OPAC-brugere"
 
-# Web Services > ILS-DI
-msgid "web_services.pref#ILS-DI:AuthorizedIPs# allowed IPs to use the ILS-DI services"
-msgstr "tillad IPs at bruge ILS-DI-tjenester"
+# Web services > ILS-DI
+msgid "web_services.pref#ILS-DI:AuthorizedIPs# Allow IP addresses"
+msgstr ""
 
-# Web Services > OAI-PMH
+# Web services > ILS-DI
+msgid "web_services.pref#ILS-DI:AuthorizedIPs# to use the ILS-DI services (when enabled). Separate the IP addresses with commas and without spaces. Leave the field blank to allow any IP address."
+msgstr ""
+
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH# <a href=\"http://www.openarchives.org/pmh/\">OAI-PMH</a> server."
 msgstr "<a href=\"http://www.openarchives.org/pmh/\">OAI-PMH</a> server."
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH# Disable"
 msgstr "Deaktiver"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH# Enable"
 msgstr "Aktiver"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH# Koha's"
 msgstr "Koha's"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:AutoUpdateSets# Disable"
-msgstr ""
+msgstr "Deaktiver"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:AutoUpdateSets# Enable"
-msgstr ""
+msgstr "Aktiver"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:AutoUpdateSets# automatic update of OAI-PMH sets when a bibliographic record is created or updated"
+msgstr "automatisk opdatering af OAI-PMH sæt, når en bibliografisk post oprettes eller opdateres"
+
+# Web services > OAI-PMH
+msgid "web_services.pref#OAI-PMH:ConfFile# . If empty, Koha OAI Server operates in normal mode, otherwise it operates in extended mode. In extended mode, it's possible to parameter other formats than marcxml or Dublin Core. OAI-PMH:ConfFile specify a YAML configuration file which list available metadata formats and XSL file used to create them from marcxml records."
 msgstr ""
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
+msgid "web_services.pref#OAI-PMH:ConfFile# YAML OAI Koha server configuration file:"
+msgstr ""
+
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:MaxCount# Only return"
 msgstr "Returner kun"
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:MaxCount# records at a time in response to a ListRecords or ListIdentifiers query."
 msgstr "poster på en gang som svar på en ListRecords eller ListIdentifiers forespørgsel."
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:archiveID# : ."
-msgstr "."
+msgstr " : ."
 
-# Web Services > OAI-PMH
+# Web services > OAI-PMH
 msgid "web_services.pref#OAI-PMH:archiveID# Identify records at this site with the prefix"
 msgstr "Identificer poster på denne side med præfiks"
+
+# Web services > Reporting
+msgid "web_services.pref#SvcMaxReportRows# Only return"
+msgstr "Returner kun"
+
+# Web services > Reporting
+msgid "web_services.pref#SvcMaxReportRows# rows of a report requested via the reports web service."
+msgstr "rækker i en rapport, som bestilles via rapport webtjenesten."
 

@@ -47,6 +47,8 @@ use C4::Members; # to use GetMember
 use C4::Branch;     # GetBranchDetail
 use C4::Serials;    # CountSubscriptionFromBiblionumber
 use C4::Search;		# enabled_staff_search_views
+use C4::Acquisition qw(GetOrdersByBiblionumber);
+
 
 #---- Internal function
 
@@ -109,7 +111,40 @@ $template->param (
     z3950_search_params => C4::Search::z3950_search_args(GetBiblioData($biblionumber)),
     ocoins => GetCOinSBiblio($record),
     C4::Search::enabled_staff_search_views,
+    searchid            => $query->param('searchid'),
 );
+
+my @allorders_using_biblio = GetOrdersByBiblionumber ($biblionumber);
+my @deletedorders_using_biblio;
+my @orders_using_biblio;
+my @baskets_orders;
+my @baskets_deletedorders;
+
+foreach my $myorder (@allorders_using_biblio) {
+    my $basket = $myorder->{'basketno'};
+    if ((defined $myorder->{'datecancellationprinted'}) and  ($myorder->{'datecancellationprinted'} ne '0000-00-00') ){
+        push @deletedorders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_deletedorders)){
+            push @baskets_deletedorders,$myorder->{'basketno'};
+        }
+    }
+    else {
+        push @orders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_orders)){
+            push @baskets_orders,$myorder->{'basketno'};
+            }
+    }
+}
+
+my $count_orders_using_biblio = scalar @orders_using_biblio ;
+$template->param (countorders => $count_orders_using_biblio);
+
+my $count_deletedorders_using_biblio = scalar @deletedorders_using_biblio ;
+$template->param (countdeletedorders => $count_deletedorders_using_biblio);
+
+my $holds = C4::Reserves::GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
+my $holdcount = scalar( @$holds );
+$template->param( holdcount => scalar ( @$holds ) );
 
 output_html_with_http_headers $query, $cookie, $template->output;
 

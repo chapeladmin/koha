@@ -66,10 +66,12 @@ my $display_columns = [ {_add                   => {label => "Add Item", link_fi
                       ];
 
 if ( $op eq "do_search" ) {
+    my $QParser;
+    $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser'));
     $idx         = $query->param('idx');
     $ccl_textbox = $query->param('ccl_textbox');
     if ( $ccl_textbox && $idx ) {
-        $ccl_query = "$idx=$ccl_textbox";
+        $ccl_query = "$idx:$ccl_textbox";
     }
 
     $datefrom = $query->param('datefrom');
@@ -77,15 +79,26 @@ if ( $op eq "do_search" ) {
 
     if ($datefrom) {
         $datefrom = C4::Dates->new($datefrom);
-        $ccl_query .= ' and ' if $ccl_textbox;
-        $ccl_query .=
-          "acqdate,st-date-normalized,ge=" . $datefrom->output("iso");
+        if ($QParser) {
+            $ccl_query .= ' && ' if $ccl_textbox;
+            $ccl_query .=
+                "acqdate(" . $datefrom->output("iso") . '-)';
+        } else {
+            $ccl_query .= ' and ' if $ccl_textbox;
+            $ccl_query .=
+                "acqdate,st-date-normalized,ge=" . $datefrom->output("iso");
+        }
     }
 
     if ($dateto) {
         $dateto = C4::Dates->new($dateto);
-        $ccl_query .= ' and ' if ( $ccl_textbox || $datefrom );
-        $ccl_query .= "acqdate,st-date-normalized,le=" . $dateto->output("iso");
+        if ($QParser) {
+            $ccl_query .= ' && ' if ( $ccl_textbox || $datefrom );
+            $ccl_query .= "acqdate(-" . $dateto->output("iso") . ')';
+        } else {
+            $ccl_query .= ' and ' if ( $ccl_textbox || $datefrom );
+            $ccl_query .= "acqdate,st-date-normalized,le=" . $dateto->output("iso");
+        }
     }
 
     my $offset = $startfrom > 1 ? $startfrom - 1 : 0;
@@ -112,7 +125,7 @@ if ($show_results) {
     for ( my $i = 0 ; $i < $hits ; $i++ ) {
         my @row_data= ();
         #DEBUG Notes: Decode the MARC record from each resulting MARC record...
-        my $marcrecord = MARC::File::USMARC::decode( $marcresults->[$i] );
+        my $marcrecord = C4::Search::new_record_from_zebra( 'biblioserver', $marcresults->[$i] );
         #DEBUG Notes: Transform it to Koha form...
         my $biblio = TransformMarcToKoha( C4::Context->dbh, $marcrecord, '' );
         #DEBUG Notes: Stuff the bib into @biblio_data...
@@ -250,5 +263,4 @@ else {
 }
 
 # Print the page
-$template->param( DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(), );
 output_html_with_http_headers $query, $cookie, $template->output;

@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 #
 # Copyright 2008 Liblime
+# Copyright 2014 Foundations Bible College, Inc.
 #
 # This file is part of Koha.
 #
@@ -29,6 +30,7 @@ use Mail::Sendmail;
 use Text::CSV_XS;
 use CGI;
 use Carp;
+use Encode;
 
 use vars qw($VERSION);
 
@@ -56,6 +58,9 @@ runreport.pl [ -h | -m ] [ -v ] reportID [ reportID ... ]
    --format=s      selects format. Choice of text, html, csv, or tsv
 
    -e --email      whether to use e-mail (implied by --to or --from)
+   --username      username to pass to the SMTP server for authentication
+   --password      password to pass to the SMTP server for authentication
+   --method        method is the type of authentication. Ie. LOGIN, DIGEST-MD5, etc.
    --to=s          e-mail address to send report to
    --from=s        e-mail address to send report from
    --subject=s     subject for the e-mail
@@ -68,11 +73,11 @@ runreport.pl [ -h | -m ] [ -v ] reportID [ reportID ... ]
 
 =over
 
-=item B<-help>
+=item B<--help>
 
 Print a brief help message and exits.
 
-=item B<-man>
+=item B<--man>
 
 Prints the manual page and exits.
 
@@ -80,23 +85,35 @@ Prints the manual page and exits.
 
 Verbose. Without this flag set, only fatal errors are reported.
 
-=item B<-format>
+=item B<--format>
 
 Current options are text, html, csv, and tsv. At the moment, text and tsv both produce tab-separated tab-separated output.
 
-=item B<-email>
+=item B<--email>
 
 Whether to use e-mail (implied by --to or --from).
 
-=item B<-to>
+=item B<--username>
+
+Username to pass to the SMTP server for authentication
+
+=item B<--password>
+
+Password to pass to the SMTP server for authentication
+
+=item B<--method>
+
+Method is the type of authentication. Ie. LOGIN, DIGEST-MD5, etc.
+
+=item B<--to>
 
 E-mail address to send report to. Defaults to KohaAdminEmailAddress.
 
-=item B<-from>
+=item B<--from>
 
 E-mail address to send report from. Defaults to KohaAdminEmailAddress.
 
-=item B<-subject>
+=item B<--subject>
 
 Subject for the e-mail message. Defaults to "Koha Saved Report"
 
@@ -149,15 +166,23 @@ my $subject = 'Koha Saved Report';
 my $separator = ',';
 my $quote = '"';
 
+my $username = undef;
+my $password = undef;
+my $method = 'LOGIN';
+
 GetOptions(
-    'help|?'     => \$help,
-    'man'        => \$man,
-    'verbose'    => \$verbose,
-    'format=s'   => \$format,
-    'to=s'       => \$to,
-    'from=s'     => \$from,
-    'subject=s'  => \$subject,
-    'email'      => \$email,
+    'help|?'            => \$help,
+    'man'               => \$man,
+    'verbose'           => \$verbose,
+    'format=s'          => \$format,
+    'to=s'              => \$to,
+    'from=s'            => \$from,
+    'subject=s'         => \$subject,
+    'email'             => \$email,
+    'username:s'        => \$username,
+    'password:s'        => \$password,
+    'method:s'          => \$method,
+
 ) or pod2usage(2);
 pod2usage( -verbose => 2 ) if ($man);
 pod2usage( -verbose => 2 ) if ($help and $verbose);
@@ -192,9 +217,9 @@ foreach my $report_id (@ARGV) {
         warn "ERROR: No saved report $report_id found";
         next;
     }
-    my $sql         => $report->{savedsql};
-    my $report_name => $report->{report_name};
-    my $type        => $report->{type};
+    my $sql         = $report->{savedsql};
+    my $report_name = $report->{report_name};
+    my $type        = $report->{type};
 
     $verbose and print "SQL: $sql\n\n";
     if (defined($report_name) and $report_name ne "")
@@ -240,14 +265,26 @@ foreach my $report_id (@ARGV) {
             $message .= $csv->string() . "\n";
         }
     }
-
     if ($email){
-        my %mail = (
-            To      => $to,
-            From    => $from,
-            Subject => $subject,
-            Message => $message 
-        );
+        my %mail;
+        if ($format eq 'html') {
+                $message = "<html><head><style>tr:nth-child(2n+1) { background-color: #ccc;}</style></head><body>$message</body></html>";
+           %mail = (
+              To      => $to,
+              From    => $from,
+              'Content-Type' => 'text/html',
+              Subject => encode('utf8', $subject ),
+              Message => encode('utf8', $message )
+          );
+        } else {
+          %mail = (
+              To      => $to,
+              From    => $from,
+              Subject => encode('utf8', $subject ),
+              Message => encode('utf8', $message )
+          );
+        }
+        $mail{'Auth'} = {user => $username, pass => $password, method => $method} if $username;
         sendmail(%mail) or carp 'mail not sent:' . $Mail::Sendmail::error;
     } else {
         print $message;

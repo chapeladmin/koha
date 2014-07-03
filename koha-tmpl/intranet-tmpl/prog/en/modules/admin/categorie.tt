@@ -1,33 +1,35 @@
+[% USE KohaDates -%]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Administration &rsaquo; Patron categories &rsaquo; [% IF ( add_form ) %][% IF ( categorycode ) %]Modify category '[% categorycode |html %]'[% ELSE %]New category[% END %][% END %]
 [% IF ( add_validate ) %]Data recorded[% END %]
-[% IF ( delete_confirm ) %][% IF ( totalgtzero ) %]Cannot delete: category [% categorycode |html %] in use[% ELSE %]Confirm deletion of category '[% categorycode |html %]'[% END %][% END %]
+[% IF ( delete_confirm ) %][% IF ( patrons_in_category > 0 ) %]Cannot delete: category [% categorycode |html %] in use[% ELSE %]Confirm deletion of category '[% categorycode |html %]'[% END %][% END %]
 [% IF ( delete_confirmed ) %]Category deleted[% END %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
 [% INCLUDE 'calendar.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.pager.js"></script>
-<script type="text/javascript" id="js">$(document).ready(function() {
-	$("#table_categorie").tablesorter({
-		sortList: [[0,0]],
-		widgets: ['zebra'],
-		headers: { 11: { sorter: false}}
-	}).tablesorterPager({container: $("#pagertable_categorie"),positionFixed: false,size: 20});
-    $( "#enrolmentperioddate" ).datepicker({ minDate: 1 }); // Require that "until date" be in the future
-}); </script>
-<script type="text/javascript">
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript" id="js">
 //<![CDATA[
-	//
+    $(document).ready(function() {
+        $("#table_categorie").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "aoColumnDefs": [
+                { "aTargets": [ -1, -2 ], "bSortable": false, "bSearchable": false },
+                { "aTargets": [ 3,4,5 ], "sType": "natural" },
+            ],
+            "aaSorting": [[ 1, "asc" ]],
+            "sPaginationType": "four_button"
+        }));
+
+    $( "#enrolmentperioddate" ).datepicker({ minDate: 1 }); // Require that "until date" be in the future
+
+    if ( $("#branches option:selected").length < 1 ) {
+        $("#branches option:first").attr("selected", "selected");
+    }
+});
 	function isNotNull(f,noalert) {
 		if (f.value.length ==0) {
    return false;
 		}
-		return true;
-	}
-	//
-	function toUC(f) {
-		var x=f.value.toUpperCase();
-		f.value=x;
 		return true;
 	}
 	//
@@ -40,13 +42,6 @@
 		return false;
 	}
 	return true;
-	}
-	//
-	function isDate(f) {
-		var t = Date.parse(f.value);
-		if (isNaN(t)) {
-			return false;
-		}
 	}
 	// to check if the data are correctly entered.
 	function Check(ff) {
@@ -104,7 +99,7 @@
 
 <div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/admin/admin-home.pl">Administration</a> &rsaquo; [% IF ( add_form ) %] <a href="/cgi-bin/koha/admin/categorie.pl">Patron categories</a> &rsaquo; [% IF ( categorycode ) %]Modify category '[% categorycode |html %]'[% ELSE %]New category[% END %][% END %]
 [% IF ( add_validate ) %] <a href="/cgi-bin/koha/admin/categorie.pl">Patron categories</a> &rsaquo; Data recorded[% END %]
-[% IF ( delete_confirm ) %] <a href="/cgi-bin/koha/admin/categorie.pl">Patron categories</a> &rsaquo; [% IF ( totalgtzero ) %]Cannot delete: Category [% categorycode |html %] in use[% ELSE %]Confirm deletion of category '[% categorycode |html %]'[% END %][% END %]
+[% IF ( delete_confirm ) %] <a href="/cgi-bin/koha/admin/categorie.pl">Patron categories</a> &rsaquo; [% IF ( patrons_in_category > 0 ) %]Cannot delete: Category [% categorycode |html %] in use[% ELSE %]Confirm deletion of category '[% categorycode |html %]'[% END %][% END %]
 [% IF ( delete_confirmed ) %] <a href="/cgi-bin/koha/admin/categorie.pl">Patron categories</a> &rsaquo; Category deleted[% END %]
 [% IF ( else ) %]Patron categories[% END %]</div>
 
@@ -129,20 +124,20 @@
 	[% END %]
 	<fieldset class="rows">
 	<ol>[% IF ( categorycode ) %]
-	<li><span class="label">Category code</span>[% categorycode |html %]
+    <li><span class="label">Category code: </span>[% categorycode |html %]
 				<input type="hidden" name="categorycode" value="[% categorycode |html %]" /><input type="hidden" name="is_a_modif" value="1" /></li>
 	[% ELSE %]
-	<li><label for="categorycode">Category code: </label> <input type="text" name="categorycode" id="categorycode" size="10" maxlength="10" onblur="toUC(this)" /></li>
+    <li><label for="categorycode" class="required">Category code: </label> <input type="text" name="categorycode" id="categorycode" size="10" maxlength="10" onblur="toUC(this)" /></li>
 	[% END %]
-	<li><label for="description">Description: </label> <input type="text" name="description" id="description" size="40" maxlength="80" value="[% description |html %]" /></li>
-	<li><label for="enrolmentperiod">Enrollment period: </label>
+    <li><label for="description" class="required">Description: </label> <input type="text" name="description" id="description" size="40" maxlength="80" value="[% description |html %]" /></li>
+    <li><label for="enrolmentperiod" class="required">Enrollment period: </label>
 	<fieldset>
 	<legend>Choose one</legend>
 	<ol>
 	<li><label for="enrolmentperiod" style="width:6em;">In months: </label>
 		<input type="text" name="enrolmentperiod" id="enrolmentperiod" size="3" maxlength="3" value="[% IF ( enrolmentperiod ) %][% enrolmentperiod %][% END %]" /> months</li>
 	<li><label for="enrolmentperioddate" style="width:6em;">Until date: </label>
-        <input type="text" name="enrolmentperioddate" id="enrolmentperioddate" value="[% enrolmentperioddate %]" />
+        <input type="text" name="enrolmentperioddate" id="enrolmentperioddate" value="[% enrolmentperioddate | $KohaDates %]" />
 		<div id="enrolmentmessage" class="hint" style="margin-left:0;">Cannot have "months" and "until date" at the same time</div>
 	</li>
 	</ol>
@@ -160,7 +155,7 @@
 						<option value="1">Yes</option>
 			[% END %]
 					</select></li>
-	<li><label for="hidelostitems">Lost items in staff client</label> <select name="hidelostitems" id="hidelostitems">
+    <li><label for="hidelostitems">Lost items in staff client: </label> <select name="hidelostitems" id="hidelostitems">
 			[% IF ( hidelostitems ) %]
 						<option value="0">Shown</option>
 						<option value="1" selected="selected">Hidden by default</option>
@@ -170,7 +165,7 @@
 			[% END %]
 					</select></li>
 	<li><label for="reservefee">Hold fee: </label><input type="text" name="reservefee" id="reservefee" size="6" value="[% reservefee %]" /></li>
-	<li><label for="category_type">Category type: </label> <select name="category_type" id="category_type">
+    <li><label for="category_type" class="required">Category type: </label> <select name="category_type" id="category_type">
                         [% IF ( type_n ) %]<option value="" selected="selected">Select a category type</option>[% ELSE %]<option value="">Select a category type</option>[% END %]
 					[% IF ( type_A ) %]<option value="A" selected="selected">Adult</option>[% ELSE %]<option value="A">Adult</option>[% END %]
 					[% IF ( type_C ) %]<option value="C" selected="selected">Child</option>[% ELSE %]<option value="C">Child</option>[% END %]
@@ -179,7 +174,66 @@
 					[% IF ( type_P ) %]<option value="P" selected="selected">Professional</option>[% ELSE %]<option value="P">Professional</option>[% END %]
 					[% IF ( type_X ) %]<option value="X" selected="selected">Statistical</option>[% ELSE %]<option value="X">Statistical</option>[% END %]
 					</select>
-	</li></ol>
+    </li>
+    <li><label for="branches">Branches limitation: </label>
+        <select id="branches" name="branches" multiple size="10">
+            <option value="">All branches</option>
+            [% FOREACH branch IN branches_loop %]
+              [% IF ( branch.selected ) %]
+                <option selected="selected" value="[% branch.branchcode %]">[% branch.branchname %]</option>
+              [% ELSE %]
+                <option value="[% branch.branchcode %]">[% branch.branchname %]</option>
+              [% END %]
+            [% END %]
+        </select>
+        <span>Select <i>All branches</i> if this category type must to be displayed all the time. Otherwise select libraries you want to associate with this value.
+        </span>
+    </li>
+    <li><label for="block_expired">Block expired patrons</label>
+        <select name="block_expired" id="block_expired">
+            [% IF ( BlockExpiredPatronOpacActions == -1  ) %]
+                <option value="-1" selected="selected"> Follow system preference BlockExpiredPatronOpacActions </option>
+            [% ELSE %]
+                <option value="-1"> Follow system preference BlockExpiredPatronOpacActions </option>
+            [% END %]
+
+            [% IF ( BlockExpiredPatronOpacActions == 1   ) %]
+                <option value="1" selected="selected"> Block </option>
+            [% ELSE %]
+                <option value="1"> Block </option>
+            [% END %]
+
+            [% IF ( BlockExpiredPatronOpacActions == 0   ) %]
+                <option value="0" selected="selected"> Don't block </option>
+            [% ELSE %]
+                <option value="0"> Don't block </option>
+            [% END %]
+        </select>
+        <span>
+            Choose whether patrons of this category be blocked from public catalog actions such as renewing and placing holds when their cards have expired.   
+        </span>
+    </li>
+    <li>
+        <label for="default_privacy">Default privacy: </label>
+        <select id="default_privacy" name="default_privacy">
+            [% SWITCH default_privacy %]
+            [% CASE 'forever' %]
+                <option value="default">Default</option>
+                <option value="never">Never</option>
+                <option value="forever" selected="selected">Forever</option>
+            [% CASE 'never' %]
+                <option value="default">Default</option>
+                <option value="never" selected="selected">Never</option>
+                <option value="forever">Forever</option>
+            [% CASE %]
+                <option value="default" selected="selected">Default</option>
+                <option value="never">Never</option>
+                <option value="forever">Forever</option>
+            [% END %]
+        </select>
+        <span>Controls how long a patrons checkout history is kept for new patrons of this category. "Never" anonymizes checkouts on return, and "Forever" keeps a patron's checkout history indefinitely. When set to "Default", the amount of history kept is controlled by the cronjob <i>batch_anonymise.pl</i> which should be set up by your system administrator.</span>
+    </li>
+    </ol>
 </fieldset>
 
     [% IF ( EnhancedMessagingPreferences ) %]
@@ -198,16 +252,18 @@
 	<form action="[% script_name %]" method="post">
 		<input type="submit" value="OK" />
 	</form>
-
 [% END %]
 
 [% IF ( delete_confirm ) %]
-	
-    	<form action="[% script_name %]" method="post">
-	<fieldset><legend>    	
-	[% IF ( totalgtzero ) %]
-	Category [% categorycode |html %] is in use.  Deletion not possible![% ELSE %]
-Confirm deletion of category [% categorycode |html %][% END %]</legend>
+    <form action="[% script_name %]" method="post">
+        <fieldset>
+            <legend>
+                [% IF ( patrons_in_category > 0 ) %]
+                    Category [% categorycode |html %] is in use.  Deletion not possible!
+                [% ELSE %]
+                    Confirm deletion of category [% categorycode |html %]
+                [% END %]
+            </legend>
 
 [% IF ( totalgtzero ) %]<div class="dialog alert"><strong>This category is used [% total %] times</strong>. Deletion not possible</div>[% END %]
 	<table>
@@ -218,7 +274,7 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
 			[% IF ( enrolmentperiod ) %]
 				[% enrolmentperiod %] months
 			[% ELSE %]
-				until [% enrolmentperioddate %]
+				until [% enrolmentperioddate | $KohaDates %]
 			[% END %]
 		</td>
 	</tr>
@@ -228,6 +284,19 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
 	<tr><th scope="row">Receives overdue notices: </th><td>[% IF ( overduenoticerequired ) %]Yes[% ELSE %]No[% END %]</td></tr>
 	<tr><th scope="row">Lost items in staff client</th><td>[% IF ( hidelostitems ) %]Hidden by default[% ELSE %]Shown[% END %]</td></tr>
 	<tr><th scope="row">Hold fee: </th><td>[% reservefee %]</td></tr>
+    <tr>
+        <th scope="row">Default privacy: </th>
+        <td>
+            [% SWITCH category.default_privacy %]
+            [% CASE 'default' %]
+                Default
+            [% CASE 'never' %]
+                Never
+            [% CASE 'forever' %]
+                Forever
+            [% END %]
+        </td>
+    </tr>
 </table>
 		<fieldset class="action">[% IF ( totalgtzero ) %]
 <input type="submit" value="OK" /></form>
@@ -247,27 +316,9 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
 
 [% IF ( else ) %]
 
-<div id="toolbar">
-	<script type="text/javascript">
-	//<![CDATA[
-
-	// prepare DOM for YUI Toolbar
-
-	 $(document).ready(function() {
-	    yuiToolbar();
-	 });
-
-	// YUI Toolbar Functions
-
-	function yuiToolbar() {
-	    new YAHOO.widget.Button("newcategory");
-	}
-
-	//]]>
-	</script>
-	<ul class="toolbar">
-    <li><a id="newcategory" href="/cgi-bin/koha/admin/categorie.pl?op=add_form">New category</a></li>
-</ul></div>
+<div id="toolbar" class="btn-toolbar">
+    <a class="btn btn-small" id="newcategory" href="/cgi-bin/koha/admin/categorie.pl?op=add_form"><i class="icon-plus"></i> New category</a>
+</div>
 
 <h2>Patron category administration</h2>
 [% IF ( searchfield ) %]
@@ -275,10 +326,10 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
 	[% END %]
 [% IF ( loop ) %]
 <div id="pagertable_categorie">
-[% INCLUDE 'table-pager.inc' perpage='20' %]
 </div>
         <table id="table_categorie">
 		<thead>
+        <tr>
 			<th scope="col">Code</th>
 			<th scope="col">Category name</th>
 			<th scope="col">Type</th>
@@ -292,8 +343,13 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
             [% IF ( EnhancedMessagingPreferences ) %]
             <th scope="col">Messaging</th>
             [% END %]
-			<th scope="col" colspan="2">&nbsp; </th>
+            <th scope="col">Branches limitations</th>
+            <th scope="col">Default privacy</th>
+            <th scope="col">&nbsp; </th>
+            <th scope="col">&nbsp; </th>
+        </tr>
 		</thead>
+        <tbody>
 		[% FOREACH loo IN loop %]
 			<tr>
                         <td>[% loo.categorycode |html %]</td>
@@ -312,7 +368,7 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
                         	[% IF ( loo.enrolmentperiod ) %]
                         		[% loo.enrolmentperiod %] months
                         	[% ELSE %]
-                        		until [% loo.enrolmentperioddate %]
+                        		until [% loo.enrolmentperioddate | $KohaDates %]
                         	[% END %]
                         
                         </td>
@@ -345,10 +401,38 @@ Confirm deletion of category [% categorycode |html %][% END %]</legend>
                             [% END %]
                         </td>
                         [% END %]
+                        <td>
+                            [% IF loo.branches.size > 0 %]
+                                [% branches_str = "" %]
+                                [% FOREACH branch IN loo.branches %]
+                                    [% branches_str = branches_str _ " " _ branch.branchname _ "(" _ branch.branchcode _ ")" %]
+                                [% END %]
+                                <span title="[% branches_str %]">
+                                    [% IF loo.branches.size > 1 %]
+                                        [% loo.branches.size %] branches limitations
+                                    [% ELSE %]
+                                        [% loo.branches.size %] branch limitation
+                                    [% END %]
+                                </span>
+                            [% ELSE %]
+                                No limitation
+                            [% END %]
+                        </td>
+                        <td>
+                            [% SWITCH loo.default_privacy %]
+                            [% CASE 'default' %]
+                                Default
+                            [% CASE 'never' %]
+                                Never
+                            [% CASE 'forever' %]
+                                Forever
+                            [% END %]
+                        </td>
                         <td><a href="[% loo.script_name %]?op=add_form&amp;categorycode=[% loo.categorycode |uri %]">Edit</a></td>
                         <td><a href="[% loo.script_name %]?op=delete_confirm&amp;categorycode=[% loo.categorycode |uri %]">Delete</a></td>
 		</tr>
 		[% END %]
+        </tbody>
 	</table>
 [% ELSE %]
 	<div class="dialog alert">No categories have been defined. <a href="/cgi-bin/koha/admin/categorie.pl?op=add_form">Create a new category</a>.</div>

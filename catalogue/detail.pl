@@ -20,6 +20,7 @@ use strict;
 use warnings;
 
 use CGI;
+use C4::Acquisition qw( GetHistory );
 use C4::Auth;
 use C4::Dates qw/format_date/;
 use C4::Koha;
@@ -40,14 +41,15 @@ use C4::VirtualShelves;
 use C4::XSLT;
 use C4::Images;
 use Koha::DateUtils;
-
-# use Smart::Comments;
+use C4::HTML5Media;
+use C4::CourseReserves qw(GetItemCourseReservesInfo);
+use C4::Acquisition qw(GetOrdersByBiblionumber);
 
 my $query = CGI->new();
 
 my $analyze = $query->param('analyze');
 
-my ( $template, $borrowernumber, $cookie ) = get_template_and_user(
+my ( $template, $borrowernumber, $cookie, $flags ) = get_template_and_user(
     {
     template_name   =>  'catalogue/detail.tmpl',
         query           => $query,
@@ -137,9 +139,6 @@ if (@hostitems){
 
 my $dat = &GetBiblioData($biblionumber);
 
-# get count of holds
-my ( $holdcount, $holds ) = GetReservesFromBiblionumber($biblionumber,1);
-
 #coping with subscriptions
 my $subscriptionsnumber = CountSubscriptionFromBiblionumber($biblionumber);
 my @subscriptions       = GetSubscriptions( $dat->{title}, $dat->{issn}, undef, $biblionumber );
@@ -150,9 +149,13 @@ foreach my $subscription (@subscriptions) {
 	my $serials_to_display;
     $cell{subscriptionid}    = $subscription->{subscriptionid};
     $cell{subscriptionnotes} = $subscription->{internalnotes};
+    $cell{missinglist}       = $subscription->{missinglist};
+    $cell{librariannote}     = $subscription->{librariannote};
     $cell{branchcode}        = $subscription->{branchcode};
     $cell{branchname}        = GetBranchName($subscription->{branchcode});
     $cell{hasalert}          = $subscription->{hasalert};
+    $cell{callnumber}        = $subscription->{callnumber};
+    $cell{closed}            = $subscription->{closed};
     #get the three latest serials.
 	$serials_to_display = $subscription->{staffdisplaycount};
 	$serials_to_display = C4::Context->preference('StaffSerialIssueDisplayCount') unless $serials_to_display;
@@ -160,6 +163,15 @@ foreach my $subscription (@subscriptions) {
     $cell{latestserials} =
       GetLatestSerials( $subscription->{subscriptionid}, $serials_to_display );
     push @subs, \%cell;
+}
+
+
+# Get acquisition details
+if ( C4::Context->preference('AcquisitionDetails') ) {
+    my ( $orders, $qty, $price, $received ) = C4::Acquisition::GetHistory( biblionumber => $biblionumber, get_canceled_order => 1 );
+    $template->param(
+        orders => $orders,
+    );
 }
 
 if ( defined $dat->{'itemtype'} ) {
@@ -173,24 +185,25 @@ $dat->{'hiddencount'} = scalar @all_items + @hostitems - scalar @items;
 my $shelflocations = GetKohaAuthorisedValues('items.location', $fw);
 my $collections    = GetKohaAuthorisedValues('items.ccode'   , $fw);
 my $copynumbers    = GetKohaAuthorisedValues('items.copynumber', $fw);
-my (@itemloop, %itemfields);
+my (@itemloop, @otheritemloop, %itemfields);
 my $norequests = 1;
 my $authvalcode_items_itemlost = GetAuthValCode('items.itemlost',$fw);
 my $authvalcode_items_damaged  = GetAuthValCode('items.damaged', $fw);
 
 my $analytics_flag;
 my $materials_flag; # set this if the items have anything in the materials field
+my $currentbranch = C4::Context->userenv ? C4::Context->userenv->{branch} : undef;
+if ($currentbranch and C4::Context->preference('SeparateHoldings')) {
+    $template->param(SeparateHoldings => 1);
+}
+my $separatebranch = C4::Context->preference('SeparateHoldingsBranch') || 'homebranch';
 foreach my $item (@items) {
-
+    my $itembranchcode = $item->{$separatebranch};
     $item->{homebranch}        = GetBranchName($item->{homebranch});
 
     # can place holds defaults to yes
     $norequests = 0 unless ( ( $item->{'notforloan'} > 0 ) || ( $item->{'itemnotforloan'} > 0 ) );
 
-    # format some item fields for display
-    if ( defined $item->{'publictype'} ) {
-        $item->{ $item->{'publictype'} } = 1;
-    }
     $item->{imageurl} = defined $item->{itype} ? getitemtypeimagelocation('intranet', $itemtypes->{ $item->{itype} }{imageurl})
                                                : '';
 
@@ -216,7 +229,7 @@ foreach my $item (@items) {
     }
 
     # checking for holds
-    my ($reservedate,$reservedfor,$expectedAt) = GetReservesFromItemnumber($item->{itemnumber});
+    my ($reservedate,$reservedfor,$expectedAt,undef,$wait) = GetReservesFromItemnumber($item->{itemnumber});
     my $ItemBorrowerReserveInfo = GetMemberDetails( $reservedfor, 0);
     
     if (C4::Context->preference('HidePatronName')){
@@ -230,8 +243,11 @@ foreach my $item (@items) {
         $item->{ReservedForSurname}     = $ItemBorrowerReserveInfo->{'surname'};
         $item->{ReservedForFirstname}   = $ItemBorrowerReserveInfo->{'firstname'};
         $item->{ExpectedAtLibrary}      = $branches->{$expectedAt}{branchname};
-	$item->{Reservedcardnumber}             = $ItemBorrowerReserveInfo->{'cardnumber'};
+        $item->{Reservedcardnumber}             = $ItemBorrowerReserveInfo->{'cardnumber'};
+        # Check waiting status
+        $item->{waitingdate} = $wait;
     }
+
 
 	# Check the transit status
     my ( $transfertwhen, $transfertfrom, $transfertto ) = GetTransfers($item->{itemnumber});
@@ -242,29 +258,45 @@ foreach my $item (@items) {
         $item->{nocancel} = 1;
     }
 
-    # FIXME: move this to a pm, check waiting status for holds
-    my $sth2 = $dbh->prepare("SELECT * FROM reserves WHERE borrowernumber=? AND itemnumber=? AND found='W'");
-    $sth2->execute($item->{ReservedForBorrowernumber},$item->{itemnumber});
-    while (my $wait_hashref = $sth2->fetchrow_hashref) {
-        $item->{waitingdate} = format_date($wait_hashref->{waitingdate});
-    }
-
     # item has a host number if its biblio number does not match the current bib
     if ($item->{biblionumber} ne $biblionumber){
         $item->{hostbiblionumber} = $item->{biblionumber};
 	$item->{hosttitle} = GetBiblioData($item->{biblionumber})->{title};
     }
 	
-	#count if item is used in analytical bibliorecords
-	my $countanalytics= GetAnalyticsCount($item->{itemnumber});
-	if ($countanalytics > 0){
-		$analytics_flag=1;
-		$item->{countanalytics} = $countanalytics;
-	}
-    if ($item->{'materials'} ne ''){
+    #count if item is used in analytical bibliorecords
+    my $countanalytics= GetAnalyticsCount($item->{itemnumber});
+    if ($countanalytics > 0){
+        $analytics_flag=1;
+        $item->{countanalytics} = $countanalytics;
+    }
+
+    if (defined($item->{'materials'}) && $item->{'materials'} =~ /\S/){
 	$materials_flag = 1;
     }
-    push @itemloop, $item;
+
+    if ( C4::Context->preference('UseCourseReserves') ) {
+        $item->{'course_reserves'} = GetItemCourseReservesInfo( itemnumber => $item->{'itemnumber'} );
+    }
+
+    if ($currentbranch and $currentbranch ne "NO_LIBRARY_SET"
+    and C4::Context->preference('SeparateHoldings')) {
+        if ($itembranchcode and $itembranchcode eq $currentbranch) {
+            push @itemloop, $item;
+        } else {
+            push @otheritemloop, $item;
+        }
+    } else {
+        push @itemloop, $item;
+    }
+}
+
+# Display only one tab if one items list is empty
+if (scalar(@itemloop) == 0 || scalar(@otheritemloop) == 0) {
+    $template->param(SeparateHoldings => 0);
+    if (scalar(@itemloop) == 0) {
+        @itemloop = @otheritemloop;
+    }
 }
 
 $template->param( norequests => $norequests );
@@ -284,7 +316,6 @@ $template->param(
 	volinfo				=> $itemfields{enumchron},
     itemdata_itemnotes  => $itemfields{itemnotes},
 	z3950_search_params	=> C4::Search::z3950_search_args($dat),
-    holdcount           => $holdcount,
         hostrecords         => $hostrecords,
 	analytics_flag	=> $analytics_flag,
 	C4::Search::enabled_staff_search_views,
@@ -328,11 +359,13 @@ foreach ( keys %{$dat} ) {
 $template->param( AmazonTld => get_amazon_tld() ) if ( C4::Context->preference("AmazonCoverImages"));
 $template->param(
     itemloop        => \@itemloop,
+    otheritemloop   => \@otheritemloop,
     biblionumber        => $biblionumber,
     ($analyze? 'analyze':'detailview') =>1,
     subscriptions       => \@subs,
     subscriptionsnumber => $subscriptionsnumber,
     subscriptiontitle   => $dat->{title},
+    searchid            => $query->param('searchid'),
 );
 
 # $debug and $template->param(debug_display => 1);
@@ -358,6 +391,12 @@ if ( C4::Context->preference("LocalCoverImages") == 1 ) {
     $template->{VARS}->{localimages} = \@images;
 }
 
+# HTML5 Media
+if ( (C4::Context->preference("HTML5MediaEnabled") eq 'both') or (C4::Context->preference("HTML5MediaEnabled") eq 'staff') ) {
+    $template->param( C4::HTML5Media->gethtml5media($record));
+}
+
+
 # Get OPAC URL
 if (C4::Context->preference('OPACBaseURL')){
      $template->param( OpacUrl => C4::Context->preference('OPACBaseURL') );
@@ -374,5 +413,59 @@ if (C4::Context->preference('TagsEnabled') and $tag_quantity = C4::Context->pref
     $template->param(TagLoop => get_tags({biblionumber=>$biblionumber, approved=>1,
                                 'sort'=>'-weight', limit=>$tag_quantity}));
 }
+
+#we only need to pass the number of holds to the template
+my $holds = C4::Reserves::GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
+$template->param( holdcount => scalar ( @$holds ) );
+
+my $StaffDetailItemSelection = C4::Context->preference('StaffDetailItemSelection');
+if ($StaffDetailItemSelection) {
+    # Only enable item selection if user can execute at least one action
+    if (
+        $flags->{superlibrarian}
+        || (
+            ref $flags->{tools} eq 'HASH' && (
+                $flags->{tools}->{items_batchmod}       # Modify selected items
+                || $flags->{tools}->{items_batchdel}    # Delete selected items
+            )
+        )
+        || ( ref $flags->{tools} eq '' && $flags->{tools} )
+      )
+    {
+        $template->param(
+            StaffDetailItemSelection => $StaffDetailItemSelection );
+    }
+}
+
+my @allorders_using_biblio = GetOrdersByBiblionumber ($biblionumber);
+my @deletedorders_using_biblio;
+my @orders_using_biblio;
+my @baskets_orders;
+my @baskets_deletedorders;
+
+foreach my $myorder (@allorders_using_biblio) {
+    my $basket = $myorder->{'basketno'};
+    if ((defined $myorder->{'datecancellationprinted'}) and  ($myorder->{'datecancellationprinted'} ne '0000-00-00') ){
+        push @deletedorders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_deletedorders)){
+            push @baskets_deletedorders,$myorder->{'basketno'};
+        }
+    }
+    else {
+        push @orders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_orders)){
+            push @baskets_orders,$myorder->{'basketno'};
+            }
+    }
+}
+
+my $count_orders_using_biblio = scalar @orders_using_biblio ;
+$template->param (countorders => $count_orders_using_biblio);
+
+my $count_deletedorders_using_biblio = scalar @deletedorders_using_biblio ;
+$template->param (countdeletedorders => $count_deletedorders_using_biblio);
+
+$template->param (basketsorders => \@baskets_orders);
+$template->param (basketsdeletedorders => \@baskets_deletedorders);
 
 output_html_with_http_headers $query, $cookie, $template->output;

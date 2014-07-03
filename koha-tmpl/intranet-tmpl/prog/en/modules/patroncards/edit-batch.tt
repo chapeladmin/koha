@@ -2,21 +2,138 @@
     <title>Koha &rsaquo; Tools &rsaquo; Patron card creator &rsaquo; Manage patron card batches</title>
     [% INCLUDE 'doc-head-close.inc' %]
     [% INCLUDE 'greybox.inc' %]
+    <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+    [% INCLUDE 'datatables.inc' %]
     <script type="text/javascript">
         //<![CDATA[
-        $(document).ready(function() {
-            $("#cancel").empty();
-            buildButtons();
-         });
-        function buildButtons() {
-            var cancelButton = new YAHOO.widget.Button({
-                type: "link",
-                href: "/cgi-bin/koha/patroncards/manage.pl?card_element=batch",
-                label: _("Cancel"),
-                id: "cancel",
-                container: "cancel",
+           function DeleteConfirm() {
+                var msg = _("Are you sure you want to delete batch %s?").format("[% batch_id %]");
+                var answer = confirm(msg);
+                if (answer) {
+                    window.location = "/cgi-bin/koha/patroncards/manage.pl?op=delete&amp;card_element=batch&amp;element_id=[% batch_id %]";
+                }
+                else {
+                    return; // abort delete
+                }
+            };
+            function Remove() {
+                items = new Array;
+                item_num = new Array;
+                if(document.items.action.length > 0) {
+                    for (var i=0; i < document.items.action.length; i++) {
+                        if (document.items.action[i].checked) {
+                            items.push("label_id=" +  document.items.action[i].value);
+                            item_num.push(i+1);
+                        }
+                    }
+                    if (items.length < 1) {
+                        alert(_("Please select at least one item to delete."));
+                        return;     // no item selected
+                    }
+                    getstr = items.join("&");
+                    item_msg = item_num.join(", ");
+                    var msg = _("Are you sure you want to remove card number(s): %s from this batch?").format(item_msg);
+                }
+                else {
+                    alert(_("Please select at least label to delete."));
+                    return;     // no item selected
+                }
+                var answer = confirm(msg);
+                if (answer) {
+                    window.location = "/cgi-bin/koha/patroncards/edit-batch.pl?op=remove&amp;batch_id=[% batch_id %]&amp;" + getstr;
+                }
+                else {
+                    return; // abort delete
+                }
+            };
+            function Add() {
+                window.open("/cgi-bin/koha/patroncards/members-search.pl?batch_id=[% batch_id %]",'FindABibIndex','width=875,height=400,toolbar=no,scrollbars=yes');
+            };
+            function DeDuplicate() {
+                window.location = "/cgi-bin/koha/patroncards/edit-batch.pl?op=de_duplicate&amp;batch_id=[% batch_id %]";
+            };
+            function Xport(mode) {
+                if (mode == 'label') {
+                    patroncards= new Array;
+                    if(document.items.action.length > 0) {
+                        for (var i=0; i < document.items.action.length; i++) {
+                            if (document.items.action[i].checked) {
+                                patroncards.push("label_id=" +  document.items.action[i].value);
+                            }
+                        }
+                        if (patroncards.length < 1) {
+                            alert(_("Please select at least one card to export."));
+                            return;     // no batch selected
+                        }
+                        getstr = patroncards.join("&");
+                    }
+                    else if (document.items.action.checked) {
+                        getstr = document.items.action.value;
+                    }
+                    else {
+                        alert(_("Please select at least one card to export."));
+                        return;     // no batch selected
+                    }
+                    return GB_showCenter(_("Export labels"), "/cgi-bin/koha/patroncards/print.pl?batch_id=[% batch_id %]&" + getstr, 700, 800);
+                }
+                else if (mode == 'batch') {
+                    return GB_showCenter(_("Export labels"), "/cgi-bin/koha/patroncards/print.pl?batch_id=[% batch_id %]", 700, 800);
+                }
+                else {
+                    // some pass-thru error trapping just in case...
+                }
+            };
+           function selected_layout() {
+                if (document.items.action.length) {
+                for (i=0;i<document.items.action.length;i++){
+                    if (document.items.action[i].checked==true){
+                        return(document.items.action[i].value);
+                    }
+                };
+                }
+                else {
+                    if (document.items.action.checked){
+                        return(document.items.action.value);
+                    }
+                };
+                alert(_("Please select at least one item."));
+                return (-1);
+            };
+
+         $(document).ready(function() {
+            $("#batcht").dataTable($.extend(true, {}, dataTablesDefaults, {
+                "aoColumnDefs": [
+                    { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false }
+                ],
+                "aaSorting": [[ 1, "asc" ]],
+                "sPaginationType": "four_button"
+            }));
+            $("#additems").click(function(){
+                Add();
+                return false;
             });
-        };
+            $("#removeitems").click(function(){
+                Remove();
+                return false;
+            });
+            $("#deletebatch").click(function(){
+                DeleteConfirm();
+                return false;
+            });
+            $("#deduplicate").click(function(){
+                DeDuplicate();
+                return false;
+            });
+            $("#exportitems").click(function(){
+                Xport('label');
+                return false;
+            });
+            $("#exportbatch").click(function(){
+                Xport('batch');
+                return false;
+            });
+         });
+        //]]>
     </script>
 </head>
 <body id="pcard_edit-batch" class="tools pcard">
@@ -33,57 +150,75 @@
         <div id="bd">
             <div id="yui-main">
                 <div class="yui-b">
-                    [% INCLUDE 'patroncards-batches-toolbar.inc' %]
-                    [% INCLUDE 'error-messages.inc' %]
-                    <div class="yui-g">
-                        <div class="yui-u first" id="manage-patroncard-batches">
-                            <div class="hint">Current library: [% LoginBranchname %]</div>
-                                [% IF ( table_loop ) %]
-                                <form name="items" class="checkboxed">
-                                    <h2>Items in batch number [% batch_id %]</h2>
-                                    <table>
-                                        [% FOREACH table_loo IN table_loop %]
+
+                <div id="toolbar" class="btn-toolbar">
+                    <a class="btn btn-small" id="additems" href="#">Add item(s)</a>[% IF ( table_loop ) %]
+                    <a class="btn btn-small" id="removeitems" href="#">Remove item(s)</a>
+                    <a class="btn btn-small" id="deletebatch" href="#">Delete batch</a>
+                    <a class="btn btn-small" id="deduplicate" href="#">Remove duplicates</a>
+                    <a class="btn btn-small" id="exportitems" href="#">Export item(s)</a>
+                    <a class="btn btn-small" id="exportbatch" href="#">Export batch</a>[% END %]
+                </div>
+
+                [% IF ( duplicate_message ) %]
+                    <div class="dialog message">
+                        <strong>[% duplicate_count %] duplicate item(s) found</strong> and removed from batch [% batch_id %].
+                    </div>
+                [% END %]
+
+                    [% INCLUDE 'patroncards-errors.inc' %]
+                    <div id="manage-patroncard-batches">
+                        <div class="hint">Current library: [% LoginBranchname %]</div>
+                            [% IF ( table_loop ) %]
+                            <form name="items" class="checkboxed">
+                                <h2>Items in batch number [% batch_id %]</h2>
+                                <table id="batcht">
+                                    [% FOREACH table_loo IN table_loop %]
                                         [% IF ( table_loo.header_fields ) %]
-                                        <tr>
-                                        [% FOREACH header_field IN table_loo.header_fields %]
-                                            <th>[% header_field.field_label %]</th>
-                                        [% END %]
-                                        </tr>
+                                            <thead>
+                                                <tr>
+                                                    [% FOREACH header_field IN table_loo.header_fields %]
+                                                        [% SWITCH header_field.field_label -%]
+                                                            [% CASE "Card Number" -%]
+                                                                <th>Card number</th>
+                                                            [% CASE "Summary" -%]
+                                                                <th>Summary</th>
+                                                            [% CASE "Borrower Number" %]
+                                                                <th>Borrower number</th>
+                                                            [% CASE "Select" -%]
+                                                                <th>Select</th>
+                                                            [% CASE %]
+                                                                <th>[% header_field.field_label %]</th>
+                                                        [% END -%]
+                                                    [% END %]
+                                                </tr>
+                                            </thead>
+                                            <tbody>
                                         [% ELSE %]
-                                        <tr>
-                                        [% FOREACH text_field IN table_loo.text_fields %]
-                                        [% IF ( text_field.select_field ) %]
-                                            <td align="center"><input type="checkbox" name="action" value="[% text_field.field_value %]"></td>
-                                        [% ELSE %]
-                                            <td>[% text_field.field_value %]</td>
+                                            <tr>
+                                                [% FOREACH text_field IN table_loo.text_fields %]
+                                                    [% IF ( text_field.select_field ) %]
+                                                        <td><input type="checkbox" name="action" value="[% text_field.field_value %]" /></td>
+                                                    [% ELSE %]
+                                                        <td>[% text_field.field_value %]</td>
+                                                    [% END %]
+                                                [% END %]
+                                            </tr>
                                         [% END %]
-                                        [% END %]
-                                        </tr>
-                                        [% END %]
-                                        [% END %]
-                                    </table>
-                                </form>
-                                [% ELSE %]
-                                    <div class="dialog message"><h4>There are no items in batch [% batch_id %] yet</h4>
-                                    <p>Use the toolbar above to add items.</p></div>
-                                [% END %]
-                            </div>
-                            [% IF ( duplicate_message ) %]
-                            <div class="yui-u">
+                                    [% END %]
+                                    </tbody>
+                                </table>
+                            </form>
+                            [% ELSE %]
                                 <div class="dialog message">
-                                    <strong>[% duplicate_count %] duplicate item(s) found</strong> and removed from batch [% batch_id %].
-                                </div>
-                            </div>
+                                <h4>There are no items in batch [% batch_id %] yet</h4>
+                                <p>Use the toolbar above to add items.</p></div>
                             [% END %]
                         </div>
-                        <fieldset class="action">
-                            <span id="cancel"><a class="cancel" href="/cgi-bin/koha/patroncards/manage.pl?card_element=batch">Cancel</a></span>
-                        </fieldset>
                     </div>
                 </div>
                 <div class="yui-b">
                     [% INCLUDE 'patroncards-menu.inc' %]
                 </div>
             </div>
-        </div>
     [% INCLUDE 'intranet-bottom.inc' %]

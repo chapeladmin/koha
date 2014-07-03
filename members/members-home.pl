@@ -26,10 +26,10 @@ use C4::Context;
 use C4::Members;
 use C4::Branch;
 use C4::Category;
+use Koha::Borrower::Modifications;
 
 my $query = new CGI;
 my $branch = $query->param('branchcode');
-my $template_name;
 
 $branch = q{} unless defined $branch;
 
@@ -44,12 +44,26 @@ my ($template, $loggedinuser, $cookie)
 
 my $branches = GetBranches;
 my @branchloop;
-foreach (sort { $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname} } keys %{$branches}) {
+if ( C4::Branch::onlymine ) {
+    my $userenv = C4::Context->userenv;
+    my $branch = C4::Branch::GetBranchDetail( $userenv->{'branch'} );
     push @branchloop, {
-        value      => $_,
-        selected   => ($branches->{$_}->{branchcode} eq $branch),
-        branchname => $branches->{$_}->{branchname},
-    };
+        value => $branch->{branchcode},
+        branchcode => $branch->{branchcode},
+        branchname => $branch->{branchname},
+        selected => 1
+    }
+} else {
+    foreach (sort { $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname} } keys %{$branches}) {
+        my $selected = 0;
+        $selected = 1 if $branch and $branch eq $_;
+        push @branchloop, {
+            value => $_,
+            branchcode => $_,
+            branchname => $branches->{$_}->{branchname},
+            selected => $selected
+        };
+    }
 }
 
 my @categories;
@@ -76,11 +90,19 @@ else {
     $template->param(categories=>\@categories);
 }
 
+
+my $pending_borrower_modifications =
+  Koha::Borrower::Modifications->GetPendingModificationsCount( $branch );
+
 $template->param( 
         "AddPatronLists_".C4::Context->preference("AddPatronLists")=> "1",
         no_add => $no_add,
+        pending_borrower_modifications => $pending_borrower_modifications,
             );
-my @letters = map { {letter => $_} } ( 'A' .. 'Z');
-$template->param( letters => \@letters );
+
+$template->param(
+    alphabet => C4::Context->preference('alphabet') || join (' ', 'A' .. 'Z'),
+    PatronsPerPage => C4::Context->preference("PatronsPerPage") || 20,
+);
 
 output_html_with_http_headers $query, $cookie, $template->output;

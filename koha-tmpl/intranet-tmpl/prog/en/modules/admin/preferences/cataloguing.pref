@@ -40,7 +40,7 @@ Cataloging:
         -
     Record Structure:
         -
-            - Fill in the default language for field 008 Range 35-37 (e.g. eng, nor, ger, see <a href="http://www.loc.gov/marc/languages/language_code.html">MARC Code List for Languages</a>)
+            - Fill in the default language for field 008 Range 35-37 of MARC21 records (e.g. eng, nor, ger, see <a href="http://www.loc.gov/marc/languages/language_code.html">MARC Code List for Languages</a>)
             - pref: DefaultLanguageField008
             - " Empty defaults to eng."
         -
@@ -57,11 +57,11 @@ Cataloging:
               choices:
                   yes: specific item
                   no: biblio record
-            - as the authoritative item type (for determining circulation and fines rules, etc).
+            - as the authoritative item type (for determining circulation and fines rules, for displaying an item type icon on either opac detail or results page, etc).
         -
             - Map the MARC subfield
             - pref: itemcallnumber
-            - "to an item's callnumber. (This can contain multiple subfields to look in; for instance <code>082ab</code> would look in 082 subfields a and b.)<br />Examples: <strong>Dewey</strong>: <code>082ab</code> or <code>092ab</code>; <strong>LOC</strong>: <code>050ab</code> or <code>090ab</code>; <strong>from the item record</strong>: <code>852hi</code>"
+            - "to an item's callnumber. (This can contain multiple subfields to look in; for instance <code>082ab</code> would look in 082 subfields a and b.)<br />Examples (for MARC21 records): <strong>Dewey</strong>: <code>082ab</code> or <code>092ab</code>; <strong>LOC</strong>: <code>050ab</code> or <code>090ab</code>; <strong>from the item record</strong>: <code>852hi</code>"
         -
             - Display MARC subfield
             - pref: AlternateHoldingsField
@@ -71,7 +71,7 @@ Cataloging:
         -
             - Fill in the <a href="http://www.loc.gov/marc/organizations/orgshome.html">MARC organization code</a>
             - pref: MARCOrgCode
-            - by default in new MARC records (leave blank to disable).
+            - by default in new MARC21 records (leave blank to disable).
         -
             - When items are created, give them the temporary location of
             - pref: NewItemsDefaultLocation
@@ -96,19 +96,23 @@ Cataloging:
                   EAN13: incremental EAN-13 barcodes
                   "OFF": not generated automatically.
         -
-            - When a new item is added, should it be prefilled with last created item values?
+            - When a new item is added,
             - pref: PrefillItem
               choices:
-                  yes: the new item is prefilled with last created item values
-                  no: the new item is not prefilled with last created item values
+                  yes: the new item is prefilled with last created item values.
+                  no: the new item is not prefilled with last created item values.
         -
             - Define a list of subfields to use when prefilling items (separated by space)
             - pref: SubfieldsToUseWhenPrefill
-
+        -
+            - Use the languague (ISO 690-2)
+            - pref: UNIMARCField100Language
+              class: short
+            - as default language in the UNIMARC field 100 when creating a new record or in the field plugin.
     Display:
         -
             - 'Separate multiple displayed authors, series or subjects with '
-            - pref: authoritysep
+            - pref: AuthoritySeparator
               class: short
             - '.'
         -
@@ -152,8 +156,46 @@ Cataloging:
                   yes: Hide
                   no: "Don't hide"
             - items marked as suppressed from OPAC search results. Note that you must have the <code>Suppress</code> index set up in Zebra and at least one suppressed item, or your searches will be broken.
-            - Restrict the suppression to IP adresses outside of the IP range
+            - <br />Restrict the suppression to IP adresses outside of the IP range
             - pref: OpacSuppressionByIPRange
               class: short
             - (Leave blank if not used. Define a range like <code>192.168.</code>.)
-
+            - <br />Redirect the opac detail page for suppressed records to
+            - pref: OpacSuppressionRedirect
+              choices:
+                  yes: "an explanatory page ('This record is blocked')."
+                  no: "the 404 error page ('Not found')."
+            - <br />Display the following message on the redirect page for suppressed biblios
+            - pref: OpacSuppressionMessage
+              type: textarea
+              class: code
+        -
+            - pref: SeparateHoldings
+              choices:
+                  yes: Separate
+                  no: Don't separate
+            - "items display into two tabs, where the first tab contains items whose"
+            - pref: SeparateHoldingsBranch
+              choices:
+                homebranch: 'home library'
+                holdingbranch: 'holding library'
+            - "is the logged in user's library. The second tab will contain all other items."
+        -
+            - Don't show these
+            - pref: NotesBlacklist
+              class: multi
+            - note fields in title notes separator (OPAC record details) and in the description separator (Staff client record details). The fields should appear separated with commas and according with the Koha MARC format (eg 3.. for UNIMARC, 5.. for MARC21)
+        -
+            - pref: AcquisitionDetails
+              choices:
+                  yes: Display
+                  no: "Don't display"
+            - acquisition details on the biblio detail page.
+    Importing:
+        -
+            - When matching on ISBN with the record import tool,
+            - pref: AggressiveMatchOnISBN
+              choices:
+                  yes: "do"
+                  no: "don't"
+            - attempt to match aggressively by trying all variations of the ISBNs in the imported record as a phrase in the ISBN fields of already cataloged records.  Note that this preference has no effect if UseQueryParser is on.

@@ -163,20 +163,6 @@ sub utf8_hashref {
         utf8::encode($hashref->{$key}) if utf8::is_utf8($hashref->{$key});
     }
 }
-        
-        
-# FIXME - this is a horrible hack to cache
-# the current known-good language, temporarily
-# put in place to resolve bug 4403.  It is
-# used only by C4::XSLT::XSLTParse4Display;
-# the language is set via the usual call
-# to themelanguage.
-my $_current_language = 'en';
-
-sub _current_language {
-    return $_current_language;
-}
-
 
 # wrapper method to allow easier transition from HTML template pro to Template Toolkit
 sub param {
@@ -228,13 +214,15 @@ sub _get_template_file {
 
 
 sub gettemplate {
-    my ( $tmplbase, $interface, $query ) = @_;
+    my ( $tmplbase, $interface, $query, $is_plugin ) = @_;
     ($query) or warn "no query in gettemplate";
     my $path = C4::Context->preference('intranet_includes') || 'includes';
     $tmplbase =~ s/\.tmpl$/.tt/;
     my ($htdocs, $theme, $lang, $filename)
        =  _get_template_file($tmplbase, $interface, $query);
+    $filename = $tmplbase if ( $is_plugin );
     my $template = C4::Templates->new($interface, $filename, $tmplbase, $query);
+
 # NOTE: Commenting these out rather than deleting them so that those who need
 # to know how we previously shimmed these directories will be able to understand.
 #    my $is_intranet = $interface eq 'intranet';
@@ -251,10 +239,13 @@ sub gettemplate {
 #        lang      => $lang
 #    );
 
-    # Bidirectionality
+    # Bidirectionality, must be sent even if is the only language
     my $current_lang = regex_lang_subtags($lang);
     my $bidi;
     $bidi = get_bidi($current_lang->{script}) if $current_lang->{script};
+    $template->param(
+            bidi                 => $bidi,
+    );
     # Languages
     my $languages_loop = getTranslatedLanguages($interface,$theme,$lang);
     my $num_languages_enabled = 0;
@@ -263,11 +254,11 @@ sub gettemplate {
             $num_languages_enabled++ if $sublang->{enabled};
          }
     }
+    my $one_language_enabled = ($num_languages_enabled <= 1) ? 1 : 0; # deal with zero enabled langs as well
     $template->param(
             languages_loop       => $languages_loop,
-            bidi                 => $bidi,
-            one_language_enabled => ($num_languages_enabled <= 1) ? 1 : 0, # deal with zero enabled langs as well
-    ) unless @$languages_loop<2;
+            one_language_enabled => $one_language_enabled,
+    ) unless $one_language_enabled;
 
     return $template;
 }
@@ -280,7 +271,7 @@ sub themelanguage {
     ($query) or warn "no query in themelanguage";
 
     # Select a language based on cookie, syspref available languages & browser
-    my $lang = getlanguage($query, $interface);
+    my $lang = C4::Languages::getlanguage($query);
 
     # Select theme
     my $is_intranet = $interface eq 'intranet';
@@ -291,7 +282,6 @@ sub themelanguage {
     # Try to find first theme for the selected language
     for my $theme (@themes) {
         if ( -e "$htdocs/$theme/$lang/modules/$tmpl" ) {
-            $_current_language = $lang;
             return ($theme, $lang, \@themes)
         }
     }
@@ -302,9 +292,11 @@ sub themelanguage {
 
 sub setlanguagecookie {
     my ( $query, $language, $uri ) = @_;
+
     my $cookie = $query->cookie(
         -name    => 'KohaOpacLanguage',
         -value   => $language,
+        -HttpOnly => 1,
         -expires => '+3y'
     );
     print $query->redirect(
@@ -313,36 +305,24 @@ sub setlanguagecookie {
     );
 }
 
+=head2 getlanguagecookie
 
-sub getlanguage {
-    my ($query, $interface) = @_;
+    my $cookie = getlanguagecookie($query,$language);
 
-    # Select a language based on cookie, syspref available languages & browser
-    my $preference_to_check =
-      $interface eq 'intranet' ? 'language' : 'opaclanguages';
-    my @languages = split /,/, C4::Context->preference($preference_to_check);
+Returns a cookie object containing the calculated language to be used.
 
-    my $lang;
+=cut
 
-    # cookie
-    if ( $query->cookie('KohaOpacLanguage') ) {
-        $lang = $query->cookie('KohaOpacLanguage');
-        $lang =~ s/[^a-zA-Z_-]*//; # sanitize cookie
-    }
+sub getlanguagecookie {
+    my ( $query, $language ) = @_;
+    my $cookie = $query->cookie(
+        -name    => 'KohaOpacLanguage',
+        -value   => $language,
+        -HttpOnly => 1,
+        -expires => '+3y'
+    );
 
-    # HTTP_ACCEPT_LANGUAGE
-    if ( !$lang && $ENV{HTTP_ACCEPT_LANGUAGE} ) {
-        $lang = accept_language( $ENV{HTTP_ACCEPT_LANGUAGE},
-            getTranslatedLanguages( $interface, 'prog' ) );
-    }
-
-    # Ignore a lang not selected in sysprefs
-    if ( $lang && any { $_ eq $lang } @languages ) {
-        return $lang;
-    }
-
-    # Fall back to English if necessary
-    return 'en';
+    return $cookie;
 }
 
 1;

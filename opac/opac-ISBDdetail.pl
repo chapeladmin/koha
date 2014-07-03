@@ -67,6 +67,7 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
 );
 
 my $biblionumber = $query->param('biblionumber');
+$biblionumber = int($biblionumber);
 
 # get biblionumbers stored in the cart
 my @cart_list;
@@ -83,6 +84,17 @@ $template->param( 'AllowOnShelfHolds' => C4::Context->preference('AllowOnShelfHo
 $template->param( 'ItemsIssued' => CountItemsIssued( $biblionumber ) );
 
 my $marcflavour      = C4::Context->preference("marcflavour");
+
+my @items = GetItemsInfo($biblionumber);
+if (scalar @items >= 1) {
+    my @hiddenitems = GetHiddenItemnumbers(@items);
+
+    if (scalar @hiddenitems == scalar @items ) {
+        print $query->redirect("/cgi-bin/koha/errors/404.pl"); # escape early
+        exit;
+    }
+}
+
 my $record = GetMarcBiblio($biblionumber);
 if ( ! $record ) {
     print $query->redirect("/cgi-bin/koha/errors/404.pl");
@@ -137,12 +149,11 @@ $template->param(
 
 my $norequests = 1;
 my $res = GetISBDView($biblionumber, "opac");
-my @items = GetItemsInfo( $biblionumber );
 
 my $itemtypes = GetItemTypes();
 for my $itm (@items) {
     $norequests = 0
-       if ( (not $itm->{'wthdrawn'} )
+       if ( (not $itm->{'withdrawn'} )
          && (not $itm->{'itemlost'} )
          && ($itm->{'itemnotforloan'}<0 || not $itm->{'itemnotforloan'} )
 		 && (not $itemtypes->{$itm->{'itype'}}->{notforloan} )
@@ -180,15 +191,20 @@ my $marcissns = GetMarcISSN ( $record, $marcflavour );
 my $issn = $marcissns->[0] || '';
 
 if (my $search_for_title = C4::Context->preference('OPACSearchForTitleIn')){
-    $dat->{author} ? $search_for_title =~ s/{AUTHOR}/$dat->{author}/g : $search_for_title =~ s/{AUTHOR}//g;
     $dat->{title} =~ s/\/+$//; # remove trailing slash
     $dat->{title} =~ s/\s+$//; # remove trailing space
-    $dat->{title} ? $search_for_title =~ s/{TITLE}/$dat->{title}/g : $search_for_title =~ s/{TITLE}//g;
-    $isbn ? $search_for_title =~ s/{ISBN}/$isbn/g : $search_for_title =~ s/{ISBN}//g;
-    $issn ? $search_for_title =~ s/{ISSN}/$issn/g : $search_for_title =~ s/{ISSN}//g;
-    $marccontrolnumber ? $search_for_title =~ s/{CONTROLNUMBER}/$marccontrolnumber/g : $search_for_title =~ s/{CONTROLNUMBER}//g;
-    $search_for_title =~ s/{BIBLIONUMBER}/$biblionumber/g;
- $template->param('OPACSearchForTitleIn' => $search_for_title);
+    $search_for_title = parametrized_url(
+        $search_for_title,
+        {
+            TITLE         => $dat->{title},
+            AUTHOR        => $dat->{author},
+            ISBN          => $isbn,
+            ISSN          => $issn,
+            CONTROLNUMBER => $marccontrolnumber,
+            BIBLIONUMBER  => $biblionumber,
+        }
+    );
+    $template->param('OPACSearchForTitleIn' => $search_for_title);
 }
 
 output_html_with_http_headers $query, $cookie, $template->output;

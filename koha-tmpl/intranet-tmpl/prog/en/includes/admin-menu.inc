@@ -30,9 +30,9 @@
     <li><a href="/cgi-bin/koha/admin/smart-rules.pl">Circulation and fines rules</a></li>
 	<li><a href="/cgi-bin/koha/admin/patron-attr-types.pl">Patron attribute types</a></li>
 	<li><a href="/cgi-bin/koha/admin/branch_transfer_limits.pl">Library transfer limits</a></li>
+	<li><a href="/cgi-bin/koha/admin/transport-cost-matrix.pl">Transport cost matrix</a></li>
 	<li><a href="/cgi-bin/koha/admin/item_circulation_alerts.pl">Item circulation alerts</a></li>
     <li><a href="/cgi-bin/koha/admin/cities.pl">Cities and towns</a></li>
-    <li><a href="/cgi-bin/koha/admin/roadtype.pl">Road types</a></li>
 </ul>
 
 <h5>Catalog</h5>
@@ -59,9 +59,9 @@
 <h5>Additional parameters</h5>
 
 <ul>
-    [% IF ( NoZebra ) %]<li><a href="/cgi-bin/koha/admin/stopwords.pl">Stop words</a></li>[% END %]
 	<!-- <li><a href="/cgi-bin/koha/admin/printers.pl">Network Printers</a></li> -->
     <li><a href="/cgi-bin/koha/admin/z3950servers.pl">Z39.50 client targets</a></li>
+    <li><a href="/cgi-bin/koha/admin/didyoumean.pl">Did you mean?</a></li>
 </ul>
 </div>
 </div>

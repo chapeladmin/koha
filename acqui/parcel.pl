@@ -67,9 +67,11 @@ use CGI;
 use C4::Output;
 use C4::Dates qw/format_date format_date_in_iso/;
 use C4::Suggestions;
+use C4::Reserves qw/GetReservesFromBiblionumber/;
 use JSON;
 
 my $input=new CGI;
+my $sticky_filters = $input->param('sticky_filters') || 0;
 
 sub get_value_with_gst_params {
     my $value = shift;
@@ -117,9 +119,10 @@ my ($template, $loggedinuser, $cookie)
                  debug => 1,
 });
 
-my $invoiceid = $input->param('invoiceid');
 my $op = $input->param('op') // '';
 
+# process cancellation first so that list of
+# orders to display is calculated after
 if ($op eq 'cancelreceipt') {
     my $ordernumber = $input->param('ordernumber');
     my $parent_ordernumber = CancelReceipt($ordernumber);
@@ -128,37 +131,27 @@ if ($op eq 'cancelreceipt') {
     }
 }
 
-my $invoice = GetInvoiceDetails($invoiceid);
+my $invoiceid = $input->param('invoiceid');
+my $invoice;
+$invoice = GetInvoiceDetails($invoiceid) if $invoiceid;
+
+unless( $invoiceid and $invoice->{invoiceid} ) {
+    $template->param(
+        error_invoice_not_known => 1,
+        no_orders_to_display    => 1
+    );
+    output_html_with_http_headers $input, $cookie, $template->output;
+    exit;
+}
+
 my $booksellerid = $invoice->{booksellerid};
 my $bookseller = GetBookSellerFromId($booksellerid);
 my $gst = $bookseller->{gstrate} // C4::Context->preference("gist") // 0;
 my $datereceived = C4::Dates->new();
-my $code            = $input->param('code');
-my @rcv_err         = $input->param('error');
-my @rcv_err_barcode = $input->param('error_bc');
-my $startfrom=$input->param('startfrom');
-my $resultsperpage = $input->param('resultsperpage');
-$resultsperpage = 20 unless ($resultsperpage);
-$startfrom=0 unless ($startfrom);
-
-
-
-# If receiving error, report the error (coming from finishrecieve.pl(sic)).
-if( scalar(@rcv_err) ) {
-	my $cnt=0;
-	my $error_loop;
-	for my $err (@rcv_err) {
-		push @$error_loop, { "error_$err" => 1 , barcode => $rcv_err_barcode[$cnt] };
-		$cnt++;
-	}
-	$template->param( receive_error => 1 ,
-						error_loop => $error_loop,
-					);
-}
 
 my $cfstr         = "%.2f";                                                           # currency format string -- could get this from currency table.
-my @parcelitems   = @{ $invoice->{orders} };
-my $countlines    = scalar @parcelitems;
+my @orders        = @{ $invoice->{orders} };
+my $countlines    = scalar @orders;
 my $totalprice    = 0;
 my $totalquantity = 0;
 my $total;
@@ -169,19 +162,25 @@ my $total_quantity = 0;
 my $total_gste = 0;
 my $total_gsti = 0;
 
-for my $item ( @parcelitems ) {
-    $item->{unitprice} = get_value_with_gst_params( $item->{unitprice}, $item->{gstrate}, $bookseller );
-    $total = ( $item->{'unitprice'} ) * $item->{'quantityreceived'};
-    $item->{'unitprice'} += 0;
-    my %line;
-    %line          = %{ $item };
+for my $order ( @orders ) {
+    $order->{unitprice} = get_value_with_gst_params( $order->{unitprice}, $order->{gstrate}, $bookseller );
+    $total = ( $order->{unitprice} ) * $order->{quantityreceived};
+    $order->{'unitprice'} += 0;
+    my %line = %{ $order };
     my $ecost = get_value_with_gst_params( $line{ecost}, $line{gstrate}, $bookseller );
     $line{ecost} = sprintf( "%.2f", $ecost );
     $line{invoice} = $invoice->{invoicenumber};
     $line{total} = sprintf($cfstr, $total);
     $line{booksellerid} = $invoice->{booksellerid};
-    $totalprice += $item->{'unitprice'};
-    $line{unitprice} = sprintf( $cfstr, $item->{'unitprice'} );
+    $line{holds} = 0;
+    my @itemnumbers = GetItemnumbersFromOrder( $order->{ordernumber} );
+    for my $itemnumber ( @itemnumbers ) {
+        my $holds = GetReservesFromBiblionumber({ biblionumber => $line{biblionumber}, itemnumber => $itemnumber });
+        $line{holds} += scalar( @$holds );
+    }
+    $line{budget} = GetBudgetByOrderNumber( $line{ordernumber} );
+    $totalprice += $order->{unitprice};
+    $line{unitprice} = sprintf( $cfstr, $order->{unitprice} );
     my $gste = get_gste( $line{total}, $line{gstrate}, $bookseller );
     my $gst = get_gst( $line{total}, $line{gstrate}, $bookseller );
     $foot{$line{gstrate}}{gstrate} = $line{gstrate};
@@ -197,7 +196,8 @@ for my $item ( @parcelitems ) {
 
     if ( $line{parent_ordernumber} != $line{ordernumber} ) {
         if ( grep { $_->{ordernumber} == $line{parent_ordernumber} }
-            @parcelitems )
+            @orders
+            )
         {
             $line{cannot_cancel} = 1;
         }
@@ -207,24 +207,51 @@ for my $item ( @parcelitems ) {
     $line{budget_name} = $budget->{'budget_name'};
 
     push @loop_received, \%line;
-    $totalquantity += $item->{'quantityreceived'};
+    $totalquantity += $order->{quantityreceived};
 
 }
 push @book_foot_loop, map { $_ } values %foot;
 
 my @loop_orders = ();
-if(!defined $invoice->{closedate}) {
+unless( defined $invoice->{closedate} ) {
     my $pendingorders;
-    if($input->param('op') eq "search"){
-        my $search   = $input->param('summaryfilter') || '';
-        my $ean      = $input->param('eanfilter') || '';
-        my $basketno = $input->param('basketfilter') || '';
-        my $orderno  = $input->param('orderfilter') || '';
-        my $grouped;
-        my $owner;
-        $pendingorders = GetPendingOrders($booksellerid,$grouped,$owner,$basketno,$orderno,$search,$ean);
+    if ( $op eq "search" or $sticky_filters ) {
+        my ( $search, $ean, $basketname, $orderno, $basketgroupname );
+        if ( $sticky_filters ) {
+            $search = $input->cookie("filter_parcel_summary");
+            $ean = $input->cookie("filter_parcel_ean");
+            $basketname = $input->cookie("filter_parcel_basketname");
+            $orderno = $input->cookie("filter_parcel_orderno");
+            $basketgroupname = $input->cookie("filter_parcel_basketgroupname");
+        } else {
+            $search   = $input->param('summaryfilter') || '';
+            $ean      = $input->param('eanfilter') || '';
+            $basketname = $input->param('basketfilter') || '';
+            $orderno  = $input->param('orderfilter') || '';
+            $basketgroupname = $input->param('basketgroupnamefilter') || '';
+        }
+        $pendingorders = SearchOrders({
+            booksellerid => $booksellerid,
+            basketname => $basketname,
+            ordernumber => $orderno,
+            search => $search,
+            ean => $ean,
+            basketgroupname => $basketgroupname,
+            pending => 1,
+            ordered => 1,
+        });
+        $template->param(
+            summaryfilter => $search,
+            eanfilter => $ean,
+            basketfilter => $basketname,
+            orderfilter => $orderno,
+            basketgroupnamefilter => $basketgroupname,
+        );
     }else{
-        $pendingorders = GetPendingOrders($booksellerid);
+        $pendingorders = SearchOrders({
+            booksellerid => $booksellerid,
+            ordered => 1
+        });
     }
     my $countpendings = scalar @$pendingorders;
 
@@ -281,40 +308,7 @@ if(!defined $invoice->{closedate}) {
         my $budget = GetBudget( $line{budget_id} );
         $line{budget_name} = $budget->{'budget_name'};
 
-        push @loop_orders, \%line if ($i >= $startfrom and $i < $startfrom + $resultsperpage);
-    }
-
-    my $count = $countpendings;
-
-    if ($count>$resultsperpage){
-        my $displaynext=0;
-        my $displayprev=$startfrom;
-        if(($count - ($startfrom+$resultsperpage)) > 0 ) {
-            $displaynext = 1;
-        }
-
-        my @numbers = ();
-        for (my $i=1; $i<$count/$resultsperpage+1; $i++) {
-                my $highlight=0;
-                ($startfrom/$resultsperpage==($i-1)) && ($highlight=1);
-                push @numbers, { number => $i,
-                    highlight => $highlight ,
-                    startfrom => ($i-1)*$resultsperpage};
-        }
-
-        my $from = $startfrom*$resultsperpage+1;
-        my $to;
-        if($count < (($startfrom+1)*$resultsperpage)){
-            $to = $count;
-        } else {
-            $to = (($startfrom+1)*$resultsperpage);
-        }
-        $template->param(numbers=>\@numbers,
-                         displaynext=>$displaynext,
-                         displayprev=>$displayprev,
-                         nextstartfrom=>(($startfrom+$resultsperpage<$count)?$startfrom+$resultsperpage:$count),
-                         prevstartfrom=>(($startfrom-$resultsperpage>0)?$startfrom-$resultsperpage:0)
-                        );
+        push @loop_orders, \%line;
     }
 
     $template->param(
@@ -333,15 +327,14 @@ $template->param(
     booksellerid          => $bookseller->{id},
     countreceived         => $countlines,
     loop_received         => \@loop_received,
-    booksellerid          => $booksellerid,
     loop_orders           => \@loop_orders,
     book_foot_loop        => \@book_foot_loop,
     totalprice            => sprintf($cfstr, $totalprice),
     totalquantity         => $totalquantity,
-    resultsperpage        => $resultsperpage,
     (uc(C4::Context->preference("marcflavour"))) => 1,
     total_quantity       => $total_quantity,
     total_gste           => sprintf( "%.2f", $total_gste ),
     total_gsti           => sprintf( "%.2f", $total_gsti ),
+    sticky_filters       => $sticky_filters,
 );
 output_html_with_http_headers $input, $cookie, $template->output;

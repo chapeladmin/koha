@@ -1,3 +1,4 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %]
 [% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %]
     catalog &rsaquo; Advanced search
@@ -56,15 +57,23 @@
         <p>
         [% IF ( expanded_options ) %]
             [% IF ( search_box.boolean ) %]
-            <select name="op">
-                <option value="and" selected="selected">and</option>
-                <option value="or">or</option>
-                <option value="not">not</option>
-            </select>
+                <select name="op">
+                    <option value="and" selected="selected">and</option>
+                    <option value="or">or</option>
+                    <option value="not">not</option>
+                </select>
             [% END %]
-        [% END %]
+        [% ELSE %]
+            <label for="search-field_[% loop.index %]">
+                [% IF loop.index == 0 %]
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                [% ELSE %]
+                    and
+                [% END %]
+            </label>
+            [% END %]
         [% IF ( expanded_options ) %][% left_content %][% END %] 
-        <select name="idx">
+        <select name="idx" id="search-field_[% loop.index %]">
             <option value="kw">Keyword</option>
             <option value="su,wrdl">Subject</option>
 [% IF ( expanded_options ) %]
@@ -77,7 +86,11 @@
 [% IF ( expanded_options ) %]
             <option value="ti,phr">&nbsp;&nbsp;&nbsp;&nbsp; Title phrase</option>
             <option value="se,wrdl">Series title</option>
+            [% IF ( numbersphr) %]
+            <option value="callnum,phr">Call number</option>
+            [% ELSE %]
             <option value="callnum">Call number</option>
+            [% END %]
             <option value="location">Shelving location</option>
 [% END %]
             <option value="au,wrdl">Author</option>
@@ -92,15 +105,25 @@
 [% END %]
 [% IF ( expanded_options ) %]
             <option value="nt">Notes/Comments</option>
+    [% IF (marcflavour != 'UNIMARC') %]
             <option value="curriculum">Curriculum</option>
+    [% END %]
 [% END %]
             <option value="pb,wrdl">Publisher</option>
             <option value="pl,wrdl">Publisher location</option>
 [% IF ( expanded_options ) %]
+            [% IF ( numbersphr) %]
+            <option value="sn,phr">Standard number</option>
+            [% ELSE %]
             <option value="sn">Standard number</option>
+            [% END %]
             <option value="nb">&nbsp;&nbsp;&nbsp;&nbsp; ISBN</option>
             <option value="ns">&nbsp;&nbsp;&nbsp;&nbsp; ISSN</option>
+            [% IF ( numbersphr) %]
             <option value="lcn,phr">&nbsp;&nbsp;&nbsp;&nbsp; Call number</option>
+            [% ELSE %]
+            <option value="lcn">&nbsp;&nbsp;&nbsp;&nbsp; Call number</option>
+            [% END %]
 [% ELSE %]
             <option value="nb">ISBN</option>
 [% END %]
@@ -109,7 +132,10 @@
         <input type="text" size="30" name="q" title="Enter search terms" value="" />
 [% IF ( expanded_options ) %]
         <!--   [% IF ( search_box.scan_index ) %]<input type="checkbox" name="scan" id="scan" value="1" /> Scan Indexes[% END %] -->
-        [% IF ( search_box.add_field ) %]<a href="JavaScript:add_field();" id="ButtonPlus" title="Add another field">[+]</a>[% END %]
+        [% IF ( !loop.first ) %]
+            <a class="ButtonPlus" name="ButtonPlus" title="Add another field" href="#">[+]</a>
+            <a class="ButtonLess" title="Remove field" href="#">[-]</a>
+        [% END %]
 [% END %]
         </p>
     [% END %]
@@ -132,7 +158,7 @@
 <fieldset>
 <!-- PUB RANGE OPTION -->
 <legend>Publication date range:</legend>
-<span>For example:  1999-2001.  You could also use "-1987" for everything published before 1987 or "2008-" for everything published after 2008.</span>
+<p>For example:  1999-2001.  You could also use "-1987" for everything published in and before 1987 or "2008-" for everything published in 2008 and after.</p>
 <input type="text" size="30" name="limit-yr" title="Enter search terms" value="" />
 </fieldset>
 <!-- /PUB RANGE OPTION -->
@@ -193,12 +219,16 @@
             <div id="subtypes" class="container"><fieldset>
             <legend>Subtype limits</legend><select name="limit" class="subtype">
                 <option value="" selected="selected" class="menuheader">Any audience</option>
-                    <option value="aud:a">Easy</option>
-                    <option value="aud:c">Juvenile</option>
-                    <option value="aud:d">Young adult</option>
+                    <option value="aud:a">Preschool</option>
+                    <option value="aud:b">Primary</option>
+                    <option value="aud:c">Pre-adolescent</option>
+                    <option value="aud:d">Adolescent</option>
                     <option value="aud:e">Adult</option>
+                    <option value="aud:f">Specialized</option>
+                    <option value="aud:g">General</option>
+                    <option value="aud:j">Juvenile</option>
                 </select>
-            
+
             <select name="limit" class="subtype">
                 <option value="" selected="selected" class="menuheader">Any content</option>
                     <option value="fic:1">Fiction</option>
@@ -264,7 +294,8 @@
 <!-- AVAILABILITY LIMITS -->
     [% UNLESS ( singleBranchMode ) %]
     <div id="location" class="container"><fieldset><legend>Location and availability: </legend>
-        
+
+        <label for="branchloop">Library:</label>
         <select name="limit" id="branchloop">
         <option value="">All libraries</option>
         [% FOREACH BranchesLoo IN BranchesLoop %]
@@ -291,8 +322,8 @@
 </div>
 <div class="yui-u">
 <!-- RANK LIMITS -->
-    <div id="sortby" class="container"><fieldset><legend>Sort by: </legend>
-        <select id="sort_by" name="sort_by">
+    <div id="sortby" class="container"><fieldset><legend>Sorting: </legend>
+        <label for="sort_by">Sort by:</label> <select id="sort_by" name="sort_by">
 [% INCLUDE 'resort_form.inc' %]
 </select></fieldset></div>
 <!-- RANK LIMITS -->
@@ -315,12 +346,22 @@
 <script type="text/javascript" language="javascript">
     /* This function allows to display a new field to search.
     */
-    function add_field() {
-        var ButtonPlus = document.getElementById('ButtonPlus');
-        var line       = ButtonPlus.parentNode;
-        line.parentNode.appendChild(line.cloneNode(true));
-        line.removeChild(ButtonPlus);
-    }
+    $(document).on("click", '.ButtonPlus', function(e) {
+        e.preventDefault();
+        $('.ButtonLess').show();
+        var thisLine = $(this).parent();
+        var newLine = thisLine.clone();
+        newLine.find('input').val('');
+        thisLine.after(newLine);
+    });
+
+    $(document).on("click", '.ButtonLess', function(e) {
+        e.preventDefault();
+        if($(this).parent().siblings().length <= 3 ) {
+           $('.ButtonLess').hide();
+        }
+        $(this).parent().remove();
+    });
 </script>
 
 </div>

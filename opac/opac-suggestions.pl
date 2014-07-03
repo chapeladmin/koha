@@ -27,11 +27,20 @@ use C4::Output;
 use C4::Suggestions;
 use C4::Koha;
 use C4::Dates;
+use C4::Scrubber;
 
 my $input           = new CGI;
 my $allsuggestions  = $input->param('showall');
 my $op              = $input->param('op');
 my $suggestion      = $input->Vars;
+my $negcaptcha      = $input->param('negcap');
+
+# If a spambot accidentally populates the 'negcap' field in the sugesstions form, then silently skip and return.
+if ($negcaptcha ) {
+    print $input->redirect("/cgi-bin/koha/opac-suggestions.pl");
+    exit;
+}
+
 delete $$suggestion{$_} foreach qw<op suggestedbyme>;
 $op = 'else' unless $op;
 
@@ -77,8 +86,13 @@ if ( $op eq "add_confirm" ) {
 		#some suggestion are answering the request Donot Add
 	}
 	else {
+		my $scrubber = C4::Scrubber->new();
+		foreach my $suggest (keys %$suggestion){
+		    $suggestion->{$suggest} = $scrubber->scrub($suggestion->{$suggest});
+		}
 		$$suggestion{'suggesteddate'}=C4::Dates->today;
 		$$suggestion{'branchcode'}= $input->param('branch') || C4::Context->userenv->{"branch"};
+
 		&NewSuggestion($suggestion);
 		# empty fields, to avoid filter in "SearchSuggestion"
 		$$suggestion{$_}='' foreach qw<title author publishercode copyrightdate place collectiontitle isbn STATUS>;
@@ -128,11 +142,15 @@ if ( C4::Context->preference("AllowPurchaseSuggestionBranchChoice") ) {
     my ( $borr ) = GetMemberDetails( $borrowernumber );
 
 # pass the pickup branch along....
-    my $branch = $input->param('branch') || $borr->{'branchcode'} || C4::Context->userenv->{branch} || '' ;
+    my $userbranch = '';
+    if (C4::Context->userenv && C4::Context->userenv->{'branch'}) {
+        $userbranch = C4::Context->userenv->{'branch'};
+    }
+    my $branch = $input->param('branch') || $borr->{'branchcode'} || $userbranch || '' ;
 
 # make branch selection options...
-    my $CGIbranchloop = GetBranchesLoop($branch);
-    $template->param( branch_loop => $CGIbranchloop );
+    my $branchloop = GetBranchesLoop($branch);
+    $template->param( branchloop => $branchloop );
 }
 
 $template->param(

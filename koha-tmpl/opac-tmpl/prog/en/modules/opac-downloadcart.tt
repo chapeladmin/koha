@@ -1,6 +1,7 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %][% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo; Download cart[% INCLUDE 'doc-head-close.inc' %]
 </head>
-<body id="opac-downloadcart" style="padding:1em;">
+<body id="opac-downloadcart" class="popup">
 <div id="userdownloadcart" class="container">[% IF ( format ) %]
     <p>Your download should begin automatically.</p>
 [% ELSE %]
@@ -9,9 +10,9 @@
 	<ol><li><label for="format">Download cart:</label>
         <select name="format" id="format">
         <option value="">-- Choose format --</option>
-	    <option value="iso2709">iso2709</option>
-	    <option value="ris">RIS</option>
-	    <option value="bibtex">BibTex</option>
+        <option value="ris">RIS (Zotero, EndNote, others)</option>
+        <option value="bibtex">BibTeX</option>
+        <option value="iso2709">MARC</option>
 	    [% FOREACH csv_profile IN csv_profiles %]
 	    <option value="[% csv_profile.export_format_id %]">CSV - [% csv_profile.profile %]</option>
 	    [% END %]

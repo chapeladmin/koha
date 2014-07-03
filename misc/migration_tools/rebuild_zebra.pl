@@ -5,14 +5,17 @@ use strict;
 
 use C4::Context;
 use Getopt::Long;
+use Fcntl qw(:flock);
 use File::Temp qw/ tempdir /;
 use File::Path;
 use C4::Biblio;
 use C4::AuthoritiesMarc;
 use C4::Items;
 use Koha::RecordProcessor;
+use XML::LibXML;
 
-# 
+use constant LOCK_FILENAME => 'rebuild..LCK';
+
 # script that checks zebradir structure & create directories & mandatory files if needed
 #
 #
@@ -21,6 +24,8 @@ $|=1; # flushes output
 # If the cron job starts us in an unreadable dir, we will break without
 # this.
 chdir $ENV{HOME} if (!(-r '.'));
+my $daemon_mode;
+my $daemon_sleep = 5;
 my $directory;
 my $nosanitize;
 my $skip_export;
@@ -31,46 +36,55 @@ my $biblios;
 my $authorities;
 my $noxml;
 my $noshadow;
-my $do_munge;
 my $want_help;
 my $as_xml;
 my $process_zebraqueue;
+my $process_zebraqueue_skip_deletes;
 my $do_not_clear_zebraqueue;
 my $length;
 my $where;
 my $offset;
+my $run_as_root;
+my $run_user = (getpwuid($<))[0];
+my $wait_for_lock = 0;
+my $use_flock;
+
 my $verbose_logging = 0;
 my $zebraidx_log_opt = " -v none,fatal,warn ";
 my $result = GetOptions(
+    'daemon'        => \$daemon_mode,
+    'sleep:i'       => \$daemon_sleep,
     'd:s'           => \$directory,
     'r|reset'       => \$reset,
     's'             => \$skip_export,
     'k'             => \$keep_export,
-    'I|skip-index'    => \$skip_index,
+    'I|skip-index'  => \$skip_index,
     'nosanitize'    => \$nosanitize,
     'b'             => \$biblios,
     'noxml'         => \$noxml,
     'w'             => \$noshadow,
-    'munge-config'  => \$do_munge,
     'a'             => \$authorities,
     'h|help'        => \$want_help,
-	'x'				=> \$as_xml,
+    'x'             => \$as_xml,
     'y'             => \$do_not_clear_zebraqueue,
     'z'             => \$process_zebraqueue,
-    'where:s'        => \$where,
-    'length:i'        => \$length,
+    'skip-deletes'  => \$process_zebraqueue_skip_deletes,
+    'where:s'       => \$where,
+    'length:i'      => \$length,
     'offset:i'      => \$offset,
-    'v+'             => \$verbose_logging,
+    'v+'            => \$verbose_logging,
+    'run-as-root'   => \$run_as_root,
+    'wait-for-lock' => \$wait_for_lock,
 );
-
 
 if (not $result or $want_help) {
     print_usage();
     exit 0;
 }
 
-if (not $biblios and not $authorities) {
-    my $msg = "Must specify -b or -a to reindex bibs or authorities\n";
+if( not defined $run_as_root and $run_user eq 'root') {
+    my $msg = "Warning: You are running this script as the user 'root'.\n";
+    $msg   .= "If this is intentional you must explicitly specify this using the -run-as-root switch\n";
     $msg   .= "Please do '$0 --help' to see usage.\n";
     die $msg;
 }
@@ -93,9 +107,33 @@ if ($process_zebraqueue and $do_not_clear_zebraqueue) {
     die $msg;
 }
 
+if ($reset) {
+    $noshadow = 1;
+}
+
 if ($noshadow) {
     $noshadow = ' -n ';
 }
+
+if ($daemon_mode) {
+    # incompatible flags handled above: help, reset, and do_not_clear_zebraqueue
+    if ($skip_export or $keep_export or $skip_index or
+          $where or $length or $offset) {
+        my $msg = "Cannot specify -s, -k, -I, -where, -length, or -offset with -daemon.\n";
+        $msg   .= "Please do '$0 --help' to see usage.\n";
+        die $msg;
+    }
+    $authorities = 1;
+    $biblios = 1;
+    $process_zebraqueue = 1;
+}
+
+if (not $biblios and not $authorities) {
+    my $msg = "Must specify -b or -a to reindex bibs or authorities\n";
+    $msg   .= "Please do '$0 --help' to see usage.\n";
+    die $msg;
+}
+
 
 #  -v is for verbose, which seems backwards here because of how logging is set
 #    on the CLI of zebraidx.  It works this way.  The default is to not log much
@@ -107,7 +145,7 @@ my $use_tempdir = 0;
 unless ($directory) {
     $use_tempdir = 1;
     $directory = tempdir(CLEANUP => ($keep_export ? 0 : 1));
-} 
+}
 
 
 my $biblioserverdir = C4::Context->zebraconfig('biblioserver')->{directory};
@@ -121,31 +159,76 @@ my $dbh = C4::Context->dbh;
 my ($biblionumbertagfield,$biblionumbertagsubfield) = &GetMarcFromKohaField("biblio.biblionumber","");
 my ($biblioitemnumbertagfield,$biblioitemnumbertagsubfield) = &GetMarcFromKohaField("biblioitems.biblioitemnumber","");
 
+# Protect again simultaneous update of the zebra index by using a lock file.
+# Create our own lock directory if its missing.  This shouild be created
+# by koha-zebra-ctl.sh or at system installation.  If the desired directory
+# does not exist and cannot be created, we fall back on /tmp - which will
+# always work.
+
+my ($lockfile, $LockFH);
+foreach (
+    C4::Context->config("zebra_lockdir"),
+    '/var/lock/zebra_' . C4::Context->config('database'),
+    '/tmp/zebra_' . C4::Context->config('database')
+) {
+    #we try three possibilities (we really want to lock :)
+    next if !$_;
+    ($LockFH, $lockfile) = _create_lockfile($_.'/rebuild');
+    last if defined $LockFH;
+}
+if( !defined $LockFH ) {
+    print "WARNING: Could not create lock file $lockfile: $!\n";
+    print "Please check your koha-conf.xml for ZEBRA_LOCKDIR.\n";
+    print "Verify file permissions for it too.\n";
+    $use_flock = 0; # we disable file locking now and will continue
+                    # without it
+                    # note that this mimics old behavior (before we used
+                    # the lockfile)
+};
+
 if ( $verbose_logging ) {
     print "Zebra configuration information\n";
     print "================================\n";
     print "Zebra biblio directory      = $biblioserverdir\n";
     print "Zebra authorities directory = $authorityserverdir\n";
     print "Koha directory              = $kohadir\n";
+    print "Lockfile                    = $lockfile\n" if $lockfile;
     print "BIBLIONUMBER in :     $biblionumbertagfield\$$biblionumbertagsubfield\n";
     print "BIBLIOITEMNUMBER in : $biblioitemnumbertagfield\$$biblioitemnumbertagsubfield\n";
     print "================================\n";
 }
 
-if ($do_munge) {
-    munge_config();
-}
+my $tester = XML::LibXML->new();
 
-if ($authorities) {
-    index_records('authority', $directory, $skip_export, $skip_index, $process_zebraqueue, $as_xml, $noxml, $nosanitize, $do_not_clear_zebraqueue, $verbose_logging, $zebraidx_log_opt, $authorityserverdir);
+# The main work is done here by calling do_one_pass().  We have added locking
+# avoid race conditions between full rebuilds and incremental updates either from
+# daemon mode or periodic invocation from cron.  The race can lead to an updated
+# record being overwritten by a rebuild if the update is applied after the export
+# by the rebuild and before the rebuild finishes (more likely to affect large
+# catalogs).
+#
+# We have chosen to exit immediately by default if we cannot obtain the lock
+# to prevent the potential for a infinite backlog from cron invocations, but an
+# option (wait-for-lock) is provided to let the program wait for the lock.
+# See http://bugs.koha-community.org/bugzilla3/show_bug.cgi?id=11078 for details.
+if ($daemon_mode) {
+    while (1) {
+        # For incremental updates, skip the update if the updates are locked
+        if (_flock($LockFH, LOCK_EX|LOCK_NB)) {
+            do_one_pass() if ( zebraqueue_not_empty() );
+            _flock($LockFH, LOCK_UN);
+        }
+        sleep $daemon_sleep;
+    }
 } else {
-    print "skipping authorities\n" if ( $verbose_logging );
-}
-
-if ($biblios) {
-    index_records('biblio', $directory, $skip_export, $skip_index, $process_zebraqueue, $as_xml, $noxml, $nosanitize, $do_not_clear_zebraqueue, $verbose_logging, $zebraidx_log_opt, $biblioserverdir);
-} else {
-    print "skipping biblios\n" if ( $verbose_logging );
+    # all one-off invocations
+    my $lock_mode = ($wait_for_lock) ? LOCK_EX : LOCK_EX|LOCK_NB;
+    if (_flock($LockFH, $lock_mode)) {
+        do_one_pass();
+        _flock($LockFH, LOCK_UN);
+    } else {
+        print "Skipping rebuild/update because flock failed on $lockfile: $!\n";
+    }
 }
 
 
@@ -175,33 +258,69 @@ if ($keep_export) {
     }
 }
 
+sub do_one_pass {
+    if ($authorities) {
+        index_records('authority', $directory, $skip_export, $skip_index, $process_zebraqueue, $as_xml, $noxml, $nosanitize, $do_not_clear_zebraqueue, $verbose_logging, $zebraidx_log_opt, $authorityserverdir);
+    } else {
+        print "skipping authorities\n" if ( $verbose_logging );
+    }
+
+    if ($biblios) {
+        index_records('biblio', $directory, $skip_export, $skip_index, $process_zebraqueue, $as_xml, $noxml, $nosanitize, $do_not_clear_zebraqueue, $verbose_logging, $zebraidx_log_opt, $biblioserverdir);
+    } else {
+        print "skipping biblios\n" if ( $verbose_logging );
+    }
+}
+
+# Check the zebra update queue and return true if there are records to process
+# This routine will handle each of -ab, -a, or -b, but in practice we force
+# -ab when in daemon mode.
+sub zebraqueue_not_empty {
+    my $where_str;
+
+    if ($authorities && $biblios) {
+        $where_str = 'done = 0;';
+    } elsif ($biblios) {
+        $where_str = 'server = "biblioserver" AND done = 0;';
+    } else {
+        $where_str = 'server = "authorityserver" AND done = 0;';
+    }
+    my $query =
+        $dbh->prepare('SELECT COUNT(*) FROM zebraqueue WHERE ' . $where_str );
+
+    $query->execute;
+    my $count = $query->fetchrow_arrayref->[0];
+    print "queued records: $count\n" if $verbose_logging > 0;
+    return $count > 0;
+}
+
 # This checks to see if the zebra directories exist under the provided path.
 # If they don't, then zebra is likely to spit the dummy. This returns true
 # if the directories had to be created, false otherwise.
 sub check_zebra_dirs {
-	my ($base) = shift() . '/';
-	my $needed_repairing = 0;
-	my @dirs = ( '', 'key', 'register', 'shadow', 'tmp' );
-	foreach my $dir (@dirs) {
-		my $bdir = $base . $dir;
+    my ($base) = shift() . '/';
+    my $needed_repairing = 0;
+    my @dirs = ( '', 'key', 'register', 'shadow', 'tmp' );
+    foreach my $dir (@dirs) {
+        my $bdir = $base . $dir;
         if (! -d $bdir) {
-        	$needed_repairing = 1;
-        	mkdir $bdir || die "Unable to create '$bdir': $!\n";
-        	print "$0: needed to create '$bdir'\n";
+            $needed_repairing = 1;
+            mkdir $bdir || die "Unable to create '$bdir': $!\n";
+            print "$0: needed to create '$bdir'\n";
         }
     }
     return $needed_repairing;
-}	# ----------  end of subroutine check_zebra_dirs  ----------
+}   # ----------  end of subroutine check_zebra_dirs  ----------
 
 sub index_records {
     my ($record_type, $directory, $skip_export, $skip_index, $process_zebraqueue, $as_xml, $noxml, $nosanitize, $do_not_clear_zebraqueue, $verbose_logging, $zebraidx_log_opt, $server_dir) = @_;
 
     my $num_records_exported = 0;
-    my $records_deleted;
+    my $records_deleted = {};
     my $need_reset = check_zebra_dirs($server_dir);
     if ($need_reset) {
-    	print "$0: found broken zebra server directories: forcing a rebuild\n";
-    	$reset = 1;
+        print "$0: found broken zebra server directories: forcing a rebuild\n";
+        $reset = 1;
     }
     if ($skip_export && $verbose_logging) {
         print "====================\n";
@@ -216,15 +335,20 @@ sub index_records {
         mkdir "$directory" unless (-d $directory);
         mkdir "$directory/$record_type" unless (-d "$directory/$record_type");
         if ($process_zebraqueue) {
-            my $entries = select_zebraqueue_records($record_type, 'deleted');
-            mkdir "$directory/del_$record_type" unless (-d "$directory/del_$record_type");
-            $records_deleted = generate_deleted_marc_records($record_type, $entries, "$directory/del_$record_type", $as_xml);
-            mark_zebraqueue_batch_done($entries);
+            my $entries;
+
+            unless ( $process_zebraqueue_skip_deletes ) {
+                $entries = select_zebraqueue_records($record_type, 'deleted');
+                mkdir "$directory/del_$record_type" unless (-d "$directory/del_$record_type");
+                $records_deleted = generate_deleted_marc_records($record_type, $entries, "$directory/del_$record_type", $as_xml);
+                mark_zebraqueue_batch_done($entries);
+            }
+
             $entries = select_zebraqueue_records($record_type, 'updated');
             mkdir "$directory/upd_$record_type" unless (-d "$directory/upd_$record_type");
-            $num_records_exported = export_marc_records_from_list($record_type, 
-                                                                  $entries, "$directory/upd_$record_type", $as_xml, $noxml, $records_deleted);
+            $num_records_exported = export_marc_records_from_list($record_type,$entries, "$directory/upd_$record_type", $as_xml, $noxml, $records_deleted);
             mark_zebraqueue_batch_done($entries);
+
         } else {
             my $sth = select_all_records($record_type);
             $num_records_exported = export_marc_records_from_sth($record_type, $sth, "$directory/$record_type", $as_xml, $noxml, $nosanitize);
@@ -251,7 +375,7 @@ sub index_records {
         }
         my $record_fmt = ($as_xml) ? 'marcxml' : 'iso2709' ;
         if ($process_zebraqueue) {
-            do_indexing($record_type, 'delete', "$directory/del_$record_type", $reset, $noshadow, $record_fmt, $zebraidx_log_opt)
+            do_indexing($record_type, 'adelete', "$directory/del_$record_type", $reset, $noshadow, $record_fmt, $zebraidx_log_opt)
                 if %$records_deleted;
             do_indexing($record_type, 'update', "$directory/upd_$record_type", $reset, $noshadow, $record_fmt, $zebraidx_log_opt)
                 if $num_records_exported;
@@ -269,7 +393,7 @@ sub select_zebraqueue_records {
     my $server = ($record_type eq 'biblio') ? 'biblioserver' : 'authorityserver';
     my $op = ($update_type eq 'deleted') ? 'recordDelete' : 'specialUpdate';
 
-    my $sth = $dbh->prepare("SELECT id, biblio_auth_number 
+    my $sth = $dbh->prepare("SELECT id, biblio_auth_number
                              FROM zebraqueue
                              WHERE server = ?
                              AND   operation = ?
@@ -363,7 +487,7 @@ sub export_marc_records_from_sth {
                     $record->encoding('UTF-8');
                     my @itemsrecord;
                     foreach my $item (@items){
-                        my $record = Item2Marc($item, $record_number);                        
+                        my $record = Item2Marc($item, $record_number);
                         push @itemsrecord, $record->field($itemtag);
                     }
                     $record->insert_fields_ordered(@itemsrecord);
@@ -373,8 +497,18 @@ sub export_marc_records_from_sth {
                         substr($itemsxml, index($itemsxml, "</leader>\n", 0) + 10);
                 }
             }
+            # extra test to ensure that result is valid XML; otherwise
+            # Zebra won't parse it in DOM mode
+            eval {
+                my $doc = $tester->parse_string($marcxml);
+            };
+            if ($@) {
+                warn "Error exporting record $record_number ($record_type): $@\n";
+                next;
+            }
             if ( $marcxml ) {
-                print {$fh} $marcxml if $marcxml;
+                $marcxml =~ s!<\?xml version="1.0" encoding="UTF-8"\?>\n!!;
+                print {$fh} $marcxml;
                 $num_exported++;
             }
             next;
@@ -385,6 +519,12 @@ sub export_marc_records_from_sth {
                 my $rec;
                 if ($as_xml) {
                     $rec = $marc->as_xml_record(C4::Context->preference('marcflavour'));
+                    eval {
+                        my $doc = $tester->parse_string($rec);
+                    };
+                    if ($@) {
+                        die "invalid XML: $@";
+                    }
                     $rec =~ s!<\?xml version="1.0" encoding="UTF-8"\?>\n!!;
                 } else {
                     $rec = $marc->as_usmarc();
@@ -393,7 +533,8 @@ sub export_marc_records_from_sth {
                 $num_exported++;
             };
             if ($@) {
-              warn "Error exporting record $record_number ($record_type) ".($noxml ? "not XML" : "XML");
+                warn "Error exporting record $record_number ($record_type) ".($noxml ? "not XML" : "XML");
+                warn "... specific error is $@" if $verbose_logging;
             }
         }
     }
@@ -437,7 +578,6 @@ sub export_marc_records_from_list {
             if ($@) {
               warn "Error exporting record $record_number ($record_type) ".($noxml ? "not XML" : "XML");
             }
-            $num_exported++;
         }
     }
     print "\nRecords exported: $num_exported\n" if ( $verbose_logging );
@@ -485,14 +625,14 @@ sub generate_deleted_marc_records {
     print {$fh} '</collection>' if (include_xml_wrapper($as_xml, $record_type));
     close $fh;
     return $records_deleted;
-    
+
 
 }
 
 sub get_corrected_marc_record {
     my ($record_type, $record_number, $noxml) = @_;
 
-    my $marc = get_raw_marc_record($record_type, $record_number, $noxml); 
+    my $marc = get_raw_marc_record($record_type, $record_number, $noxml);
 
     if (defined $marc) {
         fix_leader($marc);
@@ -512,8 +652,8 @@ sub get_corrected_marc_record {
 
 sub get_raw_marc_record {
     my ($record_type, $record_number, $noxml) = @_;
-  
-    my $marc; 
+
+    my $marc;
     if ($record_type eq 'biblio') {
         if ($noxml) {
             my $fetch_sth = $dbh->prepare_cached("SELECT marc FROM biblioitems WHERE biblionumber = ?");
@@ -556,7 +696,7 @@ sub fix_leader {
     # force them to be recalculated correct when
     # the $marc->as_usmarc() or $marc->as_xml() is called.
     # But why is this necessary?  It would be a serious bug
-    # in MARC::Record (definitely) and MARC::File::XML (arguably) 
+    # in MARC::Record (definitely) and MARC::File::XML (arguably)
     # if they are emitting incorrect leader values.
     my $marc = shift;
 
@@ -575,7 +715,7 @@ sub fix_biblio_ids {
     my $biblioitemnumber;
     if (@_) {
         $biblioitemnumber = shift;
-    } else {    
+    } else {
         my $sth = $dbh->prepare(
             "SELECT biblioitemnumber FROM biblioitems WHERE biblionumber=?");
         $sth->execute($biblionumber);
@@ -593,7 +733,7 @@ sub fix_biblio_ids {
     #    present in the MARC::Record object ought to be part of GetMarcBiblio.
     #
     # On the other hand, this better for now than what rebuild_zebra.pl used to
-    # do, which was duplicate the code for inserting the biblionumber 
+    # do, which was duplicate the code for inserting the biblionumber
     # and biblioitemnumber
     C4::Biblio::_koha_marc_update_bib_ids($marc, '', $biblionumber, $biblioitemnumber);
 
@@ -647,27 +787,83 @@ sub do_indexing {
 
 }
 
+sub _flock {
+    # test if flock is present; if so, use it; if not, return true
+    # op refers to the official flock operations including LOCK_EX,
+    # LOCK_UN, etc.
+    # combining LOCK_EX with LOCK_NB returns immediately
+    my ($fh, $op)= @_;
+    if( !defined($use_flock) ) {
+        #check if flock is present; if not, you will have a fatal error
+        my $lock_acquired = eval { flock($fh, $op) };
+        # assuming that $fh and $op are fine(..), an undef $lock_acquired
+        # means no flock
+        $use_flock = defined($lock_acquired) ? 1 : 0;
+        print "Warning: flock could not be used!\n" if $verbose_logging && !$use_flock;
+        return 1 if !$use_flock;
+        return $lock_acquired;
+    } else {
+        return 1 if !$use_flock;
+        return flock($fh, $op);
+    }
+}
+
+sub _create_lockfile { #returns undef on failure
+    my $dir= shift;
+    unless (-d $dir) {
+        eval { mkpath($dir, 0, oct(755)) };
+        return if $@;
+    }
+    return if !open my $fh, q{>}, $dir.'/'.LOCK_FILENAME;
+    return ( $fh, $dir.'/'.LOCK_FILENAME );
+}
+
 sub print_usage {
     print <<_USAGE_;
 $0: reindex MARC bibs and/or authorities in Zebra.
 
 Use this batch job to reindex all biblio or authority
-records in your Koha database.  This job is useful
-only if you are using Zebra; if you are using the 'NoZebra'
-mode, this job should not be used.
+records in your Koha database.
 
 Parameters:
+
     -b                      index bibliographic records
 
     -a                      index authority records
+
+    -daemon                 Run in daemon mode.  The program will loop checking
+                            for entries on the zebraqueue table, processing
+                            them incrementally if present, and then sleep
+                            for a few seconds before repeating the process
+                            Checking the zebraqueue table is done with a cheap
+                            SQL query.  This allows for near realtime update of
+                            the zebra search index with low system overhead.
+                            Use -sleep to control the checking interval.
+
+                            Daemon mode implies -z, -a, -b.  The program will
+                            refuse to start if options are present that do not
+                            make sense while running as an incremental update
+                            daemon (e.g. -r or -offset).
+
+    -sleep 10               Seconds to sleep between checks of the zebraqueue
+                            table in daemon mode.  The default is 5 seconds.
 
     -z                      select only updated and deleted
                             records marked in the zebraqueue
                             table.  Cannot be used with -r
                             or -s.
 
+    --skip-deletes          only select record updates, not record
+                            deletions, to avoid potential excessive
+                            I/O when zebraidx processes deletions.
+                            If this option is used for normal indexing,
+                            a cronjob should be set up to run
+                            rebuild_zebra.pl -z without --skip-deletes
+                            during off hours.
+                            Only effective with -z.
+
     -r                      clear Zebra index before
-                            adding records to index
+                            adding records to index. Implies -w.
 
     -d                      Temporary directory for indexing.
                             If not specified, one is automatically
@@ -678,7 +874,7 @@ Parameters:
     -k                      Do not delete export directory.
 
     -s                      Skip export.  Used if you have
-                            already exported the records 
+                            already exported the records
                             in a previous run.
 
     -noxml                  index from ISO MARC blob
@@ -688,7 +884,7 @@ Parameters:
 
     -x                      export and index as xml instead of is02709 (biblios only).
                             use this if you might have records > 99,999 chars,
-							
+
     -nosanitize             export biblio/authority records directly from DB marcxml
                             field without sanitizing records. It speed up
                             dump process but could fail if DB contains badly
@@ -700,10 +896,10 @@ Parameters:
                             after doing batch indexing, zebraqueue should be
                             marked done for the affected record type(s) so that
                             a running zebraqueue_daemon doesn't try to reindex
-                            the same records - specify -y to override this.  
+                            the same records - specify -y to override this.
                             Cannot be used with -z.
 
-    -v                      increase the amount of logging.  Normally only 
+    -v                      increase the amount of logging.  Normally only
                             warnings and errors from the indexing are shown.
                             Use log level 2 (-v -v) to include all Zebra logs.
 
@@ -714,382 +910,14 @@ Parameters:
     --where                 let you specify a WHERE query, like itemtype='BOOK'
                             or something like that
 
-    --munge-config          Deprecated option to try
-                            to fix Zebra config files.
+    --run-as-root           explicitily allow script to run as 'root' user
+
+    --wait-for-lock         when not running in daemon mode, the default
+                            behavior is to abort a rebuild if the rebuild
+                            lock is busy.  This option will cause the program
+                            to wait for the lock to free and then continue
+                            processing the rebuild request,
+
     --help or -h            show this message.
 _USAGE_
-}
-
-# FIXME: the following routines are deprecated and 
-# will be removed once it is determined whether
-# a script to fix Zebra configuration files is 
-# actually needed.
-sub munge_config {
-#
-# creating zebra-biblios.cfg depending on system
-#
-
-# getting zebraidx directory
-my $zebraidxdir;
-foreach (qw(/usr/local/bin/zebraidx
-        /opt/bin/zebraidx
-        /usr/bin/zebraidx
-        )) {
-    if ( -f $_ ) {
-        $zebraidxdir=$_;
-    }
-}
-
-unless ($zebraidxdir) {
-    print qq|
-    ERROR: could not find zebraidx directory
-    ERROR: Either zebra is not installed,
-    ERROR: or it's in a directory I don't checked.
-    ERROR: do a which zebraidx and edit this file to add the result you get
-|;
-    exit;
-}
-$zebraidxdir =~ s/\/bin\/.*//;
-print "Info : zebra is in $zebraidxdir \n";
-
-# getting modules directory
-my $modulesdir;
-foreach (qw(/usr/local/lib/idzebra-2.0/modules/mod-grs-xml.so
-            /usr/local/lib/idzebra/modules/mod-grs-xml.so
-            /usr/lib/idzebra/modules/mod-grs-xml.so
-            /usr/lib/idzebra-2.0/modules/mod-grs-xml.so
-        )) {
-    if ( -f $_ ) {
-        $modulesdir=$_;
-    }
-}
-
-unless ($modulesdir) {
-    print qq|
-    ERROR: could not find mod-grs-xml.so directory
-    ERROR: Either zebra is not properly compiled (libxml2 is not setup and you don t have mod-grs-xml.so,
-    ERROR: or it's in a directory I don't checked.
-    ERROR: find where mod-grs-xml.so is and edit this file to add the result you get
-|;
-    exit;
-}
-$modulesdir =~ s/\/modules\/.*//;
-print "Info: zebra modules dir : $modulesdir\n";
-
-# getting tab directory
-my $tabdir;
-foreach (qw(/usr/local/share/idzebra/tab/explain.att
-            /usr/local/share/idzebra-2.0/tab/explain.att
-            /usr/share/idzebra/tab/explain.att
-            /usr/share/idzebra-2.0/tab/explain.att
-        )) {
-    if ( -f $_ ) {
-        $tabdir=$_;
-    }
-}
-
-unless ($tabdir) {
-    print qq|
-    ERROR: could not find explain.att directory
-    ERROR: Either zebra is not properly compiled,
-    ERROR: or it's in a directory I don't checked.
-    ERROR: find where explain.att is and edit this file to add the result you get
-|;
-    exit;
-}
-$tabdir =~ s/\/tab\/.*//;
-print "Info: tab dir : $tabdir\n";
-
-#
-# AUTHORITIES creating directory structure
-#
-my $created_dir_or_file = 0;
-if ($authorities) {
-    if ( $verbose_logging ) {
-        print "====================\n";
-        print "checking directories & files for authorities\n";
-        print "====================\n";
-    }
-    unless (-d "$authorityserverdir") {
-        system("mkdir -p $authorityserverdir");
-        print "Info: created $authorityserverdir\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$authorityserverdir/lock") {
-        mkdir "$authorityserverdir/lock";
-        print "Info: created $authorityserverdir/lock\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$authorityserverdir/register") {
-        mkdir "$authorityserverdir/register";
-        print "Info: created $authorityserverdir/register\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$authorityserverdir/shadow") {
-        mkdir "$authorityserverdir/shadow";
-        print "Info: created $authorityserverdir/shadow\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$authorityserverdir/tab") {
-        mkdir "$authorityserverdir/tab";
-        print "Info: created $authorityserverdir/tab\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$authorityserverdir/key") {
-        mkdir "$authorityserverdir/key";
-        print "Info: created $authorityserverdir/key\n";
-        $created_dir_or_file++;
-    }
-    
-    unless (-d "$authorityserverdir/etc") {
-        mkdir "$authorityserverdir/etc";
-        print "Info: created $authorityserverdir/etc\n";
-        $created_dir_or_file++;
-    }
-    
-    #
-    # AUTHORITIES : copying mandatory files
-    #
-    # the record model, depending on marc flavour
-    unless (-f "$authorityserverdir/tab/record.abs") {
-        if (C4::Context->preference("marcflavour") eq "UNIMARC") {
-            system("cp -f $kohadir/etc/zebradb/marc_defs/unimarc/authorities/record.abs $authorityserverdir/tab/record.abs");
-            print "Info: copied record.abs for UNIMARC\n";
-        } else {
-            system("cp -f $kohadir/etc/zebradb/marc_defs/marc21/authorities/record.abs $authorityserverdir/tab/record.abs");
-            print "Info: copied record.abs for USMARC\n";
-        }
-        $created_dir_or_file++;
-    }
-    unless (-f "$authorityserverdir/tab/sort-string-utf.chr") {
-        system("cp -f $kohadir/etc/zebradb/lang_defs/fr/sort-string-utf.chr $authorityserverdir/tab/sort-string-utf.chr");
-        print "Info: copied sort-string-utf.chr\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$authorityserverdir/tab/word-phrase-utf.chr") {
-        system("cp -f $kohadir/etc/zebradb/lang_defs/fr/sort-string-utf.chr $authorityserverdir/tab/word-phrase-utf.chr");
-        print "Info: copied word-phase-utf.chr\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$authorityserverdir/tab/auth1.att") {
-        system("cp -f $kohadir/etc/zebradb/authorities/etc/bib1.att $authorityserverdir/tab/auth1.att");
-        print "Info: copied auth1.att\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$authorityserverdir/tab/default.idx") {
-        system("cp -f $kohadir/etc/zebradb/etc/default.idx $authorityserverdir/tab/default.idx");
-        print "Info: copied default.idx\n";
-        $created_dir_or_file++;
-    }
-    
-    unless (-f "$authorityserverdir/etc/ccl.properties") {
-#         system("cp -f $kohadir/etc/zebradb/ccl.properties ".C4::Context->zebraconfig('authorityserver')->{ccl2rpn});
-        system("cp -f $kohadir/etc/zebradb/ccl.properties $authorityserverdir/etc/ccl.properties");
-        print "Info: copied ccl.properties\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$authorityserverdir/etc/pqf.properties") {
-#         system("cp -f $kohadir/etc/zebradb/pqf.properties ".C4::Context->zebraconfig('authorityserver')->{ccl2rpn});
-        system("cp -f $kohadir/etc/zebradb/pqf.properties $authorityserverdir/etc/pqf.properties");
-        print "Info: copied pqf.properties\n";
-        $created_dir_or_file++;
-    }
-    
-    #
-    # AUTHORITIES : copying mandatory files
-    #
-    unless (-f C4::Context->zebraconfig('authorityserver')->{config}) {
-    open my $zd, '>:encoding(UTF-8)' ,C4::Context->zebraconfig('authorityserver')->{config};
-    print {$zd} "
-# generated by KOHA/misc/migration_tools/rebuild_zebra.pl 
-profilePath:\${srcdir:-.}:$authorityserverdir/tab/:$tabdir/tab/:\${srcdir:-.}/tab/
-
-encoding: UTF-8
-# Files that describe the attribute sets supported.
-attset: auth1.att
-attset: explain.att
-attset: gils.att
-
-modulePath:$modulesdir/modules/
-# Specify record type
-iso2709.recordType:grs.marcxml.record
-recordType:grs.xml
-recordId: (auth1,Local-Number)
-storeKeys:1
-storeData:1
-
-
-# Lock File Area
-lockDir: $authorityserverdir/lock
-perm.anonymous:r
-perm.kohaadmin:rw
-register: $authorityserverdir/register:4G
-shadow: $authorityserverdir/shadow:4G
-
-# Temp File area for result sets
-setTmpDir: $authorityserverdir/tmp
-
-# Temp File area for index program
-keyTmpDir: $authorityserverdir/key
-
-# Approx. Memory usage during indexing
-memMax: 40M
-rank:rank-1
-    ";
-        print "Info: creating zebra-authorities.cfg\n";
-        $created_dir_or_file++;
-    }
-    
-    if ($created_dir_or_file) {
-        print "Info: created : $created_dir_or_file directories & files\n";
-    } else {
-        print "Info: file & directories OK\n";
-    }
-    
-}
-if ($biblios) {
-    if ( $verbose_logging ) {
-        print "====================\n";
-        print "checking directories & files for biblios\n";
-        print "====================\n";
-    }
-
-    #
-    # BIBLIOS : creating directory structure
-    #
-    unless (-d "$biblioserverdir") {
-        system("mkdir -p $biblioserverdir");
-        print "Info: created $biblioserverdir\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$biblioserverdir/lock") {
-        mkdir "$biblioserverdir/lock";
-        print "Info: created $biblioserverdir/lock\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$biblioserverdir/register") {
-        mkdir "$biblioserverdir/register";
-        print "Info: created $biblioserverdir/register\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$biblioserverdir/shadow") {
-        mkdir "$biblioserverdir/shadow";
-        print "Info: created $biblioserverdir/shadow\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$biblioserverdir/tab") {
-        mkdir "$biblioserverdir/tab";
-        print "Info: created $biblioserverdir/tab\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$biblioserverdir/key") {
-        mkdir "$biblioserverdir/key";
-        print "Info: created $biblioserverdir/key\n";
-        $created_dir_or_file++;
-    }
-    unless (-d "$biblioserverdir/etc") {
-        mkdir "$biblioserverdir/etc";
-        print "Info: created $biblioserverdir/etc\n";
-        $created_dir_or_file++;
-    }
-    
-    #
-    # BIBLIOS : copying mandatory files
-    #
-    # the record model, depending on marc flavour
-    unless (-f "$biblioserverdir/tab/record.abs") {
-        if (C4::Context->preference("marcflavour") eq "UNIMARC") {
-            system("cp -f $kohadir/etc/zebradb/marc_defs/unimarc/biblios/record.abs $biblioserverdir/tab/record.abs");
-            print "Info: copied record.abs for UNIMARC\n";
-        } else {
-            system("cp -f $kohadir/etc/zebradb/marc_defs/marc21/biblios/record.abs $biblioserverdir/tab/record.abs");
-            print "Info: copied record.abs for USMARC\n";
-        }
-        $created_dir_or_file++;
-    }
-    unless (-f "$biblioserverdir/tab/sort-string-utf.chr") {
-        system("cp -f $kohadir/etc/zebradb/lang_defs/fr/sort-string-utf.chr $biblioserverdir/tab/sort-string-utf.chr");
-        print "Info: copied sort-string-utf.chr\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$biblioserverdir/tab/word-phrase-utf.chr") {
-        system("cp -f $kohadir/etc/zebradb/lang_defs/fr/sort-string-utf.chr $biblioserverdir/tab/word-phrase-utf.chr");
-        print "Info: copied word-phase-utf.chr\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$biblioserverdir/tab/bib1.att") {
-        system("cp -f $kohadir/etc/zebradb/biblios/etc/bib1.att $biblioserverdir/tab/bib1.att");
-        print "Info: copied bib1.att\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$biblioserverdir/tab/default.idx") {
-        system("cp -f $kohadir/etc/zebradb/etc/default.idx $biblioserverdir/tab/default.idx");
-        print "Info: copied default.idx\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$biblioserverdir/etc/ccl.properties") {
-#         system("cp -f $kohadir/etc/zebradb/ccl.properties ".C4::Context->zebraconfig('biblioserver')->{ccl2rpn});
-        system("cp -f $kohadir/etc/zebradb/ccl.properties $biblioserverdir/etc/ccl.properties");
-        print "Info: copied ccl.properties\n";
-        $created_dir_or_file++;
-    }
-    unless (-f "$biblioserverdir/etc/pqf.properties") {
-#         system("cp -f $kohadir/etc/zebradb/pqf.properties ".C4::Context->zebraconfig('biblioserver')->{ccl2rpn});
-        system("cp -f $kohadir/etc/zebradb/pqf.properties $biblioserverdir/etc/pqf.properties");
-        print "Info: copied pqf.properties\n";
-        $created_dir_or_file++;
-    }
-    
-    #
-    # BIBLIOS : copying mandatory files
-    #
-    unless (-f C4::Context->zebraconfig('biblioserver')->{config}) {
-    open my $zd, '>:encoding(UTF-8)', C4::Context->zebraconfig('biblioserver')->{config};
-    print {$zd} "
-# generated by KOHA/misc/migrtion_tools/rebuild_zebra.pl 
-profilePath:\${srcdir:-.}:$biblioserverdir/tab/:$tabdir/tab/:\${srcdir:-.}/tab/
-
-encoding: UTF-8
-# Files that describe the attribute sets supported.
-attset:bib1.att
-attset:explain.att
-attset:gils.att
-
-modulePath:$modulesdir/modules/
-# Specify record type
-iso2709.recordType:grs.marcxml.record
-recordType:grs.xml
-recordId: (bib1,Local-Number)
-storeKeys:1
-storeData:1
-
-
-# Lock File Area
-lockDir: $biblioserverdir/lock
-perm.anonymous:r
-perm.kohaadmin:rw
-register: $biblioserverdir/register:4G
-shadow: $biblioserverdir/shadow:4G
-
-# Temp File area for result sets
-setTmpDir: $biblioserverdir/tmp
-
-# Temp File area for index program
-keyTmpDir: $biblioserverdir/key
-
-# Approx. Memory usage during indexing
-memMax: 40M
-rank:rank-1
-    ";
-        print "Info: creating zebra-biblios.cfg\n";
-        $created_dir_or_file++;
-    }
-    
-    if ($created_dir_or_file) {
-        print "Info: created : $created_dir_or_file directories & files\n";
-    } else {
-        print "Info: file & directories OK\n";
-    }
-    
-}
 }

@@ -16,7 +16,7 @@
         var form = document.f_pop;
         h4_result = document.getElementById("h4_result");
         tr_result = document.getElementById("tr_result");
-        objXmlControlField = new xmlControlField('[% tagfield %]', 'f_pop', document.getElementById('material_type'), document.getElementById('table_material_types'), 'h4_result', 'tr_result', '', '[% themelang %]');
+        objXmlControlField = new xmlControlField('[% tagfield %]', 'f_pop', document.getElementById('material_type'), document.getElementById('table_material_types'), 'h4_result', 'tr_result', '', '[% themelang %]', '[% marcflavour %]');
         objXmlControlField.loadXmlValues();
         renderResult(tr_result, (form.result.value != "")?form.result.value:returnValueParam("result"));
         [% END %]
@@ -24,7 +24,7 @@
 
     function changeTypeofMaterial(form)
     {
-        if (form.material_type.options[form.material_type.selectedIndex].value != "" && confirm('Show values for \'' + form.material_type.options[form.material_type.selectedIndex].text + '\' material type?')) {
+        if (form.material_type.options[form.material_type.selectedIndex].value != "" && confirm(_("Show values for '%s' material type?").format(form.material_type.options[form.material_type.selectedIndex].text))) {
             objXmlControlField.setIdMaterial(form.material_type.options[form.material_type.selectedIndex].value);
             objXmlControlField.renderTemplate();
             renderResult(tr_result, form.result.value, true);

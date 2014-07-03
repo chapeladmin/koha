@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use diagnostics;
 
-use InstallAuth;
+use C4::InstallAuth;
 use CGI;
 use IPC::Cmd;
 
@@ -189,7 +189,6 @@ elsif ( $step && $step == 3 ) {
     }
     elsif ( $op && $op eq 'finish' ) {
         $installer->set_version_syspref();
-        $installer->set_indexing_engine(0); # use Zebra
 
         # Installation is finished.
         # We just deny anybody access to install
@@ -242,7 +241,7 @@ elsif ( $step && $step == 3 ) {
         $template->param( "frameworksloop" => $fwklist );
         $template->param( "marcflavour" => ucfirst($marcflavour));
 
-        my ($sample_defaulted_to_en, $levellist) = $installer->sample_data_sql_list($langchoice, $marcflavour);
+        my ($sample_defaulted_to_en, $levellist) = $installer->sample_data_sql_list($langchoice);
         $template->param( "en_sample_data" => $sample_defaulted_to_en);
         $template->param( "levelloop" => $levellist );
         $template->param( "$op"       => 1 );
@@ -383,8 +382,6 @@ elsif ( $step && $step == 3 ) {
                                 );
             }
         }
-
-        $dbh->disconnect;
     }
 }
 else {
@@ -400,8 +397,8 @@ else {
         if ( $rq->execute ) {
             my ($version) = $rq->fetchrow;
             if ($version) {
-                $query->redirect("install.pl?step=3");
-				exit;
+                print $query->redirect("/cgi-bin/koha/installer/install.pl?step=3");
+                exit;
             }
         }
     }

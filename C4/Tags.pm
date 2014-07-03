@@ -26,28 +26,30 @@ use Exporter;
 use C4::Context;
 use C4::Debug;
 #use Data::Dumper;
+use constant TAG_FIELDS => qw(tag_id borrowernumber biblionumber term language date_created);
+use constant TAG_SELECT => "SELECT " . join(',', TAG_FIELDS) . "\n FROM   tags_all\n";
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-use vars qw($ext_dict $select_all @fields);
+our $ext_dict;
 
 BEGIN {
     $VERSION = 3.07.00.049;
 	@ISA = qw(Exporter);
-	@EXPORT_OK = qw(
-		&get_tag &get_tags &get_tag_rows
-		&add_tags &add_tag
-		&delete_tag_row_by_id
-		&remove_tag
-		&delete_tag_rows_by_ids
-		&rectify_weights
-		&get_approval_rows
-		&blacklist
-		&whitelist
-		&is_approved
-		&approval_counts
-		&get_count_by_tag_status
-		&get_filters
-	);
+    @EXPORT_OK = qw(
+      &get_tag &get_tags &get_tag_rows
+      &add_tags &add_tag
+      &delete_tag_row_by_id
+      &remove_tag
+      &delete_tag_rows_by_ids
+      &get_approval_rows
+      &blacklist
+      &whitelist
+      &is_approved
+      &approval_counts
+      &get_count_by_tag_status
+      &get_filters
+      stratify_tags
+    );
 	# %EXPORT_TAGS = ();
 	$ext_dict = C4::Context->preference('TagsExternalDictionary');
 	if ($debug) {
@@ -61,11 +63,15 @@ BEGIN {
 	}
 }
 
+=head1 C4::Tags.pm - Support for user tagging of biblios.
+
+More verose debugging messages are sent in the presence of non-zero $ENV{"DEBUG"}.
+
+=cut
+
 INIT {
     $ext_dict and $Lingua::Ispell::path = $ext_dict;
     $debug and print STDERR "\$Lingua::Ispell::path = $Lingua::Ispell::path\n";
-	@fields = qw(tag_id borrowernumber biblionumber term language date_created);
-	$select_all = "SELECT " . join(',',@fields) . "\n FROM   tags_all\n";
 }
 
 sub get_filters {
@@ -175,7 +181,7 @@ sub delete_tag_rows_by_ids {
 
 sub get_tag_rows {
 	my $hash = shift || {};
-	my @ok_fields = @fields;
+    my @ok_fields = TAG_FIELDS;
 	push @ok_fields, 'limit';	# push the limit! :)
 	my $wheres;
 	my $limit  = "";
@@ -202,7 +208,7 @@ sub get_tag_rows {
 			push @exe_args, $hash->{$key};
 		}
 	}
-	my $query = $select_all . ($wheres||'') . $limit;
+    my $query = TAG_SELECT . ($wheres||'') . $limit;
 	$debug and print STDERR "get_tag_rows query:\n $query\n",
 							"get_tag_rows query args: ", join(',', @exe_args), "\n";
 	my $sth = C4::Context->dbh->prepare($query);
@@ -485,36 +491,9 @@ sub add_tag_index {
 
 sub get_tag {		# by tag_id
 	(@_) or return;
-	my $sth = C4::Context->dbh->prepare("$select_all WHERE tag_id = ?");
+    my $sth = C4::Context->dbh->prepare(TAG_SELECT . "WHERE tag_id = ?");
 	$sth->execute(shift);
 	return $sth->fetchrow_hashref;
-}
-
-sub rectify_weights {
-	my $dbh = C4::Context->dbh;
-	my $sth;
-	my $query = "
-	SELECT term,biblionumber,count(*) as count
-	FROM   tags_all
-	";
-	(@_) and $query .= " WHERE term =? ";
-	$query .= " GROUP BY term,biblionumber ";
-	$sth = $dbh->prepare($query);
-	if (@_) {
-		$sth->execute(shift);
-	} else {
-		$sth->execute();
-	}
-	my $results = $sth->fetchall_arrayref({}) or return;
-	my %tally = ();
-	foreach (@$results) {
-		_set_weight($_->{count},$_->{term},$_->{biblionumber});
-		$tally{$_->{term}} += $_->{count};
-	}
-	foreach (keys %tally) {
-		_set_weight_total($tally{$_},$_);
-	}
-	return ($results,\%tally);
 }
 
 sub increment_weights {
@@ -594,12 +573,45 @@ sub add_tag {	# biblionumber,term,[borrowernumber,approvernumber]
 	}
 }
 
+# This takes a set of tags, as returned by C<get_approval_rows> and divides
+# them up into a number of "strata" based on their weight. This is useful
+# to display them in a number of different sizes.
+#
+# Usage:
+#   ($min, $max) = stratify_tags($strata, $tags);
+# $stratum: the number of divisions you want
+# $tags: the tags, as provided by get_approval_rows
+# $min: the minumum stratum value
+# $max: the maximum stratum value. This may be the same as $min if there
+# is only one weight. Beware of divide by zeros.
+# This will add a field to the tag called "stratum" containing the calculated
+# value.
+sub stratify_tags {
+    my ( $strata, $tags ) = @_;
+
+    my ( $min, $max );
+    foreach (@$tags) {
+        my $w = $_->{weight_total};
+        $min = $w if ( !defined($min) || $min > $w );
+        $max = $w if ( !defined($max) || $max < $w );
+    }
+
+    # normalise min to zero
+    $max = $max - $min;
+    my $orig_min = $min;
+    $min = 0;
+
+    # if min and max are the same, just make it 1
+    my $span = ( $strata - 1 ) / ( $max || 1 );
+    foreach (@$tags) {
+        my $w = $_->{weight_total};
+        $_->{stratum} = int( ( $w - $orig_min ) * $span );
+    }
+    return ( $min, $max );
+}
+
 1;
 __END__
-
-=head1 C4::Tags.pm - Support for user tagging of biblios.
-
-More verose debugging messages are sent in the presence of non-zero $ENV{"DEBUG"}.
 
 =head2 add_tag(biblionumber,term[,borrowernumber])
 

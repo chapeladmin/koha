@@ -98,23 +98,23 @@ sub GetBookSellerFromId {
 
 =head2 GetBooksellersWithLateOrders
 
-%results = GetBooksellersWithLateOrders($delay);
+%results = GetBooksellersWithLateOrders( $delay, $estimateddeliverydatefrom, $estimateddeliverydateto );
 
 Searches for suppliers with late orders.
 
 =cut
 
 sub GetBooksellersWithLateOrders {
-    my ( $delay, $branch, $estimateddeliverydatefrom, $estimateddeliverydateto ) = @_;    # FIXME: Branch argument unused.
+    my ( $delay, $estimateddeliverydatefrom, $estimateddeliverydateto ) = @_;
     my $dbh = C4::Context->dbh;
 
     # FIXME NOT quite sure that this operation is valid for DBMs different from Mysql, HOPING so
     # should be tested with other DBMs
 
-    my $strsth;
+    my $query;
     my @query_params = ();
     my $dbdriver = C4::Context->config("db_scheme") || "mysql";
-    $strsth = "
+    $query = "
         SELECT DISTINCT aqbasket.booksellerid, aqbooksellers.name
         FROM aqorders LEFT JOIN aqbasket ON aqorders.basketno=aqbasket.basketno
         LEFT JOIN aqbooksellers ON aqbasket.booksellerid = aqbooksellers.id
@@ -125,27 +125,33 @@ sub GetBooksellersWithLateOrders {
             )
             AND aqorders.rrp <> 0
             AND aqorders.ecost <> 0
-            AND aqorders.quantity - IFNULL(aqorders.quantityreceived,0) <> 0
+            AND aqorders.quantity - COALESCE(aqorders.quantityreceived,0) <> 0
             AND aqbasket.closedate IS NOT NULL
     ";
-    if ( defined $delay ) {
-        $strsth .= " AND (closedate <= DATE_SUB(CAST(now() AS date),INTERVAL ? DAY)) ";
+    if ( defined $delay && $delay >= 0 ) {
+        $query .= " AND (closedate <= DATE_SUB(CAST(now() AS date),INTERVAL ? + COALESCE(aqbooksellers.deliverytime,0) DAY)) ";
         push @query_params, $delay;
+    } elsif ( $delay && $delay < 0 ){
+        warn 'WARNING: GetBooksellerWithLateOrders is called with a negative value';
+        return;
     }
     if ( defined $estimateddeliverydatefrom ) {
-        $strsth .= '
-            AND aqbooksellers.deliverytime IS NOT NULL
-            AND ADDDATE(aqbasket.closedate, INTERVAL aqbooksellers.deliverytime DAY) >= ?';
-        push @query_params, $estimateddeliverydatefrom;
+        $query .= '
+            AND ADDDATE(aqbasket.closedate, INTERVAL COALESCE(aqbooksellers.deliverytime,0) DAY) >= ?';
+            push @query_params, $estimateddeliverydatefrom;
+            if ( defined $estimateddeliverydateto ) {
+                $query .= ' AND ADDDATE(aqbasket.closedate, INTERVAL COALESCE(aqbooksellers.deliverytime, 0) DAY) <= ?';
+                push @query_params, $estimateddeliverydateto;
+            } else {
+                    $query .= ' AND ADDDATE(aqbasket.closedate, INTERVAL COALESCE(aqbooksellers.deliverytime, 0) DAY) <= CAST(now() AS date)';
+            }
     }
-    if ( defined $estimateddeliverydatefrom and defined $estimateddeliverydateto ) {
-        $strsth .= ' AND ADDDATE(aqbasket.closedate, INTERVAL aqbooksellers.deliverytime DAY) <= ?';
+    if ( defined $estimateddeliverydateto ) {
+        $query .= ' AND ADDDATE(aqbasket.closedate, INTERVAL COALESCE(aqbooksellers.deliverytime,0) DAY) <= ?';
         push @query_params, $estimateddeliverydateto;
-    } elsif ( defined $estimateddeliverydatefrom ) {
-        $strsth .= ' AND ADDDATE(aqbasket.closedate, INTERVAL aqbooksellers.deliverytime DAY) <= CAST(now() AS date)';
     }
 
-    my $sth = $dbh->prepare($strsth);
+    my $sth = $dbh->prepare($query);
     $sth->execute( @query_params );
     my %supplierlist;
     while ( my ( $id, $name ) = $sth->fetchrow ) {
@@ -175,32 +181,31 @@ sub AddBookseller {
     my $query  = q|
         INSERT INTO aqbooksellers
             (
-                name,      address1,      address2,   address3,      address4,
-                postal,    phone,         accountnumber,   fax,      url,           
-                contact,
-                contpos,   contphone,     contfax,    contaltphone,  contemail,
-                contnotes, active,        listprice,  invoiceprice,  gstreg,
-                listincgst,invoiceincgst, gstrate,    discount,
-                notes
+                name,      address1,      address2,     address3,   address4,
+                postal,    phone,         accountnumber,fax,        url,
+                contact,   contpos,       contphone,    contfax,    contaltphone,
+                contemail, contnotes,     active,       listprice,  invoiceprice,
+                gstreg,    listincgst,    invoiceincgst,gstrate,    discount,
+                notes,     deliverytime
             )
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) |
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) |
       ;
     my $sth = $dbh->prepare($query);
     $sth->execute(
-        $data->{'name'},         $data->{'address1'},
-        $data->{'address2'},     $data->{'address3'},
-        $data->{'address4'},     $data->{'postal'},
-        $data->{'phone'},        $data->{'accountnumber'},
-        $data->{'fax'},
-        $data->{'url'},          $data->{'contact'},
-        $data->{'contpos'},      $data->{'contphone'},
-        $data->{'contfax'},      $data->{'contaltphone'},
-        $data->{'contemail'},    $data->{'contnotes'},
-        $data->{'active'},       $data->{'listprice'},
-        $data->{'invoiceprice'}, $data->{'gstreg'},
-        $data->{'listincgst'},   $data->{'invoiceincgst'},
-        $data->{'gstrate'},
-        $data->{'discount'},     $data->{'notes'}
+        $data->{name}         ,$data->{address1},
+        $data->{address2}     ,$data->{address3},
+        $data->{address4}     ,$data->{postal},
+        $data->{phone}        ,$data->{accountnumber},
+        $data->{fax},
+        $data->{url}          ,$data->{contact},
+        $data->{contpos}      ,$data->{contphone},
+        $data->{contfax}      ,$data->{contaltphone},
+        $data->{contemail}    ,$data->{contnotes},
+        $data->{active}       ,$data->{listprice},
+        $data->{invoiceprice} ,$data->{gstreg},
+        $data->{listincgst}   ,$data->{invoiceincgst},
+        $data->{gstrate}      ,$data->{discount},
+        $data->{notes}        ,$data->{deliverytime},
     );
 
     # return the id of this new supplier
@@ -227,6 +232,7 @@ C<&ModBookseller> with the result.
 sub ModBookseller {
     my ($data) = @_;
     my $dbh    = C4::Context->dbh;
+    return unless $data->{'id'};
     my $query  = 'UPDATE aqbooksellers
         SET name=?,address1=?,address2=?,address3=?,address4=?,
             postal=?,phone=?,accountnumber=?,fax=?,url=?,contact=?,contpos=?,
@@ -236,7 +242,7 @@ sub ModBookseller {
             discount=?,notes=?,gstrate=?,deliverytime=?
         WHERE id=?';
     my $sth = $dbh->prepare($query);
-    $sth->execute(
+    return $sth->execute(
         $data->{'name'},         $data->{'address1'},
         $data->{'address2'},     $data->{'address3'},
         $data->{'address4'},     $data->{'postal'},
@@ -254,7 +260,6 @@ sub ModBookseller {
         $data->{deliverytime},
         $data->{'id'}
     );
-    return;
 }
 
 =head2 DelBookseller
@@ -270,8 +275,7 @@ sub DelBookseller {
     my $id  = shift;
     my $dbh = C4::Context->dbh;
     my $sth = $dbh->prepare('DELETE FROM aqbooksellers WHERE id=?');
-    $sth->execute($id);
-    return;
+    return $sth->execute($id);
 }
 
 1;

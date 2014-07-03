@@ -21,23 +21,51 @@ function Date_from_syspref(dstring) {
         }
 }
 
+function DateTime_from_syspref(date_time) {
+        var parts = date_time.split(" ");
+        var date = parts[0];
+        var time = parts[1];
+        parts = time.split(":");
+        var hour = parts[0];
+        var minute = parts[1];
+
+        if ( hour < 0 || hour > 23 ) {
+            return 0;
+        }
+        if ( minute < 0 || minute > 59 ) {
+            return 0;
+        }
+
+        var datetime = Date_from_syspref( date );
+
+        if ( isNaN( datetime.getTime() ) ) {
+            return 0;
+        }
+
+        datetime.setHours( hour );
+        datetime.setMinutes( minute );
+
+        return datetime;
+}
+
+
 /* Instead of including multiple localization files as you would normally see with
    jQueryUI we expose the localization strings in the default configuration */
 jQuery(function($){
     $.datepicker.regional[''] = {
-        closeText: _('Done'),
-        prevText: _('Prev'),
-        nextText: _('Next'),
-        currentText: _('Today'),
-        monthNames: [_('January'),_('February'),_('March'),_('April'),_('May'),_('June'),
-        _('July'),_('August'),_('September'),_('October'),_('November'),_('December')],
-        monthNamesShort: [_('Jan'), _('Feb'), _('Mar'), _('Apr'), _('May'), _('Jun'),
-        _('Jul'), _('Aug'), _('Sep'), _('Oct'), _('Nov'), _('Dec')],
-        dayNames: [_('Sunday'), _('Monday'), _('Tuesday'), _('Wednesday'), _('Thursday'), _('Friday'), _('Saturday')],
-        dayNamesShort: [_('Sun'), _('Mon'), _('Tue'), _('Wed'), _('Thu'), _('Fri'), _('Sat')],
-        dayNamesMin: [_('Su'),_('Mo'),_('Tu'),_('We'),_('Th'),_('Fr'),_('Sa')],
-        weekHeader: _('Wk'),
-        dateFormat: '[% IF ( dateformat_us ) %]mm/dd/yy[% ELSIF ( dateformat_metric ) %]dd/mm/yy[% ELSE %]yy-mm-dd[% END %]',
+        closeText: _("Done"),
+        prevText: _("Prev"),
+        nextText: _("Next"),
+        currentText: _("Today"),
+        monthNames: [_("January"),_("February"),_("March"),_("April"),_("May"),_("June"),
+        _("July"),_("August"),_("September"),_("October"),_("November"),_("December")],
+        monthNamesShort: [_("Jan"), _("Feb"), _("Mar"), _("Apr"), _("May"), _("Jun"),
+        _("Jul"), _("Aug"), _("Sep"), _("Oct"), _("Nov"), _("Dec")],
+        dayNames: [_("Sunday"), _("Monday"), _("Tuesday"), _("Wednesday"), _("Thursday"), _("Friday"), _("Saturday")],
+        dayNamesShort: [_("Sun"), _("Mon"), _("Tue"), _("Wed"), _("Thu"), _("Fri"), _("Sat")],
+        dayNamesMin: [_("Su"),_("Mo"),_("Tu"),_("We"),_("Th"),_("Fr"),_("Sa")],
+        weekHeader: _("Wk"),
+        dateFormat: "[% IF ( dateformat == "us" ) %]mm/dd/yy[% ELSIF ( dateformat == "metric" ) %]dd/mm/yy[% ELSE %]yy-mm-dd[% END %]",
         firstDay: [% CalendarFirstDayOfWeek %],
         isRTL: [% IF ( bidi ) %]true[% ELSE %]false[% END %],
         showMonthAfterYear: false,

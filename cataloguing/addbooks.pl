@@ -57,7 +57,7 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
 # get framework list
 my $frameworks = getframeworks;
 my @frameworkcodeloop;
-foreach my $thisframeworkcode ( sort {$frameworks->{$a} cmp $frameworks->{$b}}keys %{$frameworks} ) {
+foreach my $thisframeworkcode ( sort { uc($frameworks->{$a}->{'frameworktext'}) cmp uc($frameworks->{$b}->{'frameworktext'}) } keys %{$frameworks} ) {
     push @frameworkcodeloop, {
         value         => $thisframeworkcode,
         frameworktext => $frameworks->{$thisframeworkcode}->{'frameworktext'},
@@ -70,7 +70,16 @@ if ($query) {
 
     # build query
     my @operands = $query;
-    my ( $builterror,$builtquery,$simple_query,$query_cgi,$query_desc,$limit,$limit_cgi,$limit_desc,$stopwords_removed,$query_type) = buildQuery(undef,\@operands);
+
+    my $QParser;
+    $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser'));
+    my $builtquery;
+    if ($QParser) {
+        $builtquery = $query;
+    } else {
+        my ( $builterror,$simple_query,$query_cgi,$query_desc,$limit,$limit_cgi,$limit_desc,$stopwords_removed,$query_type);
+        ( $builterror,$builtquery,$simple_query,$query_cgi,$query_desc,$limit,$limit_cgi,$limit_desc,$stopwords_removed,$query_type) = buildQuery(undef,\@operands);
+    }
 
     # find results
     my ( $error, $marcresults, $total_hits ) = SimpleSearch($builtquery, $results_per_page * ($page - 1), $results_per_page);
@@ -107,7 +116,9 @@ if ($query) {
 #check is on isbn legnth 13 for new isbn and 10 for old isbn
     my ( $title, $isbn );
     if ($query=~/\d/) {
-        my $querylength = length $query;
+        my $clean_query = $query;
+        $clean_query =~ s/-//g; # remove hyphens
+        my $querylength = length $clean_query;
         if ( $querylength == 13 || $querylength == 10 ) {
             $isbn = $query;
         }

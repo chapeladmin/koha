@@ -39,6 +39,7 @@ use C4::Charset;
 use Date::Calc qw(Today);
 use MARC::File::USMARC;
 use MARC::File::XML;
+use URI::Escape;
 
 if ( C4::Context->preference('marcflavour') eq 'UNIMARC' ) {
     MARC::File::XML->default_record_format('UNIMARC');
@@ -93,9 +94,10 @@ sub MARCfindbreeding {
             return -1;
         }
         else {
-            # normalize author : probably UNIMARC specific...
+            # normalize author : UNIMARC specific...
             if (    C4::Context->preference("z3950NormalizeAuthor")
-                and C4::Context->preference("z3950AuthorAuthFields") )
+                and C4::Context->preference("z3950AuthorAuthFields")
+                and C4::Context->preference("marcflavour") eq 'UNIMARC' )
             {
                 my ( $tag, $subfield ) = GetMarcFromKohaField("biblio.author", '');
 
@@ -170,10 +172,11 @@ sub build_authorized_values_list {
     #---- branch
     if ( $tagslib->{$tag}->{$subfield}->{'authorised_value'} eq "branches" ) {
         #Use GetBranches($onlymine)
-        my $onlymine=C4::Context->preference('IndependantBranches') && 
-                C4::Context->userenv && 
-                C4::Context->userenv->{flags} % 2 == 0 && 
-                C4::Context->userenv->{branch};
+        my $onlymine =
+             C4::Context->preference('IndependentBranches')
+          && C4::Context->userenv
+          && !C4::Context->IsSuperLibrarian()
+          && C4::Context->userenv->{branch};
         my $branches = GetBranches($onlymine);
         my @branchloop;
         foreach my $thisbranch ( sort keys %$branches ) {
@@ -189,7 +192,8 @@ sub build_authorized_values_list {
             "select itemtype,description from itemtypes order by description");
         $sth->execute;
         push @authorised_values, ""
-          unless ( $tagslib->{$tag}->{$subfield}->{defaultvalue} and $tagslib->{$tag}->{$subfield}->{mandatory} );
+          unless ( $tagslib->{$tag}->{$subfield}->{mandatory}
+            && ( $value || $tagslib->{$tag}->{$subfield}->{defaultvalue} ) );
           
         my $itemtype;
         
@@ -219,17 +223,22 @@ sub build_authorized_values_list {
         $value = $default_source unless $value;
     }
     else {
+        my $branch_limit = C4::Context->userenv ? C4::Context->userenv->{"branch"} : "";
         $authorised_values_sth->execute(
-            $tagslib->{$tag}->{$subfield}->{authorised_value} );
+            $tagslib->{$tag}->{$subfield}->{authorised_value},
+            $branch_limit ? $branch_limit : (),
+        );
 
         push @authorised_values, ""
-          unless ( $tagslib->{$tag}->{$subfield}->{mandatory} );
+          unless ( $tagslib->{$tag}->{$subfield}->{mandatory}
+            && ( $value || $tagslib->{$tag}->{$subfield}->{defaultvalue} ) );
 
         while ( my ( $value, $lib ) = $authorised_values_sth->fetchrow_array ) {
             push @authorised_values, $value;
             $authorised_lib{$value} = $lib;
         }
     }
+    $authorised_values_sth->finish;
     return CGI::scrolling_list(
         -name     => "tag_".$tag."_subfield_".$subfield."_".$index_tag."_".$index_subfield,
         -values   => \@authorised_values,
@@ -372,7 +381,8 @@ sub create_input {
     # it's a thesaurus / authority field
     }
     elsif ( $tagslib->{$tag}->{$subfield}->{authtypecode} ) {
-     if (C4::Context->preference("BiblioAddsAuthorities")) {
+        # when authorities auto-creation is allowed, do not set readonly
+        my $is_readonly = !C4::Context->preference("BiblioAddsAuthorities");
         $subfield_data{marc_value} =
             "<input type=\"text\"
                     id=\"".$subfield_data{id}."\"
@@ -381,26 +391,12 @@ sub create_input {
                     class=\"input_marceditor readonly\"
                     tabindex=\"1\"
                     size=\"67\"
-                    maxlength=\"".$subfield_data{maxlength}."\"
-                    \/>
-                    <span class=\"subfield_controls\"><a href=\"#\" class=\"buttonDot\"
-                       onclick=\"openAuth(this.parentNode.parentNode.getElementsByTagName('input')[1].id,'".$tagslib->{$tag}->{$subfield}->{authtypecode}."'); return false;\" tabindex=\"1\" title=\"Tag Editor\"><img src=\"/intranet-tmpl/prog/img/edit-tag.png\" alt=\"Tag Editor\" /></a></span>
+                    maxlength=\"".$subfield_data{maxlength}."\"".
+                    ($is_readonly ? "readonly=\"readonly\"" : "").
+                    "\/>
+                    <span class=\"subfield_controls\"><a href=\"#\" class=\"buttonDot tag_editor\"
+                       onclick=\"openAuth(this.parentNode.parentNode.getElementsByTagName('input')[1].id,'".$tagslib->{$tag}->{$subfield}->{authtypecode}."','biblio'); return false;\" tabindex=\"1\" title=\"Tag editor\">Tag editor</a></span>
             ";
-      } else {
-        $subfield_data{marc_value} =
-            "<input type=\"text\"
-                    id=\"".$subfield_data{id}."\"
-                    name=\"".$subfield_data{id}."\"
-                    value=\"$value\"
-                    class=\"input_marceditor readonly\"
-                    tabindex=\"1\"
-                    size=\"67\"
-                    maxlength=\"".$subfield_data{maxlength}."\"
-                    readonly=\"readonly\"
-                    \/><span class=\"subfield_controls\"><a href=\"#\" class=\"buttonDot\"
-                        onclick=\"openAuth(this.parentNode.parentNode.getElementsByTagName('input')[1].id,'".$tagslib->{$tag}->{$subfield}->{authtypecode}."'); return false;\" tabindex=\"1\" title=\"Tag Editor\"><img src=\"/intranet-tmpl/prog/img/edit-tag.png\" alt=\"Tag Editor\" /></a></span>
-            ";
-      }
     # it's a plugin field
     }
     elsif ( $tagslib->{$tag}->{$subfield}->{'value_builder'} ) {
@@ -428,7 +424,7 @@ sub create_input {
                             size=\"67\"
                             maxlength=\"".$subfield_data{maxlength}."\"
                             onblur=\"Blur$function_name($index_tag); \" \/>
-                            <span class=\"subfield_controls\"><a href=\"#\" class=\"buttonDot\" onclick=\"Clic$function_name('$subfield_data{id}'); return false;\" tabindex=\"1\" title=\"Tag Editor\"><img src=\"/intranet-tmpl/prog/img/edit-tag.png\" alt=\"Tag Editor\" /></a></span>
+                            <span class=\"subfield_controls\"><a href=\"#\" class=\"buttonDot tag_editor\" onclick=\"Clic$function_name('$subfield_data{id}'); return false;\" tabindex=\"1\" title=\"Tag editor\">Tag editor</a></span>
                     $javascript";
         } else {
             warn "Plugin Failed: $plugin";
@@ -521,12 +517,15 @@ sub build_tabs {
     my @loop_data = ();
     my $tag;
 
-    my $authorised_values_sth = $dbh->prepare(
-        "select authorised_value,lib
-        from authorised_values
-        where category=? order by lib"
-    );
-    
+    my $branch_limit = C4::Context->userenv ? C4::Context->userenv->{"branch"} : "";
+    my $query = "SELECT authorised_value, lib
+                FROM authorised_values";
+    $query .= qq{ LEFT JOIN authorised_values_branches ON ( id = av_id )} if $branch_limit;
+    $query .= " WHERE category = ?";
+    $query .= " AND ( branchcode = ? OR branchcode IS NULL )" if $branch_limit;
+    $query .= " GROUP BY lib ORDER BY lib, lib_opac";
+    my $authorised_values_sth = $dbh->prepare( $query );
+
     # in this array, we will push all the 10 tabs
     # to avoid having 10 tabs in the template : they will all be in the same BIG_LOOP
     my @BIG_LOOP;
@@ -711,6 +710,7 @@ sub build_tabs {
             };
         }
     }
+    $authorised_values_sth->finish;
     $template->param( BIG_LOOP => \@BIG_LOOP );
 }
 
@@ -727,16 +727,23 @@ my $op            = $input->param('op');
 my $mode          = $input->param('mode');
 my $frameworkcode = $input->param('frameworkcode');
 my $redirect      = $input->param('redirect');
+my $searchid      = $input->param('searchid');
 my $dbh           = C4::Context->dbh;
 my $hostbiblionumber = $input->param('hostbiblionumber');
 my $hostitemnumber = $input->param('hostitemnumber');
+# fast cataloguing datas in transit
+my $fa_circborrowernumber = $input->param('circborrowernumber');
+my $fa_barcode            = $input->param('barcode');
+my $fa_branch             = $input->param('branch');
+my $fa_stickyduedate      = $input->param('stickyduedate');
+my $fa_duedatespec        = $input->param('duedatespec');
 
-    
 my $userflags = 'edit_catalogue';
 if ($frameworkcode eq 'FA'){
     $userflags = 'fast_cataloging';
 }
 
+my $changed_framework = $input->param('changed_framework');
 $frameworkcode = &GetFrameworkCode($biblionumber)
   if ( $biblionumber and not($frameworkcode) and $op ne 'addbiblio' );
 
@@ -753,11 +760,13 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
 
 if ($frameworkcode eq 'FA'){
     # We need to grab and set some variables in the template for use on the additems screen
-    $template->{VARS}->{'circborrowernumber'} = $input->param('borrowernumber');
-    $template->{VARS}->{'barcode'} = $input->param('barcode');
-    $template->{VARS}->{'branch'} = $input->param('branch');
-    $template->{VARS}->{'stickyduedate'} = $input->param('stickyduedate');
-    $template->{VARS}->{'duedatespec'} = $input->param('duedatespec');
+    $template->param(
+        'circborrowernumber' => $fa_circborrowernumber,
+        'barcode'            => $fa_barcode,
+        'branch'             => $fa_branch,
+        'stickyduedate'      => $fa_stickyduedate,
+        'duedatespec'        => $fa_duedatespec,
+    );
 }
 
 # Getting the list of all frameworks
@@ -815,6 +824,7 @@ if ($hostbiblionumber) {
 if ($parentbiblio) {
     my $marcflavour = C4::Context->preference('marcflavour');
     $record = MARC::Record->new();
+    SetMarcUnicodeFlag($record, $marcflavour);
     my $hostfield = prepare_host_field($parentbiblio,$marcflavour);
     if ($hostfield) {
         $record->append_fields($hostfield);
@@ -859,7 +869,7 @@ if ( $op eq "addbiblio" ) {
         my $oldbibnum;
         my $oldbibitemnum;
         if (C4::Context->preference("BiblioAddsAuthorities")){
-          my ($countlinked,$countcreated)=BiblioAutoLink($record,$frameworkcode);
+            BiblioAutoLink( $record, $frameworkcode );
         } 
         if ( $is_a_modif ) {
             ModBiblioframework( $biblionumber, $frameworkcode ); 
@@ -868,41 +878,47 @@ if ( $op eq "addbiblio" ) {
         else {
             ( $biblionumber, $oldbibitemnum ) = AddBiblio( $record, $frameworkcode );
         }
-        if ($redirect eq "items" || ($mode ne "popup" && !$is_a_modif && $redirect ne "view")){
+        if ($redirect eq "items" || ($mode ne "popup" && !$is_a_modif && $redirect ne "view" && $redirect ne "just_save")){
 	    if ($frameworkcode eq 'FA'){
-		my $borrowernumber = $input->param('circborrowernumber');
-		my $barcode = $input->param('barcode');
-		my $branch = $input->param('branch');
-		my $stickyduedate = $input->param('stickyduedate');
-		my $duedatespec = $input->param('duedatespec');
 		print $input->redirect(
-                "/cgi-bin/koha/cataloguing/additem.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode&borrowernumber=$borrowernumber&branch=$branch&barcode=$barcode&stickyduedate=$stickyduedate&duedatespec=$duedatespec"
+            '/cgi-bin/koha/cataloguing/additem.pl?'
+            .'biblionumber='.$biblionumber
+            .'&frameworkcode='.$frameworkcode
+            .'&circborrowernumber='.$fa_circborrowernumber
+            .'&branch='.$fa_branch
+            .'&barcode='.uri_escape($fa_barcode)
+            .'&stickyduedate='.$fa_stickyduedate
+            .'&duedatespec='.$fa_duedatespec
 		);
 		exit;
 	    }
 	    else {
 		print $input->redirect(
-                "/cgi-bin/koha/cataloguing/additem.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode"
+                "/cgi-bin/koha/cataloguing/additem.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode&searchid=$searchid"
 		);
 		exit;
 	    }
         }
-	elsif($is_a_modif || $redirect eq "view"){
+    elsif(($is_a_modif || $redirect eq "view") && $redirect ne "just_save"){
             my $defaultview = C4::Context->preference('IntranetBiblioDefaultView');
             my $views = { C4::Search::enabled_staff_search_views };
             if ($defaultview eq 'isbd' && $views->{can_view_ISBD}) {
-                print $input->redirect("/cgi-bin/koha/catalogue/ISBDdetail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/ISBDdetail.pl?biblionumber=$biblionumber&searchid=$searchid");
             } elsif  ($defaultview eq 'marc' && $views->{can_view_MARC}) {
-                print $input->redirect("/cgi-bin/koha/catalogue/MARCdetail.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode");
+                print $input->redirect("/cgi-bin/koha/catalogue/MARCdetail.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode&searchid=$searchid");
             } elsif  ($defaultview eq 'labeled_marc' && $views->{can_view_labeledMARC}) {
-                print $input->redirect("/cgi-bin/koha/catalogue/labeledMARCdetail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/labeledMARCdetail.pl?biblionumber=$biblionumber&searchid=$searchid");
             } else {
-                print $input->redirect("/cgi-bin/koha/catalogue/detail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/detail.pl?biblionumber=$biblionumber&searchid=$searchid");
             }
             exit;
 
-	}
-	else {
+    }
+    elsif ($redirect eq "just_save"){
+        my $tab = $input->param('current_tab');
+        print $input->redirect("/cgi-bin/koha/cataloguing/addbiblio.pl?biblionumber=$biblionumber&framework=$frameworkcode&tab=$tab&searchid=$searchid");
+    }
+    else {
           $template->param(
             biblionumber => $biblionumber,
             done         =>1,
@@ -953,7 +969,10 @@ elsif ( $op eq "delete" ) {
         $biblionumber = "";
     }
 
-    if ( $record ne -1 ) {
+    if($changed_framework eq "changed"){
+        $record = TransformHtmlToMarc( $input );
+    }
+    elsif( $record ne -1 ) {
 #FIXME: it's kind of silly to go from MARC::Record to MARC::File::XML and then back again just to fix the encoding
         eval {
             my $uxml = $record->as_xml;
@@ -981,7 +1000,9 @@ $template->param(
     popup => $mode,
     frameworkcode => $frameworkcode,
     itemtype => $frameworkcode,
-    borrowernumber => $loggedinuser, 
+    borrowernumber => $loggedinuser,
+    tab => $input->param('tab')
 );
+$template->{'VARS'}->{'searchid'} = $searchid;
 
 output_html_with_http_headers $input, $cookie, $template->output;

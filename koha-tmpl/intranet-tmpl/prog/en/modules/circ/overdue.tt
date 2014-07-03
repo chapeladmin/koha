@@ -48,9 +48,9 @@
                     return false;
                 }
             })
-            .data( "autocomplete" )._renderItem = function( ul, item ) {
+            .data( "ui-autocomplete" )._renderItem = function( ul, item ) {
                 return $( "<li></li>" )
-                .data( "item.autocomplete", item )
+                .data( "ui-autocomplete-item", item )
                 .append( "<a>" + item.description + " (" + item.authorised_value + ")</a>" )
                 .appendTo( ul )
                 .css("font-size","90%").css("width","13em");
@@ -103,6 +103,7 @@ overdue as of [% todaysdate %][% IF ( isfiltered ) %] <span style="font-size:70%
     <th>Title</th>
     <th>Barcode</th>
     <th>Call number</th>
+    <th>Price</th>
 </tr></thead>
 
 <tbody>[% FOREACH overdueloo IN overdueloop %]
@@ -116,6 +117,7 @@ overdue as of [% todaysdate %][% IF ( isfiltered ) %] <span style="font-size:70%
         </td>
 		<td><a href="/cgi-bin/koha/catalogue/moredetail.pl?biblionumber=[% overdueloo.biblionumber %]&amp;itemnumber=[% overdueloo.itemnum %]#item[% overdueloo.itemnum %]">[% overdueloo.barcode %]</a></td>
 		<td>[% overdueloo.itemcallnumber %]</td>
+                <td>[% overdueloo.replacementprice %]</td>
         </tr>
 [% END %]</tbody>
 </table>
@@ -191,6 +193,28 @@ overdue as of [% todaysdate %][% IF ( isfiltered ) %] <span style="font-size:70%
         <option value="[% itemtypeloo.value |html %]">[% itemtypeloo.itemtypename %]</option>[% END %]
       [% END %]
       </select>
+    </li>
+
+    <li>
+        <label>Item home library:</label>
+        <select name="homebranch" id="homebranch">
+            <option value="">Any</option>
+            [% FOREACH homebranchloo IN homebranchloop %][% IF ( homebranchloo.selected ) %]
+            <option value="[% homebranchloo.value |html %]" selected="selected">[% homebranchloo.branchname %]</option>[% ELSE %]
+            <option value="[% homebranchloo.value |html %]">[% homebranchloo.branchname %]</option>[% END %]
+            [% END %]
+        </select>
+    </li>
+
+    <li>
+        <label>Item holding library:</label>
+            <select name="holdingbranch" id="holdingbranch">
+            <option value="">Any</option>
+            [% FOREACH holdingbranchloo IN holdingbranchloop %][% IF ( holdingbranchloo.selected ) %]
+            <option value="[% holdingbranchloo.value |html %]" selected="selected">[% holdingbranchloo.branchname %]</option>[% ELSE %]
+            <option value="[% holdingbranchloo.value |html %]">[% holdingbranchloo.branchname %]</option>[% END %]
+            [% END %]
+        </select>
     </li>
 
     <li>

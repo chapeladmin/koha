@@ -1,4 +1,5 @@
 package C4::XSLT;
+
 # Copyright (C) 2006 LibLime
 # <jmf at liblime dot com>
 # Parts Copyright Katrin Fischer 2011
@@ -9,7 +10,7 @@ package C4::XSLT;
 #
 # Koha is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
-# Foundation; either version 2 of the License, or (at your option) any later
+# Foundation; either version 3 of the License, or (at your option) any later
 # version.
 #
 # Koha is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -30,12 +31,16 @@ use C4::Koha;
 use C4::Biblio;
 use C4::Circulation;
 use C4::Reserves;
+use Koha::XSLT_Handler;
+
 use Encode;
-use XML::LibXML;
-use XML::LibXSLT;
-use LWP::Simple;
 
 use vars qw($VERSION @ISA @EXPORT);
+
+my $engine; #XSLT Handler object
+my %authval_per_framework;
+    # Cache for tagfield-tagsubfield to decode per framework.
+    # Should be preferably be placed in Koha-core...
 
 BEGIN {
     require Exporter;
@@ -43,8 +48,8 @@ BEGIN {
     @ISA = qw(Exporter);
     @EXPORT = qw(
         &XSLTParse4Display
-        &GetURI
     );
+    $engine=Koha::XSLT_Handler->new( { do_not_return_source => 1 } );
 }
 
 =head1 NAME
@@ -53,22 +58,10 @@ C4::XSLT - Functions for displaying XSLT-generated content
 
 =head1 FUNCTIONS
 
-=head2 GetURI
-
-GetURI file and returns the xslt as a string
-
-=cut
-
-sub GetURI {
-    my ($uri) = @_;
-    my $string;
-    $string = get $uri ;
-    return $string;
-}
-
 =head2 transformMARCXML4XSLT
 
 Replaces codes with authorized values in a MARC::Record object
+Is only used in this module currently.
 
 =cut
 
@@ -108,12 +101,9 @@ sub transformMARCXML4XSLT {
 =head2 getAuthorisedValues4MARCSubfields
 
 Returns a ref of hash of ref of hash for tag -> letter controled by authorised values
+Is only used in this module currently.
 
 =cut
-
-# Cache for tagfield-tagsubfield to decode per framework.
-# Should be preferably be placed in Koha-core...
-my %authval_per_framework;
 
 sub getAuthorisedValues4MARCSubfields {
     my ($frameworkcode) = @_;
@@ -134,7 +124,37 @@ sub getAuthorisedValues4MARCSubfields {
     return $authval_per_framework{ $frameworkcode };
 }
 
-my $stylesheet;
+=head2 XSLTParse4Display
+
+Returns xml for biblionumber and requested XSLT transformation.
+Returns undef if the transform fails.
+
+Used in OPAC results and detail, intranet results and detail, list display.
+(Depending on the settings of your XSLT preferences.)
+
+The helper function _get_best_default_xslt_filename is used in a unit test.
+
+=cut
+
+sub _get_best_default_xslt_filename {
+    my ($htdocs, $theme, $lang, $base_xslfile) = @_;
+
+    my @candidates = (
+        "$htdocs/$theme/$lang/xslt/${base_xslfile}", # exact match
+        "$htdocs/$theme/en/xslt/${base_xslfile}",    # if not, preferred theme in English
+        "$htdocs/prog/$lang/xslt/${base_xslfile}",   # if not, 'prog' theme in preferred language
+        "$htdocs/prog/en/xslt/${base_xslfile}",      # otherwise, prog theme in English; should always
+                                                     # exist
+    );
+    my $xslfilename;
+    foreach my $filename (@candidates) {
+        $xslfilename = $filename;
+        if (-f $filename) {
+            last; # we have a winner!
+        }
+    }
+    return $xslfilename;
+}
 
 sub XSLTParse4Display {
     my ( $biblionumber, $orig_record, $xslsyspref, $fixamps, $hidden_items ) = @_;
@@ -142,7 +162,7 @@ sub XSLTParse4Display {
     if ( $xslfilename =~ /^\s*"?default"?\s*$/i ) {
         my $htdocs;
         my $theme;
-        my $lang = C4::Templates::_current_language();
+        my $lang = C4::Languages::getlanguage();
         my $xslfile;
         if ($xslsyspref eq "XSLTDetailsDisplay") {
             $htdocs  = C4::Context->config('intrahtdocs');
@@ -165,20 +185,16 @@ sub XSLTParse4Display {
             $xslfile = C4::Context->preference('marcflavour') .
                        "slim2OPACResults.xsl";
         }
-        $xslfilename = "$htdocs/$theme/$lang/xslt/$xslfile";
-        $xslfilename = "$htdocs/$theme/en/xslt/$xslfile" unless ( $lang ne 'en' && !-f $xslfilename );
-        $xslfilename = "$htdocs/prog/$lang/xslt/$xslfile" unless ( !-f $xslfilename );
-        $xslfilename = "$htdocs/prog/en/xslt/$xslfile" unless ( $lang ne 'en' && !-f $xslfilename );
+        $xslfilename = _get_best_default_xslt_filename($htdocs, $theme, $lang, $xslfile);
     }
 
     if ( $xslfilename =~ m/\{langcode\}/ ) {
-        my $lang = C4::Templates::_current_language();
+        my $lang = C4::Languages::getlanguage();
         $xslfilename =~ s/\{langcode\}/$lang/;
     }
 
     # grab the XML, run it through our stylesheet, push it out to the browser
     my $record = transformMARCXML4XSLT($biblionumber, $orig_record);
-    #return $record->as_formatted();
     my $itemsxml  = buildKohaItemsNamespace($biblionumber, $hidden_items);
     my $xmlrecord = $record->as_xml(C4::Context->preference('marcflavour'));
     my $sysxml = "<sysprefs>\n";
@@ -188,8 +204,9 @@ sub XSLTParse4Display {
                               UseAuthoritiesForTracings TraceSubjectSubdivisions
                               Display856uAsImage OPACDisplay856uAsImage 
                               UseControlNumber IntranetBiblioDefaultView BiblioDefaultView
-                              singleBranchMode
-                              AlternateHoldingsField AlternateHoldingsSeparator / )
+                              singleBranchMode OPACItemLocation DisplayIconsXSLT
+                              AlternateHoldingsField AlternateHoldingsSeparator
+                              TrackClicks / )
     {
         my $sp = C4::Context->preference( $syspref );
         next unless defined($sp);
@@ -197,32 +214,26 @@ sub XSLTParse4Display {
     }
     $sysxml .= "</sysprefs>\n";
     $xmlrecord =~ s/\<\/record\>/$itemsxml$sysxml\<\/record\>/;
-    if ($fixamps) { # We need to correct the ampersand entities that Zebra outputs
+    if ($fixamps) { # We need to correct the HTML entities that Zebra outputs
         $xmlrecord =~ s/\&amp;amp;/\&amp;/g;
+        $xmlrecord =~ s/\&amp\;lt\;/\&lt\;/g;
+        $xmlrecord =~ s/\&amp\;gt\;/\&gt\;/g;
     }
     $xmlrecord =~ s/\& /\&amp\; /;
     $xmlrecord =~ s/\&amp\;amp\; /\&amp\; /;
 
-    my $parser = XML::LibXML->new();
-    # don't die when you find &, >, etc
-    $parser->recover_silently(0);
-    my $source = $parser->parse_string($xmlrecord);
-    unless ( $stylesheet->{$xslfilename} ) {
-        my $xslt = XML::LibXSLT->new();
-        my $style_doc;
-        if ( $xslfilename =~ /^https?:\/\// ) {
-            my $xsltstring = GetURI($xslfilename);
-            $style_doc = $parser->parse_string($xsltstring);
-        } else {
-            use Cwd;
-            $style_doc = $parser->parse_file($xslfilename);
-        }
-        $stylesheet->{$xslfilename} = $xslt->parse_stylesheet($style_doc);
-    }
-    my $results      = $stylesheet->{$xslfilename}->transform($source);
-    my $newxmlrecord = $stylesheet->{$xslfilename}->output_string($results);
-    return $newxmlrecord;
+    #If the xslt should fail, we will return undef (old behavior was
+    #raw MARC)
+    #Note that we did set do_not_return_source at object construction
+    return $engine->transform($xmlrecord, $xslfilename ); #file or URL
 }
+
+=head2 buildKohaItemsNamespace
+
+Returns XML for items.
+Is only used in this module currently.
+
+=cut
 
 sub buildKohaItemsNamespace {
     my ($biblionumber, $hidden_items) = @_;
@@ -232,17 +243,23 @@ sub buildKohaItemsNamespace {
         my %hi = map {$_ => 1} @$hidden_items;
         @items = grep { !$hi{$_->{itemnumber}} } @items;
     }
+
+    my $shelflocations = GetKohaAuthorisedValues('items.location',GetFrameworkCode($biblionumber), 'opac');
+    my $ccodes         = GetKohaAuthorisedValues('items.ccode',GetFrameworkCode($biblionumber), 'opac');
+
     my $branches = GetBranches();
     my $itemtypes = GetItemTypes();
+    my $location = "";
+    my $ccode = "";
     my $xml = '';
     for my $item (@items) {
         my $status;
 
         my ( $transfertwhen, $transfertfrom, $transfertto ) = C4::Circulation::GetTransfers($item->{itemnumber});
 
-	my ( $reservestatus, $reserveitem, undef ) = C4::Reserves::CheckReserves($item->{itemnumber});
+        my $reservestatus = C4::Reserves::GetReserveStatus( $item->{itemnumber} );
 
-        if ( $itemtypes->{ $item->{itype} }->{notforloan} || $item->{notforloan} || $item->{onloan} || $item->{wthdrawn} || $item->{itemlost} || $item->{damaged} || 
+        if ( $itemtypes->{ $item->{itype} }->{notforloan} || $item->{notforloan} || $item->{onloan} || $item->{withdrawn} || $item->{itemlost} || $item->{damaged} ||
              (defined $transfertwhen && $transfertwhen ne '') || $item->{itemnotforloan} || (defined $reservestatus && $reservestatus eq "Waiting") ){ 
             if ( $item->{notforloan} < 0) {
                 $status = "On order";
@@ -253,7 +270,7 @@ sub buildKohaItemsNamespace {
             if ($item->{onloan}) {
                 $status = "Checked out";
             }
-            if ( $item->{wthdrawn}) {
+            if ( $item->{withdrawn}) {
                 $status = "Withdrawn";
             }
             if ($item->{itemlost}) {
@@ -272,28 +289,40 @@ sub buildKohaItemsNamespace {
             $status = "available";
         }
         my $homebranch = $item->{homebranch}? xml_escape($branches->{$item->{homebranch}}->{'branchname'}):'';
-	    my $itemcallnumber = xml_escape($item->{itemcallnumber});
+        my $holdingbranch = $item->{holdingbranch}? xml_escape($branches->{$item->{holdingbranch}}->{'branchname'}):'';
+        $location = $item->{location}? xml_escape($shelflocations->{$item->{location}}||$item->{location}):'';
+        $ccode = $item->{ccode}? xml_escape($ccodes->{$item->{ccode}}||$item->{ccode}):'';
+        my $itemcallnumber = xml_escape($item->{itemcallnumber});
         $xml.= "<item><homebranch>$homebranch</homebranch>".
-		"<status>$status</status>".
-		"<itemcallnumber>".$itemcallnumber."</itemcallnumber>"
-        . "</item>";
-
+                "<holdingbranch>$holdingbranch</holdingbranch>".
+                "<location>$location</location>".
+                "<ccode>$ccode</ccode>".
+                "<status>$status</status>".
+                "<itemcallnumber>".$itemcallnumber."</itemcallnumber>".
+                "</item>";
     }
     $xml = "<items xmlns=\"http://www.koha-community.org/items\">".$xml."</items>";
     return $xml;
 }
 
+=head2 engine
 
-
-1;
-__END__
-
-=head1 NOTES
+Returns reference to XSLT handler object.
 
 =cut
+
+sub engine {
+    return $engine;
+}
+
+1;
+
+__END__
 
 =head1 AUTHOR
 
 Joshua Ferraro <jmf@liblime.com>
+
+Koha Development Team <http://koha-community.org/>
 
 =cut

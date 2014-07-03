@@ -46,6 +46,7 @@ use C4::Members;
 use C4::Members::Attributes qw(:all);
 use C4::Members::AttributeTypes;
 use C4::Members::Messaging;
+use Koha::Borrower::Debarments;
 
 use Text::CSV;
 # Text::CSV::Unicode, even in binary mode, fails to parse lines with these diacriticals:
@@ -58,7 +59,7 @@ use CGI;
 my (@errors, @feedback);
 my $extended = C4::Context->preference('ExtendedPatronAttributes');
 my $set_messaging_prefs = C4::Context->preference('EnhancedMessagingPreferences');
-my @columnkeys = C4::Members->columns;
+my @columnkeys = C4::Members::columns();
 if ($extended) {
     push @columnkeys, 'patron_attributes';
 }
@@ -231,7 +232,18 @@ if ( $uploadborrowers && length($uploadborrowers) > 0 ) {
                 }
             }
         }
-            
+
+        if ( C4::Members::checkcardnumber( $borrower{cardnumber}, $borrowernumber ) ) {
+            push @errors, {
+                invalid_cardnumber => 1,
+                borrowernumber => $borrowernumber,
+                cardnumber => $borrower{cardnumber}
+            };
+            $invalid++;
+            next;
+        }
+
+
         if ($borrowernumber) {
             # borrower exists
             unless ($overwrite_cardnumber) {
@@ -258,6 +270,26 @@ if ( $uploadborrowers && length($uploadborrowers) > 0 ) {
                 $template->param('lastinvalid'=>$borrower{'surname'}.' / '.$borrowernumber);
                 next LINE;
             }
+            if ( $borrower{debarred} ) {
+                # Check to see if this debarment already exists
+                my $debarrments = GetDebarments(
+                    {
+                        borrowernumber => $borrowernumber,
+                        expiration     => $borrower{debarred},
+                        comment        => $borrower{debarredcomment}
+                    }
+                );
+                # If it doesn't, then add it!
+                unless (@$debarrments) {
+                    AddDebarment(
+                        {
+                            borrowernumber => $borrowernumber,
+                            expiration     => $borrower{debarred},
+                            comment        => $borrower{debarredcomment}
+                        }
+                    );
+                }
+            }
             if ($extended) {
                 if ($ext_preserve) {
                     my $old_attributes = GetBorrowerAttributes($borrowernumber);
@@ -274,13 +306,26 @@ if ( $uploadborrowers && length($uploadborrowers) > 0 ) {
                 $borrower{'cardnumber'} = fixup_cardnumber(undef);
             }
             if ($borrowernumber = AddMember(%borrower)) {
+
+                if ( $borrower{debarred} ) {
+                    AddDebarment(
+                        {
+                            borrowernumber => $borrowernumber,
+                            expiration     => $borrower{debarred},
+                            comment        => $borrower{debarredcomment}
+                        }
+                    );
+                }
+
                 if ($extended) {
                     SetBorrowerAttributes($borrowernumber, $patron_attributes);
                 }
+
                 if ($set_messaging_prefs) {
                     C4::Members::Messaging::SetMessagingPreferencesFromDefaults({ borrowernumber => $borrowernumber,
                                                                                   categorycode => $borrower{categorycode} });
                 }
+
                 $imported++;
                 $template->param('lastimported'=>$borrower{'surname'}.' / '.$borrowernumber);
             } else {
@@ -304,7 +349,7 @@ if ( $uploadborrowers && length($uploadborrowers) > 0 ) {
 } else {
     if ($extended) {
         my @matchpoints = ();
-        my @attr_types = C4::Members::AttributeTypes::GetAttributeTypes();
+        my @attr_types = C4::Members::AttributeTypes::GetAttributeTypes(undef, 1);
         foreach my $type (@attr_types) {
             my $attr_type = C4::Members::AttributeTypes->fetch($type->{code});
             if ($attr_type->unique_id()) {

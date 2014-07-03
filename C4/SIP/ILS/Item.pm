@@ -21,15 +21,11 @@ use C4::Items;
 use C4::Circulation;
 use C4::Members;
 use C4::Reserves;
+use Koha::Database;
 
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+our $VERSION = 3.07.00.049;
 
-BEGIN {
-    $VERSION = 3.07.00.049;
-	require Exporter;
-	@ISA = qw(Exporter);
-	@EXPORT_OK = qw();
-}
+=encoding UTF-8
 
 =head1 EXAMPLE
 
@@ -93,7 +89,10 @@ sub new {
     $item->{permanent_location}= $item->{homebranch};
     $item->{'collection_code'} = $item->{ccode};
     $item->{  'call_number'  } = $item->{itemcallnumber};
-    # $item->{'destination_loc'}  =  ?
+
+    my $it = C4::Context->preference('item-level_itypes') ? $item->{itype} : $item->{itemtype};
+    my $itemtype = Koha::Database->new()->schema()->resultset('Itemtype')->find( $it );
+    $item->{sip_media_type} = $itemtype->sip_media_type() if $itemtype;
 
 	# check if its on issue and if so get the borrower
 	my $issue = GetItemIssue($item->{'itemnumber'});
@@ -102,8 +101,8 @@ sub new {
     }
 	my $borrower = GetMember(borrowernumber=>$issue->{'borrowernumber'});
 	$item->{patron} = $borrower->{'cardnumber'};
-    my ($whatever, $arrayref) = GetReservesFromBiblionumber($item->{biblionumber});
-	$item->{hold_queue} = [ sort priority_sort @$arrayref ];
+    my $reserves = GetReservesFromBiblionumber({ biblionumber => $item->{biblionumber} });
+    $item->{hold_queue} = [ sort priority_sort @$reserves ];
 	$item->{hold_shelf}    = [( grep {   defined $_->{found}  and $_->{found} eq 'W' } @{$item->{hold_queue}} )];
 	$item->{pending_queue} = [( grep {(! defined $_->{found}) or  $_->{found} ne 'W' } @{$item->{hold_queue}} )];
 	$self = $item;
@@ -140,7 +139,7 @@ my %fields = (
 );
 
 sub next_hold {
-    my $self = shift or return;
+    my $self = shift;
     # use Data::Dumper; warn "next_hold() hold_shelf: " . Dumper($self->{hold_shelf}); warn "next_hold() pending_queue: " . $self->{pending_queue};
     foreach (@{$self->hold_shelf}) {    # If this item was taken from the hold shelf, then that reserve still governs
         next unless ($_->{itemnumber} and $_->{itemnumber} == $self->{itemnumber});
@@ -168,7 +167,7 @@ sub hold_patron_id {
 
 }
 sub hold_patron_name {
-    my $self = shift or return;
+    my $self = shift;
     my $borrowernumber = (@_ ? shift: $self->hold_patron_id()) or return;
     my $holder = GetMember(borrowernumber=>$borrowernumber);
     unless ($holder) {
@@ -186,7 +185,7 @@ sub hold_patron_name {
 }
 
 sub hold_patron_bcode {
-    my $self = shift or return;
+    my $self = shift;
     my $borrowernumber = (@_ ? shift: $self->hold_patron_id()) or return;
     my $holder = GetMember(borrowernumber => $borrowernumber);
     if ($holder) {
@@ -257,9 +256,11 @@ sub sip_circulation_status {
 }
 
 sub sip_security_marker {
+    my $self = shift;
     return '02';	# FIXME? 00-other; 01-None; 02-Tattle-Tape Security Strip (3M); 03-Whisper Tape (3M)
 }
 sub sip_fee_type {
+    my $self = shift;
     return '01';    # FIXME? 01-09 enumerated in spec.  We just use O1-other/unknown.
 }
 
@@ -354,7 +355,7 @@ sub _barcode_to_borrowernumber {
     return $member->{borrowernumber};
 }
 sub barcode_is_borrowernumber {    # because hold_queue only has borrowernumber...
-    my $self = shift;   # not really used
+    my $self = shift;
     my $barcode = shift;
     my $number  = shift or return;    # can't be zero
     return unless defined $barcode; # might be 0 or 000 or 000000

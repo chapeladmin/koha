@@ -1,8 +1,8 @@
+[% USE Koha %]
 [% USE KohaDates %]
-
 [% INCLUDE 'doc-head-open.inc' %][% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo; Tags
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
+[% INCLUDE 'datatables.inc' %]
 <style type="text/css">
 	fieldset { padding : .3em;margin:.3em 0;}
 	#tagcloud    {background-color: #F3F3F3; text-align: justify;padding:7px;}
@@ -21,33 +21,20 @@
 </style>
 <script type="text/javascript">
 //<![CDATA[
-	var fontsizes = new Array (12,14,16,18,20,22,24,26,28,30);
-	var fontcount = fontsizes.length;
-	var maxcloudweight = 1;
-	$(document).ready(function() {
-		// $('#tagcloud').css('background-color','lightgrey');
-		// $('#tagcloud .tag').css('border','1px solid black');
-		$('#tagcloud .tag').each(function() {
-			if (maxcloudweight < this.title) { maxcloudweight = this.title; }
-			// have to run through the set of tags once to get the max: cannot be combined w/ 2nd pass
-		});
-		$('#tagcloud .tag').each(function(i) {
-			var pos = this.id;
-			var weight = this.title;	// "cloudweight"
-			weight = (! weight) ? 1 : (weight > maxcloudweight) ? maxcloudweight : weight ;
-			var index = Math.round(fontcount * weight/maxcloudweight) - 1;
-			index  = (! index ) ? 0 : ( index > fontcount     ) ? fontcount      : index  ;
-			var newsize = fontsizes[index];
-			// alert(pos+ " (" +i+ ") weight = " +weight+ " of " +maxcloudweight+ ", fontsize[" +index+ " of " +fontcount+ "] = " +newsize);
-			$('#' + pos).css({"font-size":(newsize + 'px'), display:"inline"});
-		});
-		$("#mytagst").tablesorter({[% IF ( dateformat == 'metric' ) %]
-    dateFormat: 'uk',[% END %]
-            widgets : ['zebra'],
-			headers: { 3: { sorter: false }},
-            sortList: [[2,0]]
-        });
-	});
+    $(document).ready(function(){
+        $("#mytagst").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "aaSorting": [[ 2, "asc" ]],
+            "aoColumnDefs": [
+              { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false }
+            ],
+            "aoColumns": [
+                null,
+                { "sType": "anti-the" },
+                { "sType": "title-string" },
+                null
+            ]
+        }));
+    });
 //]]>
 </script>
 </head>
@@ -90,7 +77,7 @@
 	[% IF ( TAGLOOP ) %]
 	<div id="tagcloud">
 	[% FOREACH TAGLOO IN TAGLOOP %]
-    <span class="tag" id="tag[% loop.count %]">
+            <span class="tag tagweight[% TAGLOO.stratum %]" id="tag[% loop.count %]" style="display:inline;">
 		<a href="/cgi-bin/koha/opac-search.pl?tag=[% TAGLOO.term |url %]&amp;q=[% TAGLOO.term |url %]">
 		[% TAGLOO.term |html %]</a>
 			<span class="tagweight">[% TAGLOO.weight_total %]</span>
@@ -119,7 +106,7 @@
 			</td>
 			<td><a href="/cgi-bin/koha/opac-detail.pl?biblionumber=[% MY_TAG.biblionumber %]">
 				[% MY_TAG.bib_summary |html %]</a></td>
-			<td>[% MY_TAG.date_created | $KohaDates %]</td>
+            <td><span title="[% MY_TAG.date_created %]">[% MY_TAG.date_created | $KohaDates %]</span></td>
 			<td><input type="submit" name="del[% MY_TAG.tag_id %]" value="Delete" /></td>
 		</tr>
 	[% END %]</tbody>

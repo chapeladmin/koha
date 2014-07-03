@@ -19,7 +19,7 @@ KOHA.OpenLibrary = {
      */
     GetCoverFromIsbn: function() {
         var bibkeys = [];
-        $("div [id^=openlibrary-thumbnail]").each(function(i) {
+        $("[id^=openlibrary-thumbnail]").each(function(i) {
             bibkeys.push("ISBN:" + $(this).attr("class")); // id=isbn
         });
         bibkeys = bibkeys.join(',');
@@ -40,7 +40,7 @@ KOHA.OpenLibrary = {
         for (id in booksInfo) {
             var book = booksInfo[id];
             var isbn = id.substring(5);
-            $("."+isbn).each(function() {
+            $("[id^=openlibrary-thumbnail]."+isbn).each(function() {
                 var is_opacdetail = /openlibrary-thumbnail-preview/.exec($(this).attr("id"));
                 var a = document.createElement("a");
                 a.href = booksInfo.url;
@@ -51,7 +51,8 @@ KOHA.OpenLibrary = {
                         $(this).append(img);
                         $(this).append('<div class="results_summary">' + '<a href="' + book.url + '">Preview</a></div>');
                     } else {
-                        img.src = book.cover.small;
+                        img.src = book.cover.medium;
+                        img.height = '110';
                         $(this).append(img);
                     }
                 } else {

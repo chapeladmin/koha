@@ -1,3 +1,6 @@
+[% USE KohaDates %]
+[% USE ItemTypes %]
+[% USE AuthorisedValues %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Circulation &rsaquo; Holds queue</title>
 [% INCLUDE 'doc-head-close.inc' %]
@@ -6,13 +9,18 @@
 <body id="circ_view_holdsqueue" class="circ">
 [% INCLUDE 'header.inc' %]
 [% INCLUDE 'cat-search.inc' %]
-
-<script type="text/javascript" src="[% ( themelang ) %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">//<![CDATA[
 $(document).ready(function() {
-        $("#holdst").tablesorter({
-                sortList: [[6,0]],
-        });
+    $("#holdst").dataTable({
+        "aaSorting": [[ 3, "asc" ]],
+        "aoColumns": [
+            { "sType": "anti-the" },null,null,null,null,null,null,null,null,{ "sType": "title-string" },null
+        ],
+        "sDom": 't',
+        "bPaginate": false
+    });
 });
 //]]>
 </script>
@@ -34,7 +42,7 @@ $(document).ready(function() {
 [% IF ( run_report ) %]
     [% IF ( total ) %]
         <div class="results">[% total %] items found for
-            [% IF ( branch ) %][% branch %][% ELSE %]ALL libraries[% END %]
+            [% IF ( branchlimit ) %][% branchlimit %][% ELSE %]ALL libraries[% END %]
         </div>
     [% ELSE %]
         <div class="dialog message">No items found.</div>
@@ -45,6 +53,7 @@ $(document).ready(function() {
 	<tr>
         <th class="hq-title">Title</th>
         <th class="hq-collection">Collection</th>
+        <th class="hq-itemtype">Item type</th>
         <th class="hq-callnumber">Call number</th>
         <th class="hq-copynumber">Copy number</th>
         <th class="hq-enumchron">Enumeration</th>
@@ -66,7 +75,8 @@ $(document).ready(function() {
                                          [% IF ( itemsloo.size ) %][% itemsloo.size %][% END %] [% IF ( itemsloo.isbn ) %]ISBN: [% itemsloo.isbn %][% END %]</p>
 			</div>
 			</td>
-            <td class="hq-collection">[% itemsloo.ccode %]</td>
+            <td class="hq-collection">[% AuthorisedValues.GetByCode( 'CCODE', itemsloo.ccode ) %]</td>
+            <td class="hq-itemtype">[% ItemTypes.GetDescription( itemsloo.itype ) %]</td>
             <td class="hq-callnumber">[% itemsloo.location %] [% itemsloo.itemcallnumber %]</td>
             <td class="hq-copynumber">[% itemsloo.copynumber %]</td>
             <td class="hq-enumchron">[% itemsloo.enumchron %]</td>
@@ -79,7 +89,7 @@ $(document).ready(function() {
             </td>
 			<td class="hq-patron"><p><a href="/cgi-bin/koha/circ/circulation.pl?findborrower=[% itemsloo.cardnumber %]#reserves">[% itemsloo.surname %], [% itemsloo.firstname %] ([% itemsloo.cardnumber %])</a></p> <p>[% itemsloo.phone %]</p></td>
             <td class="hq-sendto">[% itemsloo.pickbranch %]</td>
-            <td class="hq-date">[% itemsloo.reservedate %]</td>
+            <td class="hq-date"><span title="[% itemsloo.reservedate %]">[% itemsloo.reservedate | $KohaDates %]</span></td>
             <td class="hq-notes">[% itemsloo.notes %]</td>
         </tr>
     [% END %]</tbody>

@@ -1,14 +1,18 @@
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Choose Adult category</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
 	$(document).ready(function() {
-		$.tablesorter.defaults.widgets = ['zebra'];
-		$("#catst").tablesorter({
-			sortList: [[2,0]],
-			headers: { 0: { sorter: false }}
-		});
+        $("#catst").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "sDom": 't',
+            "aaSorting": [[ 2, "asc" ]],
+            "aoColumnDefs": [
+                { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false }
+            ],
+            "bPaginate": false
+        }));
 	});
 </script>
 <style type="text/css"> 
@@ -21,7 +25,7 @@
 <div id="bd">
 
 [% IF ( CONFIRM ) %]
-<script language="javascript" type="text/javascript">
+<script type="text/javascript">
 function confirm_updatechild() {
     var is_confirmed = window.confirm('Are you sure you want to update this child to an Adult category?  This cannot be undone.');
    
@@ -35,7 +39,7 @@ confirm_updatechild([% borrowernumber %]);
 [% END %]
 
 [% IF ( SUCCESS ) %]
-<script language="javascript" type="text/javascript">
+<script type="text/javascript">
 self.opener.location.href='/cgi-bin/koha/members/moremember.pl?borrowernumber=[% borrowernumber %]';
 window.close();
 </script>

@@ -144,12 +144,17 @@ use C4::Context;
 use C4::Output;
 use C4::Auth qw(:DEFAULT get_session);
 use C4::Search;
-use C4::Languages qw(getAllLanguages);
+use C4::Languages qw(getLanguages);
 use C4::Koha;
 use C4::Members qw(GetMember);
 use C4::VirtualShelves;
+use URI::Escape;
 use POSIX qw(ceil floor);
+use String::Random;
 use C4::Branch; # GetBranches
+use C4::Search::History;
+
+use URI::Escape;
 
 my $DisplayMultiPlaceHold = C4::Context->preference("DisplayMultiPlaceHold");
 # create a new CGI object
@@ -158,7 +163,6 @@ use CGI qw('-no_undef_params');
 my $cgi = new CGI;
 
 my ($template,$borrowernumber,$cookie);
-
 # decide which template to use
 my $template_name;
 my $template_type;
@@ -171,7 +175,7 @@ else {
     $template_type = 'advsearch';
 }
 # load the template
-($template, $borrowernumber, $cookie) = get_template_and_user({
+my ($template, $borrowernumber, $cookie) = get_template_and_user({
     template_name => $template_name,
     query => $cgi,
     type => "intranet",
@@ -179,8 +183,14 @@ else {
     flagsrequired   => { catalogue => 1 },
     }
 );
+
+my $lang = C4::Languages::getlanguage($cgi);
+
 if (C4::Context->preference("marcflavour") eq "UNIMARC" ) {
     $template->param('UNIMARC' => 1);
+}
+if (C4::Context->preference("IntranetNumbersPreferPhrase")) {
+    $template->param('numbersphr' => 1);
 }
 
 if($cgi->cookie("holdfor")){ 
@@ -221,7 +231,7 @@ if($cgi->cookie("holdfor")){
 my $branches = GetBranches();
 
 # Populate branch_loop with all branches sorted by their name.  If
-# independantbranches is activated, set the default branch to the borrower
+# IndependentBranches is activated, set the default branch to the borrower
 # branch, except for superlibrarian who need to search all libraries.
 my $user = C4::Context->userenv;
 my @branch_loop = map {
@@ -234,7 +244,7 @@ my @branch_loop = map {
     $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname}
 } keys %$branches;
 
-my $categories = GetBranchCategories(undef,'searchdomain');
+my $categories = GetBranchCategories('searchdomain');
 
 $template->param(branchloop => \@branch_loop, searchdomainloop => $categories);
 
@@ -334,7 +344,7 @@ if ( $template_type eq 'advsearch' ) {
                       search_boxes_loop => \@search_boxes_array);
 
     # load the language limits (for search)
-    my $languages_limit_loop = getAllLanguages();
+    my $languages_limit_loop = getLanguages($lang, 1);
     $template->param(search_languages_loop => $languages_limit_loop,);
 
     # Expanded search options in advanced search:
@@ -388,11 +398,11 @@ unless (@servers) {
 }
 # operators include boolean and proximity operators and are used
 # to evaluate multiple operands
-my @operators = $cgi->param('op');
+my @operators = map uri_unescape($_), $cgi->param('op');
 
 # indexes are query qualifiers, like 'title', 'author', etc. They
 # can be single or multiple parameters separated by comma: kw,right-Truncation 
-my @indexes = $cgi->param('idx');
+my @indexes = map uri_unescape($_), $cgi->param('idx');
 
 # if a simple index (only one)  display the index used in the top search box
 if ($indexes[0] && (!$indexes[1] || $params->{'scan'})) {
@@ -401,15 +411,18 @@ if ($indexes[0] && (!$indexes[1] || $params->{'scan'})) {
     $template->param($idx => 1);
 }
 
-
 # an operand can be a single term, a phrase, or a complete ccl query
-my @operands = $cgi->param('q');
+my @operands = map uri_unescape($_), $cgi->param('q');
 
 # limits are use to limit to results to a pre-defined category such as branch or language
-my @limits = $cgi->param('limit');
+my @limits = map uri_unescape($_), $cgi->param('limit');
+my @nolimits = map uri_unescape($_), $cgi->param('nolimit');
+my %is_nolimit = map { $_ => 1 } @nolimits;
+@limits = grep { not $is_nolimit{$_} } @limits;
 
 if($params->{'multibranchlimit'}) {
-    push @limits, '('.join( " or ", map { "branch: $_ " } @{ GetBranchesInCategory( $params->{'multibranchlimit'} ) } ).')';
+    my $multibranch = '('.join( " or ", map { "branch: $_ " } @{ GetBranchesInCategory( $params->{'multibranchlimit'} ) } ).')';
+    push @limits, $multibranch if ($multibranch ne  '()');
 }
 
 my $available;
@@ -447,7 +460,7 @@ my $indexes2z3950 = {
 };
 for (my $ii = 0; $ii < @operands; ++$ii)
 {
-    my $name = $indexes2z3950->{$indexes[$ii]};
+    my $name = $indexes2z3950->{$indexes[$ii] || 'kw'};
     if (defined $name && defined $operands[$ii])
     {
         $z3950par ||= {};
@@ -472,7 +485,6 @@ my ( $error,$query,$simple_query,$query_cgi,$query_desc,$limit,$limit_cgi,$limit
 my @results;
 
 ## I. BUILD THE QUERY
-my $lang = C4::Templates::getlanguage($cgi, 'intranet');
 ( $error,$query,$simple_query,$query_cgi,$query_desc,$limit,$limit_cgi,$limit_desc,$stopwords_removed,$query_type) = buildQuery(\@operators,\@operands,\@indexes,\@limits,\@sort_by,$scan,$lang);
 
 ## parse the query_cgi string and put it into a form suitable for <input>s
@@ -505,7 +517,7 @@ for my $this_cgi ( split('&',$limit_cgi) ) {
     my $input_name = $1;
     my $input_value = $2;
     $input_name =~ s/=$//;
-    push @limit_inputs, { input_name => $input_name, input_value => $input_value };
+    push @limit_inputs, { input_name => $input_name, input_value => uri_unescape($input_value) };
 }
 $template->param ( LIMIT_INPUTS => \@limit_inputs );
 
@@ -515,18 +527,10 @@ my $facets; # this object stores the faceted results that display on the left-ha
 my @results_array;
 my $results_hashref;
 
-if (C4::Context->preference('NoZebra')) {
-    $query=~s/yr(:|=)\s*([\d]{1,4})-([\d]{1,4})/(yr>=$2 and yr<=$3)/g;
-    $simple_query=~s/yr\s*(:|=)([\d]{1,4})-([\d]{1,4})/(yr>=$2 and yr<=$3)/g;
-    # warn $query; 
-    eval {
-        ($error, $results_hashref, $facets) = NZgetRecords($query,$simple_query,\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$query_type,$scan);
-    };
-} else {
-    eval {
-        ($error, $results_hashref, $facets) = getRecords($query,$simple_query,\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$itemtypes,$query_type,$scan);
-    };
-}
+eval {
+    ($error, $results_hashref, $facets) = getRecords($query,$simple_query,\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$itemtypes,$query_type,$scan);
+};
+
 # This sorts the facets into alphabetical order
 if ($facets) {
     foreach my $f (@$facets) {
@@ -550,6 +554,30 @@ for (my $i=0;$i<@servers;$i++) {
         my @newresults = searchResults('intranet', $query_desc, $hits, $results_per_page, $offset, $scan,
                                        $results_hashref->{$server}->{"RECORDS"});
         $total = $total + $results_hashref->{$server}->{"hits"};
+
+        # Search history
+        if (C4::Context->preference('EnableSearchHistory')) {
+            unless ( $offset ) {
+                my $path_info = $cgi->url(-path_info=>1);
+                my $query_cgi_history = $cgi->url(-query=>1);
+                $query_cgi_history =~ s/^$path_info\?//;
+                $query_cgi_history =~ s/;/&/g;
+                my $query_desc_history = $query_desc;
+                $query_desc_history .= ", $limit_desc"
+                    if $limit_desc;
+
+                C4::Search::History::add({
+                    userid => $borrowernumber,
+                    sessionid => $cgi->cookie("CGISESSID"),
+                    query_desc => $query_desc_history,
+                    query_cgi => $query_cgi_history,
+                    total => $total,
+                    type => "biblio",
+                });
+            }
+            $template->param( EnableSearchHistory => 1 );
+        }
+
         ## If there's just one result, redirect to the detail page
         if ($total == 1) {         
             my $biblionumber = $newresults[0]->{biblionumber};
@@ -567,6 +595,9 @@ for (my $i=0;$i<@servers;$i++) {
             exit;
         }
 
+        # set up parameters if user wishes to re-run the search
+        # as a Z39.50 search
+        $template->param (z3950_search_params => C4::Search::z3950_search_args($z3950par || $query_desc));
 
         if ($hits) {
             $template->param(total => $hits);
@@ -579,7 +610,6 @@ for (my $i=0;$i<@servers;$i++) {
             $template->param(limit_desc => $limit_desc);
             $template->param(offset     => $offset);
             $template->param(DisplayMultiPlaceHold => $DisplayMultiPlaceHold);
-            $template->param (z3950_search_params => C4::Search::z3950_search_args($query_desc));
             if ($query_desc || $limit_desc) {
                 $template->param(searchdesc => 1);
             }
@@ -654,7 +684,6 @@ for (my $i=0;$i<@servers;$i++) {
         # no hits
         else {
             $template->param(searchdesc => 1,query_desc => $query_desc,limit_desc => $limit_desc);
-            $template->param (z3950_search_params => C4::Search::z3950_search_args($z3950par || $query_desc));
         }
 
     } # end of the if local
@@ -663,7 +692,10 @@ for (my $i=0;$i<@servers;$i++) {
     elsif ($server =~/authorityserver/) { # this is the local authority server
         my @inner_sup_results_array;
         for my $sup_record ( @{$results_hashref->{$server}->{"RECORDS"}} ) {
-            my $marc_record_object = MARC::Record->new_from_usmarc($sup_record);
+            my $marc_record_object = C4::Search::new_record_from_zebra(
+                'authorityserver',
+                $sup_record
+            );
             # warn "Authority Found: ".$marc_record_object->as_formatted();
             push @inner_sup_results_array, {
                 'title' => $marc_record_object->field(100)->subfield('a'),
@@ -678,6 +710,25 @@ for (my $i=0;$i<@servers;$i++) {
 } #/end of the for loop
 #$template->param(FEDERATED_RESULTS => \@results_array);
 
+$template->{'VARS'}->{'searchid'} = $cgi->param('searchid');
+
+my $gotonumber = $cgi->param('gotoNumber');
+if ($gotonumber eq 'last' || $gotonumber eq 'first') {
+    $template->{'VARS'}->{'gotoNumber'} = $gotonumber;
+}
+$template->{'VARS'}->{'gotoPage'}   = 'detail.pl';
+my $gotopage = $cgi->param('gotoPage');
+$template->{'VARS'}->{'gotoPage'} = $gotopage
+  if $gotopage =~ m/^(ISBD|labeledMARC|MARC|more)?detail.pl$/;
+
+my @input_values = map { Encode::decode_utf8($_->{input_value}) } @limit_inputs;
+for my $facet ( @$facets ) {
+    for my $entry ( @{ $facet->{facets} } ) {
+        my $index = $entry->{type_link_value};
+        my $value = $entry->{facet_link_value};
+        $entry->{active} = grep { $_ eq qq{$index:$value} } @input_values;
+    }
+}
 
 $template->param(
             #classlist => $classlist,

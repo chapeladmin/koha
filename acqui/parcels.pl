@@ -79,7 +79,7 @@ use C4::Budgets;
 
 my $input          = CGI->new;
 my $booksellerid     = $input->param('booksellerid');
-my $order          = $input->param('orderby') || 'datereceived desc';
+my $order          = $input->param('orderby') || 'shipmentdate desc';
 my $startfrom      = $input->param('startfrom');
 my $code           = $input->param('filter');
 my $datefrom       = $input->param('datefrom');
@@ -98,14 +98,32 @@ our ( $template, $loggedinuser, $cookie, $flags ) = get_template_and_user(
     }
 );
 
-if($op and $op eq 'new') {
-    my $invoicenumber = $input->param('invoice');
-    my $shipmentdate = $input->param('shipmentdate');
-    my $shipmentcost = $input->param('shipmentcost');
-    my $shipmentcost_budgetid = $input->param('shipmentcost_budgetid');
-    if($shipmentdate) {
-        $shipmentdate = C4::Dates->new($shipmentdate)->output('iso');
+my $invoicenumber = $input->param('invoice');
+my $shipmentdate = $input->param('shipmentdate');
+my $shipmentcost = $input->param('shipmentcost');
+my $shipmentcost_budgetid = $input->param('shipmentcost_budgetid');
+if($shipmentdate) {
+    $shipmentdate = C4::Dates->new($shipmentdate)->output('iso');
+}
+
+if ( $op and $op eq 'new' ) {
+    if ( C4::Context->preference('AcqWarnOnDuplicateInvoice') ) {
+        my @invoices = GetInvoices(
+            supplierid    => $booksellerid,
+            invoicenumber => $invoicenumber,
+        );
+        if ( scalar @invoices > 0 ) {
+            $template->{'VARS'}->{'duplicate_invoices'} = \@invoices;
+            $template->{'VARS'}->{'invoicenumber'}      = $invoicenumber;
+            $template->{'VARS'}->{'shipmentdate'}       = $shipmentdate;
+            $template->{'VARS'}->{'shipmentcost'}       = $shipmentcost;
+            $template->{'VARS'}->{'shipmentcost_budgetid'} =
+              $shipmentcost_budgetid;
+        }
     }
+    $op = 'confirm' unless $template->{'VARS'}->{'duplicate_invoices'};
+}
+if ($op and $op eq 'confirm') {
     my $invoiceid = AddInvoice(
         invoicenumber => $invoicenumber,
         booksellerid => $booksellerid,
@@ -151,7 +169,7 @@ for my $i ( $startfrom .. $last_row) {
         nullcode         => $p->{invoicenumber} eq 'NULL',
         emptycode        => $p->{invoicenumber} eq q{},
         raw_datereceived => $p->{shipmentdate},
-        datereceived     => format_date( $p->{shipmentdate} ),
+        datereceived     => $p->{shipmentdate},
         bibcount         => $p->{receivedbiblios} || 0,
         reccount         => $p->{receiveditems} || 0,
         itemcount        => $p->{itemsexpected} || 0,
@@ -161,12 +179,24 @@ if ($count_parcels) {
     $template->param( searchresults => $loopres, count => $count_parcels );
 }
 
-my $budgets = GetBudgets();
-my @budgets_loop;
-foreach my $budget (@$budgets) {
-    next unless CanUserUseBudget($loggedinuser, $budget, $flags);
-    push @budgets_loop, $budget;
+# build budget list
+my $budget_loop = [];
+my $budgets = GetBudgetHierarchy;
+foreach my $r (@{$budgets}) {
+    next unless (CanUserUseBudget($loggedinuser, $r, $flags));
+    if (!defined $r->{budget_amount} || $r->{budget_amount} == 0) {
+        next;
+    }
+    push @{$budget_loop}, {
+        b_id  => $r->{budget_id},
+        b_txt => $r->{budget_name},
+        b_active => $r->{budget_period_active},
+    };
 }
+
+@{$budget_loop} =
+  sort { uc( $a->{b_txt}) cmp uc( $b->{b_txt}) } @{$budget_loop};
+
 
 $template->param(
     orderby                  => $order,
@@ -175,11 +205,10 @@ $template->param(
     dateto                   => $dateto,
     resultsperpage           => $resultsperpage,
     name                     => $bookseller->{'name'},
-    DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
     shipmentdate_today       => C4::Dates->new()->output(),
     booksellerid             => $booksellerid,
     GST                      => C4::Context->preference('gist'),
-    budgets                  => \@budgets_loop,
+    budgets                  => $budget_loop,
 );
 
 output_html_with_http_headers $input, $cookie, $template->output;

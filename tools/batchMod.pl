@@ -34,6 +34,7 @@ use C4::ClassSource;
 use C4::Dates;
 use C4::Debug;
 use MARC::File::XML;
+use List::MoreUtils qw/uniq/;
 
 my $input = new CGI;
 my $dbh = C4::Context->dbh;
@@ -46,13 +47,14 @@ my $del_records  = $input->param('del_records');
 my $completedJobID = $input->param('completedJobID');
 my $runinbackground = $input->param('runinbackground');
 my $src          = $input->param('src');
-
+my $use_default_values = $input->param('use_default_values');
 
 my $template_name;
 my $template_flag;
 if (!defined $op) {
     $template_name = "tools/batchMod.tmpl";
     $template_flag = { tools => '*' };
+    $op = q{};
 } else {
     $template_name = ($del) ? "tools/batchMod-del.tmpl" : "tools/batchMod-edit.tmpl";
     $template_flag = ($del) ? { tools => 'items_batchdel' }   : { tools => 'items_batchmod' };
@@ -76,13 +78,14 @@ my $itemrecord;
 my $nextop="";
 my @errors; # store errors found while checking data BEFORE saving item.
 my $items_display_hashref;
-my $frameworkcode="";
-my $tagslib = &GetMarcStructure(1,$frameworkcode);
+my $tagslib = &GetMarcStructure(1);
 
 my $deleted_items = 0;     # Number of deleted items
 my $deleted_records = 0;   # Number of deleted records ( with no items attached )
 my $not_deleted_items = 0; # Number of items that could not be deleted
 my @not_deleted;           # List of the itemnumbers that could not be deleted
+my $modified_items = 0;    # Numbers of modified items
+my $modified_fields = 0;   # Numbers of modified fields
 
 my %cookies = parse CGI::Cookie($cookie);
 my $sessionID = $cookies{'CGISESSID'}->value;
@@ -108,7 +111,7 @@ if ($op eq "action") {
     # Once the job is done
     if ($completedJobID) {
 	# If we have a reasonable amount of items, we display them
-	if (scalar(@itemnumbers) <= 1000) {
+    if (scalar(@itemnumbers) <= ( C4::Context->preference("MaxItemsForBatch") // 1000 ) ) {
 	    $items_display_hashref=BuildItemsData(@itemnumbers);
 	} else {
 	    # Else, we only display the barcode
@@ -138,7 +141,6 @@ if ($op eq "action") {
 	my (  $itemtagfield,   $itemtagsubfield) = &GetMarcFromKohaField("items.itemnumber", "");
 	if ($values_to_modify){
 	    my $xml = TransformHtmlToXml(\@tags,\@subfields,\@values,\@indicator,\@ind_tag, 'ITEM');
-        utf8::encode($xml);
 	    $marcitem = MARC::Record::new_from_xml($xml, 'UTF-8');
         }
         if ($values_to_blank){
@@ -159,7 +161,7 @@ if ($op eq "action") {
 
 		$job->progress($i) if $runinbackground;
 		my $itemdata = GetItem($itemnumber);
-		if ($input->param("del")){
+        if ( $del ){
 			my $return = DelItemCheck(C4::Context->dbh, $itemdata->{'biblionumber'}, $itemdata->{'itemnumber'});
 			if ($return == 1) {
 			    $deleted_items++;
@@ -183,14 +185,25 @@ if ($op eq "action") {
                             }
                         }
 		} else {
-		    if ($values_to_modify || $values_to_blank) {
-			my $localmarcitem = Item2Marc($itemdata);
-			UpdateMarcWith( $marcitem, $localmarcitem );
-			eval{
-                            if ( my $item = ModItemFromMarc( $localmarcitem, $itemdata->{biblionumber}, $itemnumber ) ) {
-                                LostItem($itemnumber, 'MARK RETURNED', 'CHARGE FEE') if $item->{itemlost};
-                            }
-                        };
+            if ($values_to_modify || $values_to_blank) {
+                my $localmarcitem = Item2Marc($itemdata);
+
+                my $modified = UpdateMarcWith( $marcitem, $localmarcitem );
+                if ( $modified ) {
+                    eval {
+                        if ( my $item = ModItemFromMarc( $localmarcitem, $itemdata->{biblionumber}, $itemnumber ) ) {
+                            LostItem($itemnumber, 'MARK RETURNED') if $item->{itemlost};
+                        }
+                    };
+                }
+                if ( $runinbackground ) {
+                    $modified_items++ if $modified;
+                    $modified_fields += $modified;
+                    $job->set({
+                        modified_items  => $modified_items,
+                        modified_fields => $modified_fields,
+                    });
+                }
 		    }
 		}
 		$i++;
@@ -236,7 +249,7 @@ if ($op eq "show"){
             }
         }
         if ( my $list=$input->param('barcodelist')){
-            push my @barcodelist, split(/\s\n/, $list);
+            push my @barcodelist, uniq( split(/\s\n/, $list) );
 
             foreach my $barcode (@barcodelist) {
 
@@ -253,19 +266,24 @@ if ($op eq "show"){
 
     # Flag to tell the template there are valid results, hidden or not
     if(scalar(@itemnumbers) > 0){ $template->param("itemresults" => 1); }
-    # Only display the items if there are no more than 1000
-    if (scalar(@itemnumbers) <= 1000) {
+    # Only display the items if there are no more than pref MaxItemsForBatch
+    if (scalar(@itemnumbers) <= ( C4::Context->preference("MaxItemsForBatch") // 1000 ) ) {
         $items_display_hashref=BuildItemsData(@itemnumbers);
     } else {
         $template->param("too_many_items" => scalar(@itemnumbers));
         # Even if we do not display the items, we need the itemnumbers
-        my @itemnumbers_hashref = map {{itemnumber => $_}} @itemnumbers;
-        $template->param("itemnumbers_hashref" => \@itemnumbers_hashref);
+        $template->param(itemnumbers_array => \@itemnumbers);
     }
 # now, build the item form for entering a new item
 my @loop_data =();
 my $i=0;
-my $authorised_values_sth = $dbh->prepare("SELECT authorised_value,lib FROM authorised_values WHERE category=? ORDER BY lib");
+my $branch_limit = C4::Context->userenv ? C4::Context->userenv->{"branch"} : "";
+my $query = qq{SELECT authorised_value, lib FROM authorised_values};
+$query  .= qq{ LEFT JOIN authorised_values_branches ON ( id = av_id ) } if $branch_limit;
+$query  .= qq{ WHERE category = ?};
+$query  .= qq{ AND ( branchcode = ? OR branchcode IS NULL ) } if $branch_limit;
+$query  .= qq{ GROUP BY lib ORDER BY lib, lib_opac};
+my $authorised_values_sth = $dbh->prepare( $query );
 
 my $branches = GetBranchesLoop();  # build once ahead of time, instead of multiple times later.
 
@@ -301,7 +319,7 @@ foreach my $tag (sort keys %{$tagslib}) {
 	$subfield_data{repeatable} = $tagslib->{$tag}->{$subfield}->{repeatable};
 	my ($x,$value);
 	$value =~ s/"/&quot;/g;
-	unless ($value) {
+   if ( !$value && $use_default_values) {
 	    $value = $tagslib->{$tag}->{$subfield}->{defaultvalue};
 	    # get today date & replace YYYY, MM, DD if provided in the default value
 	    my ( $year, $month, $day ) = split ',', $today_iso;     # FIXME: iso dates don't have commas!
@@ -310,9 +328,9 @@ foreach my $tag (sort keys %{$tagslib}) {
 	    $value =~ s/DD/$day/g;
 	}
 	$subfield_data{visibility} = "display:none;" if (($tagslib->{$tag}->{$subfield}->{hidden} > 4) || ($tagslib->{$tag}->{$subfield}->{hidden} < -4));
-	# testing branch value if IndependantBranches.
+    # testing branch value if IndependentBranches.
 
-	my $attributes_no_value = qq(tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="255" );
+    my $attributes_no_value = qq(tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="255" );
 	my $attributes          = qq($attributes_no_value value="$value" );
 
 	if ( $tagslib->{$tag}->{$subfield}->{authorised_value} ) {
@@ -358,7 +376,7 @@ foreach my $tag (sort keys %{$tagslib}) {
       }
       else {
           push @authorised_values, ""; # unless ( $tagslib->{$tag}->{$subfield}->{mandatory} );
-          $authorised_values_sth->execute( $tagslib->{$tag}->{$subfield}->{authorised_value} );
+          $authorised_values_sth->execute( $tagslib->{$tag}->{$subfield}->{authorised_value}, $branch_limit ? $branch_limit : () );
           while ( my ( $value, $lib ) = $authorised_values_sth->fetchrow_array ) {
               push @authorised_values, $value;
               $authorised_lib{$value} = $lib;
@@ -393,14 +411,14 @@ foreach my $tag (sort keys %{$tagslib}) {
 			my $temp;
             my $extended_param = plugin_parameters( $dbh, $temp, $tagslib, $subfield_data{id}, \@loop_data );
             my ( $function_name, $javascript ) = plugin_javascript( $dbh, $temp, $tagslib, $subfield_data{id}, \@loop_data );
-            $subfield_data{marc_value} = qq[<input $attributes
+            $subfield_data{marc_value} = qq[<input type="text" $attributes
                 onfocus="Focus$function_name($subfield_data{random}, '$subfield_data{id}');"
                  onblur=" Blur$function_name($subfield_data{random}, '$subfield_data{id}');" />
                 <a href="#" class="buttonDot" onclick="Clic$function_name('$subfield_data{id}'); return false;" title="Tag Editor">...</a>
                 $javascript];
         } else {
             warn "Plugin Failed: $plugin";
-            $subfield_data{marc_value} = "<input $attributes />"; # supply default input form
+            $subfield_data{marc_value} = "<input type=\"text\" $attributes />"; # supply default input form
         }
     }
     elsif ( $tag eq '' ) {       # it's an hidden field
@@ -419,13 +437,15 @@ foreach my $tag (sort keys %{$tagslib}) {
         $subfield_data{marc_value} = "<textarea $attributes_no_value>$value</textarea>\n";
     } else {
         # it's a standard field
-         $subfield_data{marc_value} = "<input $attributes />";
+         $subfield_data{marc_value} = "<input type=\"text\" $attributes />";
     }
 #   $subfield_data{marc_value}="<input type=\"text\" name=\"field_value\">";
     push (@loop_data, \%subfield_data);
     $i++
   }
 } # -- End foreach tag
+$authorised_values_sth->finish;
+
 
 
     # what's the next op ? it's what we are not in : an add if we're editing, otherwise, and edit.
@@ -440,8 +460,8 @@ foreach my $tag (sort keys %{$tagslib}) {
 $template->param(%$items_display_hashref) if $items_display_hashref;
 $template->param(
     op      => $nextop,
-    $op => 1,
 );
+$template->param( $op => 1 ) if $op;
 
 if ($op eq "action") {
 
@@ -457,9 +477,10 @@ if ($op eq "action") {
 }
 
 foreach my $error (@errors) {
-    $template->param($error => 1);
+    $template->param($error => 1) if $error;
 }
 $template->param(src => $src);
+$template->param(biblionumber => $biblionumber);
 output_html_with_http_headers $input, $cookie, $template->output;
 exit;
 
@@ -481,10 +502,10 @@ sub BuildItemsData{
 			foreach my $field (grep {$_->tag() eq $itemtagfield} $itemmarc->fields()) {
 				# loop through each subfield
 				my $itembranchcode=$field->subfield($branchtagsubfield);
-				if ($itembranchcode && C4::Context->preference("IndependantBranches")) {
+                if ($itembranchcode && C4::Context->preference("IndependentBranches")) {
 						#verifying rights
 						my $userenv = C4::Context->userenv();
-						unless (($userenv->{'flags'} == 1) or (($userenv->{'branch'} eq $itembranchcode))){
+                        unless (C4::Context->IsSuperLibrarian() or (($userenv->{'branch'} eq $itembranchcode))){
 								$this_row{'nomod'}=1;
 						}
 				}
@@ -536,6 +557,8 @@ sub BuildItemsData{
       $row_data{title} = $row->{title};
       $row_data{isbn} = $row->{isbn};
       $row_data{biblionumber} = $row->{biblionumber};
+      my $is_on_loan = C4::Circulation::IsItemIssued( $row->{itemnumber} );
+      $row_data{onloan} = $is_on_loan ? 1 : 0;
 			push(@item_value_loop,\%row_data);
 		}
 		my @header_loop=map { { header_value=> $witness{$_}} } @witnesscodessorted;
@@ -550,21 +573,25 @@ sub BuildItemsData{
 # And $tag>10
 sub UpdateMarcWith {
   my ($marcfrom,$marcto)=@_;
-  #warn "FROM :",$marcfrom->as_formatted;
-	my (  $itemtag,   $itemtagsubfield) = &GetMarcFromKohaField("items.itemnumber", "");
-	my $fieldfrom=$marcfrom->field($itemtag);
-	my @fields_to=$marcto->field($itemtag);
-    foreach my $subfield ($fieldfrom->subfields()){
-		foreach my $field_to_update (@fields_to){
-		    if ($subfield->[1]){
-			$field_to_update->update($subfield->[0]=>$subfield->[1]);
-		    }
-		    else {
-			$field_to_update->delete_subfield(code=> $subfield->[0]);
-		    }
-		}
+    my (  $itemtag,   $itemtagsubfield) = &GetMarcFromKohaField("items.itemnumber", "");
+    my $fieldfrom=$marcfrom->field($itemtag);
+    my @fields_to=$marcto->field($itemtag);
+    my $modified = 0;
+    foreach my $subfield ( $fieldfrom->subfields() ) {
+        foreach my $field_to_update ( @fields_to ) {
+            if ( $subfield->[1] ) {
+                unless ( $field_to_update->subfield($subfield->[0]) ~~ $subfield->[1] ) {
+                    $modified++;
+                    $field_to_update->update( $subfield->[0] => $subfield->[1] );
+                }
+            }
+            else {
+                $modified++;
+                $field_to_update->delete_subfield( code => $subfield->[0] );
+            }
+        }
     }
-  #warn "TO edited:",$marcto->as_formatted;
+    return $modified;
 }
 
 sub find_value {
@@ -599,6 +626,13 @@ sub add_saved_job_results_to_template {
     my $job = C4::BackgroundJob->fetch($sessionID, $completedJobID);
     my $results = $job->results();
     add_results_to_template($template, $results);
+
+    my $fields = $job->get("modified_fields");
+    my $items = $job->get("modified_items");
+    $template->param(
+        modified_items => $items,
+        modified_fields => $fields,
+    );
 }
 
 sub put_in_background {

@@ -1,21 +1,39 @@
 #!/usr/bin/perl
 
-use Test::More tests => 15;
+use Modern::Perl;
+
+use DateTime;
+use C4::Biblio;
+use C4::Branch;
+use C4::Items;
+use C4::Members;
+use C4::Reserves;
+
+use Test::More tests => 48;
 
 BEGIN {
     use_ok('C4::Circulation');
 }
 
+my $dbh = C4::Context->dbh;
+
+# Start transaction
+$dbh->{AutoCommit} = 0;
+$dbh->{RaiseError} = 1;
+
+# Start with a clean slate
+$dbh->do('DELETE FROM issues');
+
 my $CircControl = C4::Context->preference('CircControl');
 my $HomeOrHoldingBranch = C4::Context->preference('HomeOrHoldingBranch');
 
 my $item = {
-    homebranch => 'ItemHomeBranch',
-    holdingbranch => 'ItemHoldingBranch'
+    homebranch => 'MPL',
+    holdingbranch => 'MPL'
 };
 
 my $borrower = {
-    branchcode => 'BorrowerBranch'
+    branchcode => 'MPL'
 };
 
 # No userenv, PickupLibrary
@@ -59,8 +77,8 @@ is(
 
 diag('Now, set a userenv');
 C4::Context->_new_userenv('xxx');
-C4::Context::set_userenv(0,0,0,'firstname','surname', 'CurrentBranch', 'CurrentBranchName', '', '', '');
-is(C4::Context->userenv->{branch}, 'CurrentBranch', 'userenv set');
+C4::Context::set_userenv(0,0,0,'firstname','surname', 'MPL', 'Midway Public Library', '', '', '');
+is(C4::Context->userenv->{branch}, 'MPL', 'userenv set');
 
 # Userenv set, PickupLibrary
 C4::Context->set_preference('CircControl', 'PickupLibrary');
@@ -71,7 +89,7 @@ is(
 );
 is(
     C4::Circulation::_GetCircControlBranch($item, $borrower),
-    'CurrentBranch',
+    'MPL',
     '_GetCircControlBranch returned current branch'
 );
 
@@ -108,3 +126,326 @@ is(
     $CircControl,
     'CircControl reset to its initial value'
 );
+
+# Set a simple circ policy
+$dbh->do('DELETE FROM issuingrules');
+$dbh->do(
+    q{INSERT INTO issuingrules (categorycode, branchcode, itemtype, reservesallowed,
+                                maxissueqty, issuelength, lengthunit,
+                                renewalsallowed, renewalperiod,
+                                fine, chargeperiod)
+      VALUES (?, ?, ?, ?,
+              ?, ?, ?,
+              ?, ?,
+              ?, ?
+             )
+    },
+    {},
+    '*', '*', '*', 25,
+    20, 14, 'days',
+    1, 7,
+    .10, 1
+);
+
+# Test C4::Circulation::ProcessOfflinePayment
+my $sth = C4::Context->dbh->prepare("SELECT COUNT(*) FROM accountlines WHERE amount = '-123.45' AND accounttype = 'Pay'");
+$sth->execute();
+my ( $original_count ) = $sth->fetchrow_array();
+
+C4::Context->dbh->do("INSERT INTO borrowers ( cardnumber, surname, firstname, categorycode, branchcode ) VALUES ( '99999999999', 'Hall', 'Kyle', 'S', 'MPL' )");
+
+C4::Circulation::ProcessOfflinePayment({ cardnumber => '99999999999', amount => '123.45' });
+
+$sth->execute();
+my ( $new_count ) = $sth->fetchrow_array();
+
+ok( $new_count == $original_count  + 1, 'ProcessOfflinePayment makes payment correctly' );
+
+C4::Context->dbh->do("DELETE FROM accountlines WHERE borrowernumber IN ( SELECT borrowernumber FROM borrowers WHERE cardnumber = '99999999999' )");
+C4::Context->dbh->do("DELETE FROM borrowers WHERE cardnumber = '99999999999'");
+C4::Context->dbh->do("DELETE FROM accountlines");
+{
+# CanBookBeRenewed tests
+
+    # Generate test biblio
+    my $biblio = MARC::Record->new();
+    my $title = 'Silence in the library';
+    $biblio->append_fields(
+        MARC::Field->new('100', ' ', ' ', a => 'Moffat, Steven'),
+        MARC::Field->new('245', ' ', ' ', a => $title),
+    );
+
+    my ($biblionumber, $biblioitemnumber) = AddBiblio($biblio, '');
+
+    my $barcode = 'R00000342';
+    my $branch = 'MPL';
+
+    my ( $item_bibnum, $item_bibitemnum, $itemnumber ) = AddItem(
+        {
+            homebranch       => $branch,
+            holdingbranch    => $branch,
+            barcode          => $barcode,
+            replacementprice => 12.00
+        },
+        $biblionumber
+    );
+
+    my $barcode2 = 'R00000343';
+    my ( $item_bibnum2, $item_bibitemnum2, $itemnumber2 ) = AddItem(
+        {
+            homebranch       => $branch,
+            holdingbranch    => $branch,
+            barcode          => $barcode2,
+            replacementprice => 23.00
+        },
+        $biblionumber
+    );
+
+    my $barcode3 = 'R00000346';
+    my ( $item_bibnum3, $item_bibitemnum3, $itemnumber3 ) = AddItem(
+        {
+            homebranch       => $branch,
+            holdingbranch    => $branch,
+            barcode          => $barcode3,
+            replacementprice => 23.00
+        },
+        $biblionumber
+    );
+
+    # Create 2 borrowers
+    my %renewing_borrower_data = (
+        firstname =>  'John',
+        surname => 'Renewal',
+        categorycode => 'S',
+        branchcode => $branch,
+    );
+
+    my %reserving_borrower_data = (
+        firstname =>  'Katrin',
+        surname => 'Reservation',
+        categorycode => 'S',
+        branchcode => $branch,
+    );
+
+    my $renewing_borrowernumber = AddMember(%renewing_borrower_data);
+    my $reserving_borrowernumber = AddMember(%reserving_borrower_data);
+
+    my $renewing_borrower = GetMember( borrowernumber => $renewing_borrowernumber );
+
+    my $constraint     = 'a';
+    my $bibitems       = '';
+    my $priority       = '1';
+    my $resdate        = undef;
+    my $expdate        = undef;
+    my $notes          = '';
+    my $checkitem      = undef;
+    my $found          = undef;
+
+    my $datedue = AddIssue( $renewing_borrower, $barcode);
+    is (defined $datedue, 1, "Item 1 checked out, due date: $datedue");
+
+    my $datedue2 = AddIssue( $renewing_borrower, $barcode2);
+    is (defined $datedue2, 1, "Item 2 checked out, due date: $datedue2");
+
+    my $borrowing_borrowernumber = GetItemIssue($itemnumber)->{borrowernumber};
+    is ($borrowing_borrowernumber, $renewing_borrowernumber, "Item checked out to $renewing_borrower->{firstname} $renewing_borrower->{surname}");
+
+    my ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber, 1);
+    is( $renewokay, 1, 'Can renew, no holds for this title or item');
+
+
+    diag("Biblio-level hold, renewal test");
+    AddReserve(
+        $branch, $reserving_borrowernumber, $biblionumber,
+        $constraint, $bibitems,  $priority, $resdate, $expdate, $notes,
+        $title, $checkitem, $found
+    );
+
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber);
+    is( $renewokay, 0, '(Bug 10663) Cannot renew, reserved');
+    is( $error, 'on_reserve', '(Bug 10663) Cannot renew, reserved (returned error is on_reserve)');
+
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber2);
+    is( $renewokay, 0, '(Bug 10663) Cannot renew, reserved');
+    is( $error, 'on_reserve', '(Bug 10663) Cannot renew, reserved (returned error is on_reserve)');
+
+    my $reserveid = C4::Reserves::GetReserveId({ biblionumber => $biblionumber, borrowernumber => $reserving_borrowernumber});
+    my $reserving_borrower = GetMember( borrowernumber => $reserving_borrowernumber );
+    AddIssue($reserving_borrower, $barcode3);
+    my $reserve = $dbh->selectrow_hashref(
+        'SELECT * FROM old_reserves WHERE reserve_id = ?',
+        { Slice => {} },
+        $reserveid
+    );
+    is($reserve->{found}, 'F', 'hold marked completed when checking out item that fills it');
+
+    diag("Item-level hold, renewal test");
+    AddReserve(
+        $branch, $reserving_borrowernumber, $biblionumber,
+        $constraint, $bibitems,  $priority, $resdate, $expdate, $notes,
+        $title, $itemnumber, $found
+    );
+
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber, 1);
+    is( $renewokay, 0, '(Bug 10663) Cannot renew, item reserved');
+    is( $error, 'on_reserve', '(Bug 10663) Cannot renew, item reserved (returned error is on_reserve)');
+
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber2, 1);
+    is( $renewokay, 1, 'Can renew item 2, item-level hold is on item 1');
+
+
+    diag("Items can't fill hold for reasons");
+    ModItem({ notforloan => 1 }, $biblionumber, $itemnumber);
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber, 1);
+    is( $renewokay, 1, 'Can renew, item is marked not for loan, hold does not block');
+    ModItem({ notforloan => 0, itype => '' }, $biblionumber, $itemnumber,1);
+
+    # FIXME: Add more for itemtype not for loan etc.
+
+    $reserveid = C4::Reserves::GetReserveId({ biblionumber => $biblionumber, itemnumber => $itemnumber, borrowernumber => $reserving_borrowernumber});
+    CancelReserve({ reserve_id => $reserveid });
+
+    # set policy to require that loans cannot be
+    # renewed until seven days prior to the due date
+    $dbh->do('UPDATE issuingrules SET norenewalbefore = 7');
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber);
+    is( $renewokay, 0, 'Cannot renew, renewal is premature');
+    is( $error, 'too_soon', 'Cannot renew, renewal is premature (returned code is too_soon)');
+    is(
+        GetSoonestRenewDate($renewing_borrowernumber, $itemnumber),
+        $datedue->clone->add(days => -7),
+        'renewals permitted 7 days before due date, as expected',
+    );
+
+    diag("Too many renewals");
+
+    # set policy to forbid renewals
+    $dbh->do('UPDATE issuingrules SET norenewalbefore = NULL, renewalsallowed = 0');
+
+    ( $renewokay, $error ) = CanBookBeRenewed($renewing_borrowernumber, $itemnumber);
+    is( $renewokay, 0, 'Cannot renew, 0 renewals allowed');
+    is( $error, 'too_many', 'Cannot renew, 0 renewals allowed (returned code is too_many)');
+
+    # Test WhenLostForgiveFine and WhenLostChargeReplacementFee
+    diag("WhenLostForgiveFine and WhenLostChargeReplacementFee");
+    C4::Context->set_preference('WhenLostForgiveFine','1');
+    C4::Context->set_preference('WhenLostChargeReplacementFee','1');
+
+    C4::Overdues::UpdateFine( $itemnumber, $renewing_borrower->{borrowernumber},
+        15.00, q{}, Koha::DateUtils::output_pref($datedue) );
+
+    LostItem( $itemnumber, 1 );
+
+    my $total_due = $dbh->selectrow_array(
+        'SELECT SUM( amountoutstanding ) FROM accountlines WHERE borrowernumber = ?',
+        undef, $renewing_borrower->{borrowernumber}
+    );
+
+    ok( $total_due == 12, 'Borrower only charged replacement fee with both WhenLostForgiveFine and WhenLostChargeReplacementFee enabled' );
+
+    C4::Context->dbh->do("DELETE FROM accountlines");
+
+    C4::Context->set_preference('WhenLostForgiveFine','0');
+    C4::Context->set_preference('WhenLostChargeReplacementFee','0');
+
+    C4::Overdues::UpdateFine( $itemnumber2, $renewing_borrower->{borrowernumber},
+        15.00, q{}, Koha::DateUtils::output_pref($datedue) );
+
+    LostItem( $itemnumber2, 1 );
+
+    $total_due = $dbh->selectrow_array(
+        'SELECT SUM( amountoutstanding ) FROM accountlines WHERE borrowernumber = ?',
+        undef, $renewing_borrower->{borrowernumber}
+    );
+
+    ok( $total_due == 15, 'Borrower only charged fine with both WhenLostForgiveFine and WhenLostChargeReplacementFee disabled' );
+}
+
+{
+    # GetUpcomingDueIssues tests
+    my $barcode  = 'R00000342';
+    my $barcode2 = 'R00000343';
+    my $barcode3 = 'R00000344';
+    my $branch   = 'MPL';
+
+    #Create another record
+    my $biblio2 = MARC::Record->new();
+    my $title2 = 'Something is worng here';
+    $biblio2->append_fields(
+        MARC::Field->new('100', ' ', ' ', a => 'Anonymous'),
+        MARC::Field->new('245', ' ', ' ', a => $title2),
+    );
+    my ($biblionumber2, $biblioitemnumber2) = AddBiblio($biblio2, '');
+
+    #Create third item
+    AddItem(
+        {
+            homebranch       => $branch,
+            holdingbranch    => $branch,
+            barcode          => $barcode3
+        },
+        $biblionumber2
+    );
+
+    # Create a borrower
+    my %a_borrower_data = (
+        firstname =>  'Fridolyn',
+        surname => 'SOMERS',
+        categorycode => 'S',
+        branchcode => $branch,
+    );
+
+    my $a_borrower_borrowernumber = AddMember(%a_borrower_data);
+    my $a_borrower = GetMember( borrowernumber => $a_borrower_borrowernumber );
+
+    my $yesterday = DateTime->today(time_zone => C4::Context->tz())->add( days => -1 );
+    my $two_days_ahead = DateTime->today(time_zone => C4::Context->tz())->add( days => 2 );
+    my $today = DateTime->today(time_zone => C4::Context->tz());
+
+    my $datedue  = AddIssue( $a_borrower, $barcode, $yesterday );
+    my $datedue2 = AddIssue( $a_borrower, $barcode2, $two_days_ahead );
+
+    my $upcoming_dues;
+
+    diag( "GetUpcomingDueIssues tests" );
+
+    for my $i(0..1) {
+        $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => $i } );
+        is ( scalar( @$upcoming_dues ), 0, "No items due in less than one day ($i days in advance)" );
+    }
+
+    #days_in_advance needs to be inclusive, so 1 matches items due tomorrow, 0 items due today etc.
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => 2 } );
+    is ( scalar ( @$upcoming_dues), 1, "Only one item due in 2 days or less" );
+
+    for my $i(3..5) {
+        $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => $i } );
+        is ( scalar( @$upcoming_dues ), 1,
+            "Bug 9362: Only one item due in more than 2 days ($i days in advance)" );
+    }
+
+    # Bug 11218 - Due notices not generated - GetUpcomingDueIssues needs to select due today items as well
+
+    my $datedue3 = AddIssue( $a_borrower, $barcode3, $today );
+
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => -1 } );
+    is ( scalar ( @$upcoming_dues), 0, "Overdues can not be selected" );
+
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => 0 } );
+    is ( scalar ( @$upcoming_dues), 1, "1 item is due today" );
+
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => 1 } );
+    is ( scalar ( @$upcoming_dues), 1, "1 item is due today, none tomorrow" );
+
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => 2 }  );
+    is ( scalar ( @$upcoming_dues), 2, "2 items are due withing 2 days" );
+
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues( { days_in_advance => 3 } );
+    is ( scalar ( @$upcoming_dues), 2, "2 items are due withing 2 days" );
+
+    $upcoming_dues = C4::Circulation::GetUpcomingDueIssues();
+    is ( scalar ( @$upcoming_dues), 2, "days_in_advance is 7 in GetUpcomingDueIssues if not provided" );
+
+}
+
+$dbh->rollback;

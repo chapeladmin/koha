@@ -55,15 +55,17 @@ my $op = $input->param('op');
 if($op && $op eq "save") {
     my @marcfields = $input->param('marcfield');
     my @marcsubfields = $input->param('marcsubfield');
+    my @operators = $input->param('operator');
     my @marcvalues = $input->param('marcvalue');
 
     my @mappings;
     my $i = 0;
     while($i < @marcfields and $i < @marcsubfields and $i < @marcvalues) {
-        if($marcfields[$i] and $marcsubfields[$i] and $marcvalues[$i]) {
+        if($marcfields[$i] and $marcsubfields[$i]) {
             push @mappings, {
                 marcfield    => $marcfields[$i],
                 marcsubfield => $marcsubfields[$i],
+                operator     => $operators[$i],
                 marcvalue    => $marcvalues[$i]
             };
         }

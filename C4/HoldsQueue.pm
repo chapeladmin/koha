@@ -32,6 +32,7 @@ use C4::Biblio;
 use C4::Dates qw/format_date/;
 
 use List::Util qw(shuffle);
+use List::MoreUtils qw(any);
 use Data::Dumper;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
@@ -48,8 +49,6 @@ BEGIN {
      );
 }
 
-# XXX This is not safe in a persistant environment
-my $dbh   = C4::Context->dbh;
 
 =head1 FUNCTIONS
 
@@ -62,6 +61,7 @@ Returns Transport Cost Matrix as a hashref <to branch code> => <from branch code
 =cut
 
 sub TransportCostMatrix {
+    my $dbh   = C4::Context->dbh;
     my $transport_costs = $dbh->selectall_arrayref("SELECT * FROM transport_cost",{ Slice => {} });
 
     my %transport_cost_matrix;
@@ -86,6 +86,7 @@ Records: { frombranch => <code>, tobranch => <code>, cost => <figure>, disable_t
 
 sub UpdateTransportCostMatrix {
     my ($records) = @_;
+    my $dbh   = C4::Context->dbh;
 
     my $sth = $dbh->prepare("INSERT INTO transport_cost (frombranch, tobranch, cost, disable_transfer) VALUES (?, ?, ?, ?)");
 
@@ -116,9 +117,10 @@ Returns hold queue for a holding branch. If branch is omitted, then whole queue 
 
 sub GetHoldsQueueItems {
     my ($branchlimit) = @_;
+    my $dbh   = C4::Context->dbh;
 
     my @bind_params = ();
-    my $query = q/SELECT tmp_holdsqueue.*, biblio.author, items.ccode, items.location, items.enumchron, items.cn_sort, biblioitems.publishercode,biblio.copyrightdate,biblioitems.publicationyear,biblioitems.pages,biblioitems.size,biblioitems.publicationyear,biblioitems.isbn,items.copynumber
+    my $query = q/SELECT tmp_holdsqueue.*, biblio.author, items.ccode, items.itype, biblioitems.itemtype, items.location, items.enumchron, items.cn_sort, biblioitems.publishercode,biblio.copyrightdate,biblioitems.publicationyear,biblioitems.pages,biblioitems.size,biblioitems.publicationyear,biblioitems.isbn,items.copynumber
                   FROM tmp_holdsqueue
                        JOIN biblio      USING (biblionumber)
                   LEFT JOIN biblioitems USING (biblionumber)
@@ -133,13 +135,19 @@ sub GetHoldsQueueItems {
     $sth->execute(@bind_params);
     my $items = [];
     while ( my $row = $sth->fetchrow_hashref ){
-        $row->{reservedate} = format_date($row->{reservedate});
         my $record = GetMarcBiblio($row->{biblionumber});
         if ($record){
             $row->{subtitle} = GetRecordValue('subtitle',$record,'')->[0]->{subfield};
             $row->{parts} = GetRecordValue('parts',$record,'')->[0]->{subfield};
             $row->{numbers} = GetRecordValue('numbers',$record,'')->[0]->{subfield};
         }
+
+        # return the bib-level or item-level itype per syspref
+        if (!C4::Context->preference('item-level_itypes')) {
+            $row->{itype} = $row->{itemtype};
+        }
+        delete $row->{itemtype};
+
         push @$items, $row;
     }
     return $items;
@@ -154,6 +162,7 @@ Top level function that turns reserves into tmp_holdsqueue and hold_fill_targets
 =cut
 
 sub CreateQueue {
+    my $dbh   = C4::Context->dbh;
 
     $dbh->do("DELETE FROM tmp_holdsqueue");  # clear the old table for new info
     $dbh->do("DELETE FROM hold_fill_targets");
@@ -220,7 +229,9 @@ sub GetBibsWithPendingHoldRequests {
                      FROM reserves
                      WHERE found IS NULL
                      AND priority > 0
-                     AND reservedate <= CURRENT_DATE()";
+                     AND reservedate <= CURRENT_DATE()
+                     AND suspend = 0
+                     ";
     my $sth = $dbh->prepare($bib_query);
 
     $sth->execute();
@@ -263,6 +274,7 @@ sub GetPendingHoldRequestsForBib {
                          AND found IS NULL
                          AND priority > 0
                          AND reservedate <= CURRENT_DATE()
+                         AND suspend = 0
                          ORDER BY priority";
     my $sth = $dbh->prepare($request_query);
     $sth->execute($biblionumber);
@@ -286,6 +298,7 @@ to fill a hold request if and only if:
     * it is not currently in transit
     * it is not lost
     * it is not sitting on the hold shelf
+    * it is not damaged (unless AllowHoldsOnDamagedItems is on)
 
 =cut
 
@@ -305,7 +318,7 @@ sub GetItemsAvailableToFillHoldRequestsForBib {
     $items_query .=   "WHERE items.notforloan = 0
                        AND holdingbranch IS NOT NULL
                        AND itemlost = 0
-                       AND wthdrawn = 0";
+                       AND withdrawn = 0";
     $items_query .= "  AND damaged = 0" unless C4::Context->preference('AllowHoldsOnDamagedItems');
     $items_query .= "  AND items.onloan IS NULL
                        AND (itemtypes.notforloan IS NULL OR itemtypes.notforloan = 0)
@@ -317,8 +330,6 @@ sub GetItemsAvailableToFillHoldRequestsForBib {
                            AND (found IS NOT NULL OR priority = 0)
                         )
                        AND items.biblionumber = ?";
-    $items_query .=  " AND damaged = 0 "
-      unless C4::Context->preference('AllowHoldsOnDamagedItems');
 
     my @params = ($biblionumber, $biblionumber);
     if ($branches_to_use && @$branches_to_use) {
@@ -332,7 +343,7 @@ sub GetItemsAvailableToFillHoldRequestsForBib {
     my @items = grep { ! scalar GetTransfers($_->{itemnumber}) } @$itm;
     return [ grep {
         my $rule = GetBranchItemRule($_->{homebranch}, $_->{itype});
-        $_->{holdallowed} = $rule->{holdallowed} != 0
+        $_->{holdallowed} = $rule->{holdallowed};
     } @items ];
 }
 
@@ -348,8 +359,6 @@ sub MapItemsToHoldRequests {
     # handle trival cases
     return unless scalar(@$hold_requests) > 0;
     return unless scalar(@$available_items) > 0;
-
-    my $automatic_return = C4::Context->preference("AutomaticItemReturn");
 
     # identify item-level requests
     my %specific_items_requested = map { $_->{itemnumber} => 1 }
@@ -398,11 +407,10 @@ sub MapItemsToHoldRequests {
     foreach my $item (@$available_items) {
         next unless $item->{holdallowed};
 
-        push @{ $items_by_branch{  $automatic_return ? $item->{homebranch}
-                                                     : $item->{holdingbranch} } }, $item
+        push @{ $items_by_branch{ $item->{holdingbranch} } }, $item
           unless exists $allocated_items{ $item->{itemnumber} };
     }
-    return unless keys %items_by_branch;
+    return \%item_map unless keys %items_by_branch;
 
     # now handle the title-level requests
     $num_items_remaining = scalar(@$available_items) - scalar(keys %allocated_items);
@@ -415,7 +423,7 @@ sub MapItemsToHoldRequests {
         my $pickup_branch = $request->{branchcode} || $request->{borrowerbranch};
         my ($itemnumber, $holdingbranch);
 
-        my $holding_branch_items = $automatic_return ? undef : $items_by_branch{$pickup_branch};
+        my $holding_branch_items = $items_by_branch{$pickup_branch};
         if ( $holding_branch_items ) {
             foreach my $item (@$holding_branch_items) {
                 if ( $request->{borrowerbranch} eq $item->{homebranch} ) {
@@ -424,7 +432,6 @@ sub MapItemsToHoldRequests {
                 }
             }
             $holdingbranch = $pickup_branch;
-            $itemnumber ||= $holding_branch_items->[0]->{itemnumber};
         }
         elsif ($transport_cost_matrix) {
             $pull_branches = [keys %items_by_branch];
@@ -438,7 +445,6 @@ sub MapItemsToHoldRequests {
                     $itemnumber = $item->{itemnumber};
                     last;
                 }
-                $itemnumber ||= $holding_branch_items->[0]->{itemnumber};
             }
             else {
                 warn "No transport costs for $pickup_branch";
@@ -460,14 +466,22 @@ sub MapItemsToHoldRequests {
                 $holdingbranch ||= $branch;
                 foreach my $item (@$holding_branch_items) {
                     next if $pickup_branch ne $item->{homebranch};
+                    next if ( $item->{holdallowed} == 1 && $item->{homebranch} ne $request->{borrowerbranch} );
 
                     $itemnumber = $item->{itemnumber};
                     $holdingbranch = $branch;
                     last PULL_BRANCHES;
                 }
             }
-            $itemnumber ||= $items_by_branch{$holdingbranch}->[0]->{itemnumber}
-              if $holdingbranch;
+
+            unless ( $itemnumber ) {
+                foreach my $current_item ( @{ $items_by_branch{$holdingbranch} } ) {
+                    if ( $holdingbranch && ( $current_item->{holdallowed} == 2 || $request->{borrowerbranch} eq $current_item->{homebranch} ) ) {
+                        $itemnumber = $current_item->{itemnumber};
+                        last; # quit this loop as soon as we have a suitable item
+                    }
+                }
+            }
         }
 
         if ($itemnumber) {
@@ -583,9 +597,13 @@ sub least_cost_branch {
     #$from - arrayref
     my ($to, $from, $transport_cost_matrix) = @_;
 
-# Nothing really spectacular: supply to branch, a list of potential from branches
-# and find the minimum from - to value from the transport_cost_matrix
+    # Nothing really spectacular: supply to branch, a list of potential from branches
+    # and find the minimum from - to value from the transport_cost_matrix
     return $from->[0] if @$from == 1;
+
+    # If the pickup library is in the list of libraries to pull from,
+    # return that library right away, it is obviously the least costly
+    return ($to) if any { $_ eq $to } @$from;
 
     my ($least_cost, @branch);
     foreach (@$from) {

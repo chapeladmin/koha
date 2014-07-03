@@ -12,7 +12,7 @@ INSERT INTO `categories` (`categorycode`, `description`, `enrolmentperiod`, `upp
 
 -- Professionals
 ('T','Lehrer',99,999,18,NULL,NULL,'0.000000',0,NULL,'0.000000','P'),
-('B','Vorstand',99,17,5,NULL,NULL,'0.000000',1,NULL,'0.000000','P'),
+('B','Gremienmitglied',99,17,5,NULL,NULL,'0.000000',1,NULL,'0.000000','P'),
 
 -- Institutional
 ('IL','Fernleihbibliothek',99,999,18,NULL,NULL,'0.000000',1,NULL,'0.000000','I'),
@@ -20,4 +20,4 @@ INSERT INTO `categories` (`categorycode`, `description`, `enrolmentperiod`, `upp
 ('L','Bibliothek',99,999,18,NULL,NULL,'0.000000',1,NULL,'0.000000','I'),
 
 -- Staff
-('S','Mitarbeiter',99,999,18,NULL,NULL,'0.000000',0,NULL,'0.000000','S');
+('S','Bibliotheksmitarbeiter',99,999,18,NULL,NULL,'0.000000',0,NULL,'0.000000','S');

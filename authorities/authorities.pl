@@ -24,6 +24,7 @@ use CGI;
 use C4::Auth;
 use C4::Output;
 use C4::AuthoritiesMarc;
+use C4::ImportBatch; #GetImportRecordMarc
 use C4::Context;
 use C4::Koha; # XXX subfield_is_koha_internal_p
 use Date::Calc qw(Today);
@@ -46,6 +47,21 @@ our($authorised_values_sth,$is_a_modif,$usedTagsLib,$mandatory_z3950);
 builds list, depending on authorised value...
 
 =cut
+
+sub MARCfindbreeding_auth {
+    my ( $id ) = @_;
+    my ($marc, $encoding) = GetImportRecordMarc($id);
+    if ($marc) {
+        my $record = MARC::Record->new_from_usmarc($marc);
+        if ( !defined(ref($record)) ) {
+                return -1;
+        } else {
+            return $record, $encoding;
+        }
+    } else {
+        return -1;
+    }
+}
 
 sub build_authorized_values_list {
     my ( $tag, $subfield, $value, $dbh, $authorised_values_sth,$index_tag,$index_subfield ) = @_;
@@ -76,7 +92,8 @@ sub build_authorized_values_list {
             "select itemtype,description from itemtypes order by description");
         $sth->execute;
         push @authorised_values, ""
-        unless ( $tagslib->{$tag}->{$subfield}->{mandatory} );
+          unless ( $tagslib->{$tag}->{$subfield}->{mandatory}
+            && ( $value || $tagslib->{$tag}->{$subfield}->{defaultvalue} ) );
         
         my $itemtype;
         
@@ -93,7 +110,8 @@ sub build_authorized_values_list {
             $tagslib->{$tag}->{$subfield}->{authorised_value} );
 
         push @authorised_values, ""
-        unless ( $tagslib->{$tag}->{$subfield}->{mandatory} );
+          unless ( $tagslib->{$tag}->{$subfield}->{mandatory}
+            && ( $value || $tagslib->{$tag}->{$subfield}->{defaultvalue} ) );
 
         while ( my ( $value, $lib ) = $authorised_values_sth->fetchrow_array ) {
             push @authorised_values, $value;
@@ -152,9 +170,15 @@ sub create_input {
         $value =~ s/DD/$day/g;
     }
     my $dbh = C4::Context->dbh;
+
+    # map '@' as "subfield" label for fixed fields
+    # to something that's allowed in a div id.
+    my $id_subfield = $subfield;
+    $id_subfield = "00" if $id_subfield eq "@";
+
     my %subfield_data = (
         tag        => $tag,
-        subfield   => $subfield,
+        subfield   => $id_subfield,
         marc_lib   => substr( $tagslib->{$tag}->{$subfield}->{lib}, 0, 22 ),
         marc_lib_plain => $tagslib->{$tag}->{$subfield}->{lib}, 
         tag_mandatory  => $tagslib->{$tag}->{mandatory},
@@ -162,14 +186,10 @@ sub create_input {
         repeatable     => $tagslib->{$tag}->{$subfield}->{repeatable},
         kohafield      => $tagslib->{$tag}->{$subfield}->{kohafield},
         index          => $index_tag,
-        id             => "tag_".$tag."_subfield_".$subfield."_".$index_tag."_".$index_subfield,
+        id             => "tag_".$tag."_subfield_".$id_subfield."_".$index_tag."_".$index_subfield,
         value          => $value,
+        random         => CreateKey(),
     );
-    if($subfield eq '@'){
-        $subfield_data{id} = "tag_".$tag."_subfield_00_".$index_tag."_".$index_subfield;
-    } else {
-        $subfield_data{id} = "tag_".$tag."_subfield_".$subfield."_".$index_tag."_".$index_subfield;
-    }
 
     if(exists $mandatory_z3950->{$tag.$subfield}){
         $subfield_data{z3950_mandatory} = $mandatory_z3950->{$tag.$subfield};
@@ -194,11 +214,10 @@ sub create_input {
             id=\"".$subfield_data{id}."\"
             name=\"".$subfield_data{id}."\"
             value=\"$value\"
-            class=\"input_marceditor readonly\"
-            tabindex=\"1\"
-            readonly=\"readonly\" \/>
+            class=\"input_marceditor\"
+            tabindex=\"1\" \/>
         <a href=\"#\" class=\"buttonDot\"
-        onclick=\"openAuth(this.parentNode.getElementsByTagName('input')[1].id,'".$tagslib->{$tag}->{$subfield}->{authtypecode}."'); return false;\" tabindex=\"1\" title=\"Tag Editor\">...</a>
+        onclick=\"openAuth(this.parentNode.getElementsByTagName('input')[1].id,'".$tagslib->{$tag}->{$subfield}->{authtypecode}."','auth'); return false;\" tabindex=\"1\" title=\"Tag Editor\">...</a>
     ";
     # it's a plugin field
     }
@@ -543,6 +562,7 @@ my $nonav = $input->param('nonav');
 my $myindex = $input->param('index');
 my $linkid=$input->param('linkid');
 my $authtypecode = $input->param('authtypecode');
+my $breedingid    = $input->param('breedingid');
 
 my $dbh = C4::Context->dbh;
 if(!$authtypecode) {
@@ -557,11 +577,18 @@ my ($template, $loggedinuser, $cookie)
                             flagsrequired => {editauthorities => 1},
                             debug => 1,
                             });
-$template->param(nonav   => $nonav,index=>$myindex,authtypecode=>$authtypecode,);
+$template->param(nonav   => $nonav,index=>$myindex,authtypecode=>$authtypecode,breedingid=>$breedingid,);
+
 $tagslib = GetTagsLabels(1,$authtypecode);
 my $record=-1;
 my $encoding="";
-$record = GetAuthority($authid) if ($authid);
+if (($authid) && !($breedingid)){
+    $record = GetAuthority($authid);
+}
+if ($breedingid) {
+    ( $record, $encoding ) = MARCfindbreeding_auth( $breedingid );
+}
+
 my ($oldauthnumtagfield,$oldauthnumtagsubfield);
 my ($oldauthtypetagfield,$oldauthtypetagsubfield);
 $is_a_modif=0;
@@ -582,17 +609,6 @@ if ($op eq "add") {
     my @ind_tag = $input->param('ind_tag');
     my @indicator = $input->param('indicator');
     my $record = TransformHtmlToMarc($input);
-    if  (C4::Context->preference("marcflavour") eq "UNIMARC"){
-        unless ($record->field('100')){
-        use POSIX qw(strftime);
-        my $string = strftime( "%Y%m%d", localtime(time) );
-        # set 50 to position 26 is biblios, 13 if authorities
-        my $pos=13;
-        $string = sprintf( "%-*s", 35, $string );
-        substr( $string, $pos , 2, "50" );
-        $record->append_fields(MARC::Field->new('100','','',"a"=>$string));
-        }    
-    }
 
     my ($duplicateauthid,$duplicateauthvalue);
      ($duplicateauthid,$duplicateauthvalue) = FindDuplicateAuthority($record,$authtypecode) if ($op eq "add") && (!$is_a_modif);

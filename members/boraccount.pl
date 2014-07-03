@@ -42,7 +42,7 @@ my ($template, $loggedinuser, $cookie)
                             query => $input,
                             type => "intranet",
                             authnotrequired => 0,
-                            flagsrequired => {borrowers => 1, updatecharges => 1},
+                            flagsrequired => {borrowers => 1, updatecharges => 'remaining_permissions'},
                             debug => 1,
                             });
 
@@ -84,7 +84,7 @@ foreach my $accountline ( @{$accts}) {
     $accountline->{date} = format_date($accountline->{date});
     $accountline->{amount} = sprintf '%.2f', $accountline->{amount};
     $accountline->{amountoutstanding} = sprintf '%.2f', $accountline->{amountoutstanding};
-    if ($accountline->{accounttype} eq 'Pay') {
+    if ($accountline->{accounttype} =~ /^Pay/) {
         $accountline->{payment} = 1;
         $reverse_col = 1;
     }
@@ -92,7 +92,7 @@ foreach my $accountline ( @{$accts}) {
 
 $template->param( adultborrower => 1 ) if ( $data->{'category_type'} eq 'A' );
 
-my ($picture, $dberror) = GetPatronImage($data->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($data->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 if (C4::Context->preference('ExtendedPatronAttributes')) {
@@ -129,6 +129,7 @@ $template->param(
     reverse_col         => $reverse_col,
     accounts            => $accts,
 	activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+    RoutingSerials => C4::Context->preference('RoutingSerials'),
 );
 
 output_html_with_http_headers $input, $cookie, $template->output;

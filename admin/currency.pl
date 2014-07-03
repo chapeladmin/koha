@@ -162,15 +162,16 @@ sub add_form {
     $template->param( add_form => 1 );
 
     #---- if primkey exists, it's a modify action, so read values to modify...
+    my $date;
     if ($curr) {
         my $curr_rec =
           $dbh->selectrow_hashref( 'select * from currency where currency=?',
             {}, $curr );
         for ( keys %{$curr_rec} ) {
+            if($_ eq "timestamp"){ $date = $curr_rec->{$_}; }
             $template->param( $_ => $curr_rec->{$_} );
         }
     }
-    my $date = $template->param('timestamp');
     if ($date) {
         $template->param( 'timestamp' => format_date($date) );
     }
@@ -184,6 +185,7 @@ sub add_validate {
     my $rec = {
         rate     => $input->param('rate'),
         symbol   => $input->param('symbol') || q{},
+        isocode  => $input->param('isocode') || q{},
         active   => $input->param('active') || 0,
         currency => $input->param('currency'),
     };
@@ -197,20 +199,22 @@ sub add_validate {
         {}, $input->param('currency') );
     if ($row_count) {
         $dbh->do(
-q|UPDATE currency SET rate = ?, symbol = ?, active = ? WHERE currency = ? |,
+q|UPDATE currency SET rate = ?, symbol = ?, isocode = ?, active = ? WHERE currency = ? |,
             {},
             $rec->{rate},
             $rec->{symbol},
+            $rec->{isocode},
             $rec->{active},
             $rec->{currency}
         );
     } else {
         $dbh->do(
-q|INSERT INTO currency (currency, rate, symbol, active) VALUES (?,?,?,?) |,
+q|INSERT INTO currency (currency, rate, symbol, isocode, active) VALUES (?,?,?,?,?) |,
             {},
             $rec->{currency},
             $rec->{rate},
             $rec->{symbol},
+            $rec->{isocode},
             $rec->{active}
         );
 

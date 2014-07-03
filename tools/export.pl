@@ -17,12 +17,13 @@
 # Suite 330, Boston, MA  02111-1307 USA
 
 use Modern::Perl;
+use MARC::File::XML;
 use List::MoreUtils qw(uniq);
 use Getopt::Long;
 use CGI;
 use C4::Auth;
 use C4::AuthoritiesMarc;    # GetAuthority
-use C4::Biblio;             # GetMarcBiblio GetXmlBiblio
+use C4::Biblio;             # GetMarcBiblio
 use C4::Branch;             # GetBranches
 use C4::Csv;
 use C4::Koha;               # GetItemTypes
@@ -37,6 +38,7 @@ my $dont_export_items;
 my $deleted_barcodes;
 my $timestamp;
 my $record_type;
+my $id_list_file;
 my $help;
 my $op       = $query->param("op")       || '';
 my $filename = $query->param("filename") || 'koha.mrc';
@@ -59,12 +61,13 @@ if ( $commandline ) {
         'clean'             => \$clean,
         'filename=s'        => \$filename,
         'record-type=s'     => \$record_type,
+        'id_list_file=s'    => \$id_list_file,
         'help|?'            => \$help
     );
 
     if ($help) {
         print <<_USAGE_;
-export.pl [--format=format] [--date=date] [--record-type=TYPE] [--dont_export_items] [--deleted_barcodes] [--clean] --filename=outputfile
+export.pl [--format=format] [--date=date] [--record-type=TYPE] [--dont_export_items] [--deleted_barcodes] [--clean] [--id_list_file=PATH] --filename=outputfile
 
 
  --format=FORMAT        FORMAT is either 'xml' or 'marc' (default)
@@ -81,6 +84,11 @@ export.pl [--format=format] [--date=date] [--record-type=TYPE] [--dont_export_it
                         specified). Used only if TYPE is 'bibs'
 
  --clean                removes NSE/NSB
+
+ --id_list_file=PATH    PATH is a path to a file containing a list of
+                        IDs (biblionumber or authid) with one ID per line.
+                        This list works as a filter; it is compatible with
+                        other parameters for selecting records
 _USAGE_
         exit;
     }
@@ -92,6 +100,7 @@ _USAGE_
     $deleted_barcodes  ||= 0;
     $clean             ||= 0;
     $record_type       ||= "bibs";
+    $id_list_file       ||= 0;
 
     # Redirect stdout
     open STDOUT, '>', $filename if $filename;
@@ -117,15 +126,15 @@ my ( $template, $loggedinuser, $cookie, $flags ) = get_template_and_user(
 );
 
 my $limit_ind_branch =
-  (      C4::Context->preference('IndependantBranches')
+  (      C4::Context->preference('IndependentBranches')
       && C4::Context->userenv
-      && !( C4::Context->userenv->{flags} & 1 )
+      && !C4::Context->IsSuperLibrarian()
       && C4::Context->userenv->{branch} ) ? 1 : 0;
 
 my $branch = $query->param("branch") || '';
-if (   C4::Context->preference("IndependantBranches")
+if (   C4::Context->preference("IndependentBranches")
     && C4::Context->userenv
-    && !( C4::Context->userenv->{flags} & 1 ) )
+    && !C4::Context->IsSuperLibrarian() )
 {
     $branch = C4::Context->userenv->{'branch'};
 }
@@ -195,6 +204,19 @@ if ( $op eq "export" ) {
         my $starting_authid = $query->param('starting_authid');
         my $ending_authid   = $query->param('ending_authid');
         my $authtype        = $query->param('authtype');
+        my $filefh;
+        if ($commandline) {
+            open $filefh,"<", $id_list_file or die "cannot open $id_list_file: $!";
+        } else {
+            $filefh = $query->upload("id_list_file");
+        }
+        my %id_filter;
+        if ($filefh) {
+            while (my $number=<$filefh>){
+                $number=~s/[\r\n]*$//;
+                $id_filter{$number}=1 if $number=~/^\d+$/;
+            }
+        }
 
         if ( $record_type eq 'bibs' and not @biblionumbers ) {
             if ($timestamp) {
@@ -307,8 +329,10 @@ if ( $op eq "export" ) {
             push @recordids, map {
                 map { $$_[0] } $_
             } @{ $sth->fetchall_arrayref };
+            @recordids = grep { exists($id_filter{$_}) } @recordids if scalar(%id_filter);
         }
 
+        my $xml_header_written = 0;
         for my $recordid ( uniq @recordids ) {
             if ($deleted_barcodes) {
                 my $q = "
@@ -356,37 +380,56 @@ if ( $op eq "export" ) {
                 }
 
                 if ($export_remove_fields) {
-                    my @fields = split " ", $export_remove_fields;
-                    foreach (@fields) {
-                        /^(\d*)(\w)?$/;
-                        my $field    = $1;
-                        my $subfield = $2;
+                    for my $f ( split / /, $export_remove_fields ) {
+                        if ( $f =~ m/^(\d{3})(.)?$/ ) {
+                            my ( $field, $subfield ) = ( $1, $2 );
 
-                        # skip if this record doesn't have this field
-                        next if not defined $record->field($field);
-                        if ($subfield) {
-                            $record->field($field)->delete_subfields($subfield);
-                        }
-                        else {
-                            $record->delete_field( $record->field($field) );
+                            # skip if this record doesn't have this field
+                            if ( defined $record->field($field) ) {
+                                if ( defined $subfield ) {
+                                    my @tags = $record->field($field);
+                                    foreach my $t (@tags) {
+                                        $t->delete_subfields($subfield);
+                                    }
+                                }
+                                else {
+                                    $record->delete_fields($field);
+                                }
+                            }
                         }
                     }
                 }
                 RemoveAllNsb($record) if ($clean);
                 if ( $output_format eq "xml" ) {
-                    if ( $marcflavour eq 'UNIMARC' && $record_type eq 'auths' )
-                    {
-                        print $record->as_xml_record('UNIMARCAUTH');
+                    unless ($xml_header_written) {
+                        MARC::File::XML->default_record_format(
+                            (
+                                     $marcflavour eq 'UNIMARC'
+                                  && $record_type eq 'auths'
+                            ) ? 'UNIMARCAUTH' : $marcflavour
+                        );
+                        print MARC::File::XML::header();
+                        print "\n";
+                        $xml_header_written = 1;
                     }
-                    else {
-                        print $record->as_xml_record($marcflavour);
-                    }
+                    print MARC::File::XML::record($record);
+                    print "\n";
                 }
                 else {
+                    my (@result_build_tag) = MARC::File::USMARC::_build_tag_directory($record);
+                    if ($result_build_tag[2] > 99999) {
+                        warn "record (number $recordid) length ".$result_build_tag[2]." is larger than the MARC spec allows (99999 bytes)";
+                        next;
+                    }
                     print $record->as_usmarc();
                 }
             }
         }
+        if ($xml_header_written) {
+            print MARC::File::XML::footer();
+            print "\n";
+        }
+
         exit;
     }
     elsif ( $format eq "csv" ) {
@@ -466,7 +509,6 @@ else {
     $template->param(
         branchloop               => \@branchloop,
         itemtypeloop             => \@itemtypesloop,
-        DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
         authtypeloop             => \@authtypesloop,
         export_remove_fields     => C4::Context->preference("ExportRemoveFields"),
     );
@@ -506,7 +548,7 @@ sub construct_query {
             my $branch               = $params->{branch};
             my $start_callnumber     = $params->{start_callnumber};
             my $end_callnumber       = $params->{end_callnumber};
-            my $start_accession      = $params->{star_accession};
+            my $start_accession      = $params->{start_accession};
             my $end_accession        = $params->{end_accession};
             my $itemtype             = $params->{itemtype};
             my $items_filter =
@@ -538,12 +580,12 @@ sub construct_query {
             }
 
             if ($start_callnumber) {
-                $sql_query .= " AND itemcallnumber <= ? ";
+                $sql_query .= " AND itemcallnumber >= ? ";
                 push @sql_params, $start_callnumber;
             }
 
             if ($end_callnumber) {
-                $sql_query .= " AND itemcallnumber >= ? ";
+                $sql_query .= " AND itemcallnumber <= ? ";
                 push @sql_params, $end_callnumber;
             }
             if ($start_accession) {

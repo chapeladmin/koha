@@ -105,7 +105,6 @@ if ( $op eq 'display' ) {
         basketcount   => $supplier->{'basketcount'},
         subscriptioncount   => $supplier->{'subscriptioncount'},
         contracts     => $contracts,
-        dateformat    => C4::Context->preference("dateformat"),
     );
 } elsif ( $op eq 'delete' ) {
     # no further message needed for the user
@@ -138,7 +137,7 @@ if ( $op eq 'display' ) {
 
     # get option values from gist syspref
     my @gst_values = map {
-        option => $_
+        option => $_ + 0.0
     }, split( '\|', C4::Context->preference("gist") );
 
     $template->param(

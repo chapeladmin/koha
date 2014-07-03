@@ -134,6 +134,7 @@ foreach my $serialid (@serialids) {
         && !$processedserialid{$serialid} )
     {
         my $serinfo = GetSerialInformation($serialid); #TODO duplicates work done by GetSerials2 above
+
         for my $d ( qw( publisheddate planneddate )){
             if ( $serinfo->{$d} =~m/^00/ ) {
                 $serinfo->{$d} = q{};
@@ -151,6 +152,7 @@ foreach my $serialid (@serialids) {
             )
             || $serinfo->{'cannotedit'}
         );
+        $serinfo->{editdisable} ||= ($serinfo->{status8} and $serinfo->{closed});
         push @serialdatalist, $serinfo;
         $processedserialid{$serialid} = 1;
     }
@@ -317,8 +319,12 @@ if ( $op and $op eq 'serialchangestatus' ) {
                     if ( C4::Context->preference('autoBarcode') eq
                         'incremental' )
                     {
-                        if ( !$bib_record->field($barcodetagfield)
-                            ->subfield($barcodetagsubfield) )
+                        if (
+                            !(
+                                   $bib_record->field($barcodetagfield)
+                                && $bib_record->field($barcodetagfield)->subfield($barcodetagsubfield)
+                            )
+                          )
                         {
                             my $sth_barcode = $dbh->prepare(
                                 'select max(abs(barcode)) from items');

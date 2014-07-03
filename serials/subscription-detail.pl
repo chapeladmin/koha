@@ -15,10 +15,12 @@
 # with Koha; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use strict;
-use warnings;
+use Modern::Perl;
 use CGI;
+use C4::Acquisition;
 use C4::Auth;
+use C4::Bookseller qw/GetBookSellerFromId/;
+use C4::Budgets;
 use C4::Koha;
 use C4::Dates qw/format_date/;
 use C4::Serials;
@@ -32,31 +34,21 @@ my $query = new CGI;
 my $op = $query->param('op') || q{};
 my $issueconfirmed = $query->param('issueconfirmed');
 my $dbh = C4::Context->dbh;
-my ($template, $loggedinuser, $cookie, $hemisphere);
 my $subscriptionid = $query->param('subscriptionid');
-my $subs = GetSubscription($subscriptionid);
 
-$subs->{enddate} = GetExpirationDate($subscriptionid);
-
-if ($op && $op eq 'del') {
-	if ($subs->{'cannotedit'}){
-		carp "Attempt to delete subscription $subscriptionid by ".C4::Context->userenv->{'id'}." not allowed";
-		print $query->redirect("/cgi-bin/koha/serials/subscription-detail.pl?subscriptionid=$subscriptionid");
-	}
-	DelSubscription($subscriptionid);
-	print "Content-Type: text/html\n\n<META HTTP-EQUIV=Refresh CONTENT=\"0; URL=serials-home.pl\"></html>";
-	exit;
+if ( $op and $op eq "close" ) {
+    C4::Serials::CloseSubscription( $subscriptionid );
+} elsif ( $op and $op eq "reopen" ) {
+    C4::Serials::ReopenSubscription( $subscriptionid );
 }
 
-my ($totalissues,@serialslist) = GetSerials($subscriptionid);
-$totalissues-- if $totalissues; # the -1 is to have 0 if this is a new subscription (only 1 issue)
 # the subscription must be deletable if there is NO issues for a reason or another (should not happend, but...)
 
 # Permission needed if it is a deletion (del) : delete_subscription
 # Permission needed otherwise : *
 my $permission = ($op eq "del") ? "delete_subscription" : "*";
 
-($template, $loggedinuser, $cookie)
+my ($template, $loggedinuser, $cookie)
 = get_template_and_user({template_name => "serials/subscription-detail.tmpl",
                 query => $query,
                 type => "intranet",
@@ -65,7 +57,12 @@ my $permission = ($op eq "del") ? "delete_subscription" : "*";
                 debug => 1,
                 });
 
-$$subs{enddate} ||= GetExpirationDate($subscriptionid);
+
+my $subs = GetSubscription($subscriptionid);
+$subs->{enddate} ||= GetExpirationDate($subscriptionid);
+
+my ($totalissues,@serialslist) = GetSerials($subscriptionid);
+$totalissues-- if $totalissues; # the -1 is to have 0 if this is a new subscription (only 1 issue)
 
 if ($op eq 'del') {
 	if ($$subs{'cannotedit'}){
@@ -109,15 +106,9 @@ $template->param(%{ $subs });
 $template->param(biblionumber_for_new_subscription => $subs->{bibnum});
 my @irregular_issues = split /,/, $subs->{irregularity};
 
-if (! $subs->{numberpattern}) {
-    $subs->{numberpattern} = q{};
-}
-if (! $subs->{dow}) {
-    $subs->{dow} = q{};
-}
-if (! $subs->{periodicity}) {
-    $subs->{periodicity} = '0';
-}
+my $frequency = C4::Serials::Frequency::GetSubscriptionFrequency($subs->{periodicity});
+my $numberpattern = C4::Serials::Numberpattern::GetSubscriptionNumberpattern($subs->{numberpattern});
+
 my $default_bib_view = get_default_view();
 
 my ( $order, $bookseller, $tmpl_infos );
@@ -141,33 +132,32 @@ if ( defined $subscriptionid ) {
         $tmpl_infos->{valuegsti_spent} = sprintf( "%.2f", $tmpl_infos->{valuegsti_spent} );
         $tmpl_infos->{valuegste_spent} = sprintf( "%.2f", $tmpl_infos->{valuegste_spent} );
         $tmpl_infos->{budget_name_spent} = GetBudgetName $lastOrderReceived->{budget_id};
-        $tmpl_infos->{invoicenumber} = $lastOrderReceived->{booksellerinvoicenumber};
+        $tmpl_infos->{invoiceid} = $lastOrderReceived->{invoiceid};
         $tmpl_infos->{spent_exists} = 1;
     }
 }
 
 $template->param(
-	subscriptionid => $subscriptionid,
+    subscriptionid => $subscriptionid,
     serialslist => \@serialslist,
     hasRouting  => $hasRouting,
     routing => C4::Context->preference("RoutingSerials"),
     totalissues => $totalissues,
-    hemisphere => $hemisphere,
-    cannotedit =>(C4::Context->preference('IndependantBranches') &&
-                C4::Context->userenv &&
-                C4::Context->userenv->{flags} % 2 !=1  &&
-                C4::Context->userenv->{branch} && $subs->{branchcode} &&
-                (C4::Context->userenv->{branch} ne $subs->{branchcode})),
-    'periodicity' . $subs->{periodicity} => 1,
-    'arrival' . $subs->{dow} => 1,
-    'numberpattern' . $subs->{numberpattern} => 1,
+    cannotedit => (not C4::Serials::can_edit_subscription( $subs )),
+    frequency => $frequency,
+    numberpattern => $numberpattern,
+    has_X           => ($numberpattern->{'numberingmethod'} =~ /{X}/) ? 1 : 0,
+    has_Y           => ($numberpattern->{'numberingmethod'} =~ /{Y}/) ? 1 : 0,
+    has_Z           => ($numberpattern->{'numberingmethod'} =~ /{Z}/) ? 1 : 0,
     intranetstylesheet => C4::Context->preference('intranetstylesheet'),
     intranetcolorstylesheet => C4::Context->preference('intranetcolorstylesheet'),
     irregular_issues => scalar @irregular_issues,
     default_bib_view => $default_bib_view,
     (uc(C4::Context->preference("marcflavour"))) => 1,
     show_acquisition_details => defined $tmpl_infos->{ordered_exists} || defined $tmpl_infos->{spent_exists} ? 1 : 0,
-    );
+    basketno => $order->{basketno},
+    %$tmpl_infos,
+);
 
 output_html_with_http_headers $query, $cookie, $template->output;
 
@@ -184,4 +174,37 @@ sub get_default_view {
         return 'labeledMARCdetail';
     }
     return 'detail';
+}
+
+sub get_value_with_gst_params {
+    my $value = shift;
+    my $gstrate = shift;
+    my $bookseller = shift;
+    if ( $bookseller->{listincgst} ) {
+        return ( $value, $value / ( 1 + $gstrate ) );
+    } else {
+        return ( $value * ( 1 + $gstrate ), $value );
+    }
+}
+
+sub get_gste {
+    my $value = shift;
+    my $gstrate = shift;
+    my $bookseller = shift;
+    if ( $bookseller->{invoiceincgst} ) {
+        return $value / ( 1 + $gstrate );
+    } else {
+        return $value;
+    }
+}
+
+sub get_gst {
+    my $value = shift;
+    my $gstrate = shift;
+    my $bookseller = shift;
+    if ( $bookseller->{invoiceincgst} ) {
+        return $value / ( 1 + $gstrate ) * $gstrate;
+    } else {
+        return $value * ( 1 + $gstrate ) - $value;
+    }
 }

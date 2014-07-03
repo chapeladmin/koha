@@ -1,10 +1,11 @@
+[% USE Koha %]
 [% PROCESS 'opac-authorities.inc' %]
 [% INCLUDE 'doc-head-open.inc' %][% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo;  Entry
 [% INCLUDE 'doc-head-close.inc' %]
 [% IF ( displayhierarchy ) %]
-<script language="javascript" type="text/javascript" src="/opac-tmpl/lib/jquery/plugins/jquery.jstree.js"></script>
+<script type="text/javascript" src="/opac-tmpl/lib/jquery/plugins/jquery.jstree.js"></script>
 [% END %]
-<script language="javascript" type="text/javascript">
+<script type="text/javascript">
 //<![CDATA[
 $(document).ready(function() {
     $('#authdescriptions').tabs();
@@ -32,7 +33,7 @@ $(document).ready(function() {
     <div id="yui-main">
     <div class="yui-b"><div class="yui-g">
 
-    <div id="views"><span class="view"><span id="Normalview">Normal view</span></span> <span class="view"><a id="MARCview" href="/cgi-bin/koha/opac-authoritiesdetail.pl?authid=[% authid %]&marc=1">MARC view</a></span></div>
+    <div id="views"><span class="view"><span id="Normalview">Normal view</span></span> <span class="view"><a id="MARCview" href="/cgi-bin/koha/opac-authoritiesdetail.pl?authid=[% authid %]&amp;marc=1">MARC view</a></span></div>
 
 <div id="userauthdetails" class="container">
 
@@ -42,7 +43,7 @@ $(document).ready(function() {
 </div>
 [% END %]
 
-<h1>[% summary.mainentry %][% IF authtypetext %]([% authtypetext %])[% END %]</h1>
+<h1>[% summary.mainentry %][% IF authtypetext %] ([% authtypetext %])[% END %]</h1>
 <div class="usedin">Used in <a href="opac-search.pl?type=opac&amp;q=[% authid %]&amp;idx=an,phr">[% count %] records</a></div>
 <div class="authstanza">
 [% FOREACH authorize IN summary.authorized %]
@@ -60,6 +61,7 @@ $(document).ready(function() {
         <span class="seefrom">[% PROCESS authheadingdisplay heading=seefro.heading search=seefrosearch authid=seefro.authid %]</span>
         </li>
     [% END %]
+    </ul>
     [% PROCESS otherscript headings=summary.otherscript wantcategory='seefrom' %]
     </div>
 [% END %]
@@ -76,17 +78,21 @@ $(document).ready(function() {
     </div>
 [% END %]
 [% IF marcflavour == 'UNIMARC' && summary.otherscript %]
-    <div class="authstanza">
+  <div class="authstanza">
+    <div class="authstanzaheading">Other forms:</div>
+    <ul>
     [% FOREACH otherscrip IN summary.otherscript %]
-        <div class="heading otherscript auth[% otherscrip.field %]"><span class="label">See also[% PROCESS language lang=otherscript.lang | trim %] term:</span>
+      <li>
+        [% PROCESS language lang=otherscrip.lang | trim %]:
         <span class="otherscript">[% otherscrip.term %]</span>
-        </div>
+      </li>
     [% END %]
-    </div>
+    </ul>
+  </div>
 [% END %]
 <div id="authdescriptions" class="toptabs">
 <ul>
-    <li id="tab_descriptions" class="ui-tabs-selected"><a href="#descriptions">Notes</a></li>
+    <li id="tab_descriptions"><a href="#descriptions">Notes</a></li>
 </ul>
 <div id="descriptions">
 <div class="content_set">
@@ -102,5 +108,5 @@ $(document).ready(function() {
 </div>
 </div>
 </div>
-</div>
+
 [% INCLUDE 'opac-bottom.inc' %]

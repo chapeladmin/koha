@@ -21,6 +21,7 @@ use strict;
 use warnings;
 
 use CGI;
+use Encode;
 use C4::Auth;
 use C4::Context;
 use C4::Koha;
@@ -33,6 +34,7 @@ use C4::Budgets qw(GetCurrency);
 use File::Spec;
 use IO::File;
 use YAML::Syck qw();
+use List::MoreUtils qw(any);
 $YAML::Syck::ImplicitTyping = 1;
 our $lang;
 
@@ -53,7 +55,7 @@ sub GetTab {
         local_currency => $local_currency, # currency code is used, because we do not know how a given currency is formatted.
     );
 
-    return YAML::Syck::Load( $tab_template->output() );
+    return YAML::Syck::Load( Encode::decode('UTF-8',$tab_template->output()) );
 }
 
 sub _get_chunk {
@@ -120,6 +122,13 @@ sub TransformPrefsToHTML {
     my $tab = $data->{ $title };
     $tab = { '' => $tab } if ( ref( $tab ) eq 'ARRAY' );
 
+    my @override_syspref_names;
+    if ( exists($ENV{OVERRIDE_SYSPREF_NAMES}) &&
+         defined($ENV{OVERRIDE_SYSPREF_NAMES})
+       ) {
+        @override_syspref_names = split /,/, $ENV{OVERRIDE_SYSPREF_NAMES};
+    }
+
     foreach my $group ( sort keys %$tab ) {
         if ( $group ) {
             push @lines, { is_group_title => 1, title => $group };
@@ -156,6 +165,7 @@ sub TransformPrefsToHTML {
                                 $name_entry->{'highlighted'} = 1;
                             }
                         }
+                        $name_entry->{'overridden'} = 1 if ( any { $name eq $_ } @override_syspref_names );
                         push @names, $name_entry;
                     } else {
                         push @chunks, $piece;
@@ -164,7 +174,6 @@ sub TransformPrefsToHTML {
                     push @chunks, { type_text => 1, contents => $piece };
                 }
             }
-
             push @lines, { CHUNKS => \@chunks, NAMES => \@names, is_group_title => 0 };
         }
     }
@@ -216,12 +225,10 @@ sub SearchPrefs {
 
                 foreach my $piece ( @$line ) {
                     if ( ref( $piece ) eq 'HASH' ) {
-                        if ( !$piece->{'pref'} ){ next; }
-                        if ( $piece->{'pref'} =~ /^$searchfield$/i ) {
-                            my ( undef, $LINES ) = TransformPrefsToHTML( $data, $searchfield );
-
-                            return { search_jumped => 1, tab => $tab_name, tab_title => $title, LINES => $LINES };
-                        } elsif ( matches( $piece->{'pref'}, \@terms) ) {
+                        if ( !$piece->{'pref'} ){
+                            next;
+                        }
+                        if ( matches( $piece->{'pref'}, \@terms) ) {
                             $matched = 1;
                         } elsif ( ref( $piece->{'choices'} ) eq 'HASH' && grep( { $_ && matches( $_, \@terms ) } values( %{ $piece->{'choices'} } ) ) ) {
                             $matched = 1;
@@ -297,7 +304,10 @@ my @TABS;
 if ( $op eq 'search' ) {
     my $searchfield = $input->param( 'searchfield' );
 
-    $searchfield =~ s/[^a-zA-Z0-9_ -]//g;
+    $searchfield =~ s/\p{IsC}//g;
+    $searchfield =~ s/\s+/ /;
+    $searchfield =~ s/^\s+//;
+    $searchfield =~ s/\s+$//;
 
     $template->param( searchfield => $searchfield );
 

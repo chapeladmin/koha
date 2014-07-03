@@ -89,7 +89,7 @@ foreach my $br ( keys %$branches ) {
             my $gettitle     = GetBiblioFromItemNumber( $num->{'itemnumber'} );
             my $itemtypeinfo = getitemtypeinfo( (C4::Context->preference('item-level_itypes')) ? $gettitle->{'itype'} : $gettitle->{'itemtype'} );
 
-            $getransf{'datetransfer'} = format_date( $num->{'datesent'} );
+            $getransf{'datetransfer'} = $num->{'datesent'};
             $getransf{'itemtype'} = $itemtypeinfo ->{'description'};
 			foreach (qw(title author biblionumber itemnumber barcode homebranch holdingbranch itemcallnumber)) {
             	$getransf{$_} = $gettitle->{$_};
@@ -99,7 +99,7 @@ foreach my $br ( keys %$branches ) {
             $getransf{'subtitle'} = GetRecordValue('subtitle', $record, GetFrameworkCode($gettitle->{'biblionumber'}));
 
             # we check if we have a reserv for this transfer
-            my @checkreserv = GetReservesFromItemnumber($num->{'itemnumber'} );
+            my @checkreserv = GetReservesFromItemnumber($num->{'itemnumber'});
             if ( $checkreserv[0] ) {
                 my $getborrower = GetMemberDetails( $checkreserv[1] );
                 $getransf{'borrowernum'}       = $getborrower->{'borrowernumber'};
@@ -120,7 +120,6 @@ foreach my $br ( keys %$branches ) {
 $template->param(
     branchesloop => \@branchesloop,
     show_date    => format_date(C4::Dates->today('iso')),
-	'dateformat_' . (C4::Context->preference("dateformat") || '') => 1,
 	TransfersMaxDaysWarning => C4::Context->preference('TransfersMaxDaysWarning'),
 	latetransfers => $latetransfers ? 1 : 0,
 );

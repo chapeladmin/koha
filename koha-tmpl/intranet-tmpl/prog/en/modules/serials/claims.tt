@@ -1,31 +1,35 @@
+[% USE Branches %]
+
 [% INCLUDE 'doc-head-open.inc' %]
     <title>Koha &rsaquo; Serials &rsaquo; Claims</title>
     [% INCLUDE 'doc-head-close.inc' %]
 [% INCLUDE 'calendar.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.uitablefilter.js"></script>
-<script type="text/JavaScript" language="JavaScript">
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">
 //<![CDATA[
 	 $(document).ready(function() {
-		[% UNLESS ( preview ) %]$("#claimst").tablesorter({[% IF ( dateformat == 'metric' ) %]
-			dateFormat: 'uk',[% END %]
-			headers: { 0: { sorter: false },1:{sorter:false}}
-		});[% END %]
+        [% UNLESS ( preview ) %]
+         var sTable = $("#claimst").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "sDom": 't',
+                "aoColumnDefs": [
+                    [% IF ( letter ) %]
+                        { "aTargets": [ 0,1 ], "bSortable": false, "bSearchable": false },
+                    [% ELSE %]
+                        { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false },
+                    [% END %]
+                    { 'sType': "anti-the", 'aTargets' : [ 'anti-the'] },
+                    { 'sType': "title-string", 'aTargets' : [ 'title-string'] }
+                ],
+            "bPaginate": false
+        }));
+        [% END %]
 	    $('#supplierid').change(function() {
     	    $('#claims').submit();
 	    });
 
-	    // Case-insensitive version of jquery's contains function
-	    jQuery.extend(
-		jQuery.expr[':'], { 
-		    icontains : "jQuery(a).text().toUpperCase().indexOf(m[3].toUpperCase())>=0" 
-		}
-	    );
-
-
 	    // Checkboxes : Select All / None
 	    $("span.checkall").html("<input type=\"checkbox\" name=\"CheckAll\"> "+_("Check All")+"</input>");
-	    $("span.exportSelected").html("<a id=\"ExportSelected\" href=\"/cgi-bin/koha/serials/claims.pl\"> "+_("Export selected items data") +"<\/a>");
 
         $("#CheckAll").click(function() {
             $("#claimst tr:visible :checkbox").attr('checked', $("#CheckAll").is(':checked'));
@@ -33,63 +37,72 @@
 
 	    // Generates a dynamic link for exporting the selection's data as CSV
 	    $("#ExportSelected").click(function() {
-		// We use input:checked because it's faster, but if there must new checkboxes  
-		// used for other purpose on this page, please use [name=serialid]:checked instead
-		var selected = $("input:checked");
+               // We need to use "input[name=serialid]:checked" instead of "input:checked". Otherwise, the "check all" box will pass the value of "on" as a serialid, which produces a SQL error.
+             var selected = $("input[name=serialid]:checked");
 
-		if (selected.length == 0) {
-			alert(_('Please select at least one item to export.'));
-			return false;
-		}
-		
-		// Building the url from currently checked boxes
-		var url = '/cgi-bin/koha/serials/lateissues-excel.pl?supplierid=&amp;op=claims';
-		for (var i = 0; i < selected.length; i++) {
-		    url += '&amp;serialid=' + selected[i].value;
-		}
-		// And redirecting to the CSV page
-		location.href = url;
-		return false;
-	    });	
+        if (selected.length == 0) {
+            alert(_("Please select at least one item to export."));
+            return false;
+        }
 
-        $("#titlefilter").keyup(function() {
-            $.uiTableFilter($("#claimst"), $("#titlefilter").val())
-	    });
+        // Building the url from currently checked boxes
+        var url = '/cgi-bin/koha/serials/lateissues-export.pl?supplierid=&amp;op=claims';
+        for (var i = 0; i < selected.length; i++) {
+            url += '&amp;serialid=' + selected[i].value;
+        }
+        url += '&amp;csv_profile=' + $("#csv_profile_for_export option:selected").val();
+        // And redirecting to the CSV page
+        location.href = url;
+        return false;
+        });
+
+        $("#titlefilter").keyup( function () {
+            sTable.fnFilter( this.value, 3 ); // 3 is position of title column
+        } );
 
         $("#branchfilter").keyup(function() {
-            $.uiTableFilter($("#claimst"), $("#branchfilter").val())
+            sTable.fnFilter( this.value, 2 ); // 2 is the position of the author column
 	    });
 	 });
 
 	// Checks if the form can be sent (at least one checkbox must be checked)
 	function checkForm() {
 	    if ($("input:checked").length == 0) {
-		alert(_('Please select at least one item.'));
+		alert(_("Please select at least one item."));
 		return false;
 	    }
 	}
 
-	// Filter by status
-	function filterByStatus() {
-	    selectedStatus = $("#statusfilter").val();
-	    if (selectedStatus == "all") {
-		clearFilters();
-	    } else {
-		$("table#claimst tbody tr").hide();
-		$("table#claimst tbody tr:contains(" + selectedStatus + ")").show();
-	    }
-	}
+    // Filter by status
+    function filterByStatus() {
+        selectedStatus = $("#statusfilter").val();
+        if (selectedStatus == "all") {
+            clearFilters();
+        } else {
+            $("table#claimst tbody tr").hide();
+            $("table#claimst tbody tr").each( function() {
+                if ( $(this).find("span.status-" + selectedStatus).size() > 0 ) {
+                    $(this).show();
+                }
+            });
+        }
+    }
 
-	// Filter by branch
-	function filterByBranch() {
-	    selectedBranch = $("#branchfilter").val();
-	    if (selectedBranch == "all") {
-		clearFilters();
-	    } else {
-		$("table#claimst tbody tr").hide();
-		$("table#claimst tbody tr:contains(" + selectedBranch + ")").show();
-	    }
-	}
+    // Filter by branch
+    function filterByBranch() {
+        selectedBranch = $("#branchfilter").val();
+        if (selectedBranch == "all") {
+            clearFilters();
+        } else {
+            $("table#claimst tbody tr").hide();
+            $("table#claimst tbody tr").each( function() {
+                if ( $(this).find("span.branch-" + selectedBranch).size() > 0 ) {
+                    $(this).show();
+                }
+            });
+        }
+    }
+
 	// Filter by date
 	function filterByDate() {
         var beginDate = Date_from_syspref($("#from").val()).getTime();
@@ -97,13 +110,13 @@
 	    
 	    // Checks if the beginning date is valid
 	    if (!parseInt(beginDate)) {
-		alert(_('The beginning date is missing or invalid.'));
+		alert(_("The beginning date is missing or invalid."));
 		return false;
 	    }
 
 	    // Checks if the ending date is valid
 	    if (!parseInt(endDate)) {
-		alert(_('The ending date is missing or invalid.'));
+		alert(_("The ending date is missing or invalid."));
 		return false;
 	    }
 
@@ -164,12 +177,12 @@
 
     <h1>Claims</h1>
 
-[% IF ( letter ) %][% UNLESS ( missingissues ) %][% IF ( supplierid ) %] <div class="dialog alert">No missing issues found.</div>[% ELSE %]<div class="dialog message">Please choose a vendor.</div>[% END %][% END %][% END %]
+[% IF letters %][% UNLESS ( missingissues ) %][% IF ( supplierid ) %] <div class="dialog alert">No missing issues found.</div>[% ELSE %]<div class="dialog message">Please choose a vendor.</div>[% END %][% END %][% END %]
 	
 	     [% IF ( SHOWCONFIRMATION ) %]
      <div class="dialog alert">Your notification has been sent.</div>
      [% END %]
-[% UNLESS ( letter ) %]<div class="dialog alert">No claims notice defined. <a href="/cgi-bin/koha/tools/letter.pl">Please define one</a>.</div>[% END %]
+[% UNLESS letters %]<div class="dialog alert">No claims notice defined. <a href="/cgi-bin/koha/tools/letter.pl">Please define one</a>.</div>[% END %]
     <form id="claims" name="claims" action="claims.pl" method="post">
     <fieldset>
 	    <label for="supplierid">Vendor: </label>
@@ -202,34 +215,36 @@
 	<li>
 	    <label for="statusfilter">Status : </label>
 	    <select id="statusfilter" onchange="filterByStatus();">
-		<option value="all" selected="selected">(All)</option>
-		<option>Expected</option>
-		<option>Arrived</option>
-		<option>Late</option>
-		<option>Missing</option>
-		<option>Claimed</option>
+            <option value="all" selected="selected">(All)</option>
+            <option value="expected">Expected</option>
+            <option value="late">Late</option>
+            <option value="missing">Missing</option>
+            <option value="missing_never_received">Missing (never received)</option>
+            <option value="missing_sold_out">Missing (sold out)</option>
+            <option value="missing_damaged">Missing (damaged)</option>
+            <option value="missing_lost">Missing (lost)</option>
+            <option value="claimed">Claimed</option>
 	    </select>
 	</li>
 	
 	<li>
 	    <label for="titlefilter">Title : </label>
-	    <input id="titlefilter" type="text" />
+        <input id="titlefilter" type="text" />
+    </li>
+    <li>
 	    <label for="branchfilter">Library: </label>
 	    <select id="branchfilter" onchange="filterByBranch();">
+            <option value="all" selected="selected">(All)</option>
             [% FOREACH branchloo IN branchloop %]
-                [% IF ( branchloo.selected ) %]
-                <option value="[% branchloo.value %]" selected="selected">[% branchloo.branchname %]</option>
-                [% ELSE %]
                 <option value="[% branchloo.value %]">[% branchloo.branchname %]</option>
-                [% END %]
             [% END %]
         </select>
 	</li>
 	
 	<li>
-        <label for="from">From</label>
+        <label for="from">From:</label>
         <input type="text" name="begindate" id="from" value="[% begindate %]" size="10" maxlength="10" class="datepickerfrom" />
-        <label for="to" style="float:none;">To</label>
+        <label for="to" style="float:none;">To:</label>
         <input type="text" name="enddate" id="to" value="[% enddate %]" size="10" maxlength="10" class="datepickerto" />
         <span class="hint">[% INCLUDE 'date-format.inc' %]</span>
 	    <input type="button" value="OK" onclick="filterByDate();" />
@@ -247,59 +262,76 @@
         <input type="hidden" name="order" value="[% order %]" />
          <table id="claimst">
                 <thead><tr>
-                    [% IF ( letter ) %]
                     <th><input type="checkbox" id="CheckAll"></th>
-                    [% END %]
                     <th>Vendor</th>
                     <th>Library</th>
-                    <th>Title</th>
+                    <th class="anti-the">Title</th>
+                    <th>ISSN</th>
                     <th>Issue number</th>
                     <th>Status</th>
-                    <th>Since</th>
-                    <th>Claim date</th>
-                <th>Begin claim</th>
+                    <th class="title-string">Since</th>
+                    <th class="title-string">Claim date</th>
                 </tr></thead>
                 <tbody>[% FOREACH missingissue IN missingissues %]
                     <tr>
-                        [% IF ( letter ) %]
-                            <td>
-                    <input type="checkbox" name="serialid" value="[% missingissue.serialid %]" />
-                            </td>
-                        [% END %]
+                        <td>
+                            <input type="checkbox" name="serialid" value="[% missingissue.serialid %]" />
+                        </td>
                         <td>
                         [% missingissue.name %]
                         </td>
                         <td>
-                        [% missingissue.branchcode %]
+                            <span class="branch-[% missingissue.branchcode %]">[% Branches.GetName( missingissue.branchcode ) %]</span>
                         </td>
                         <td>
                         <a href="/cgi-bin/koha/serials/subscription-detail.pl?subscriptionid=[% missingissue.subscriptionid %]">[% missingissue.title |html %]</a>
                         </td>
                         <td>
+                          [% missingissue.issn %]
+                        </td>
+                        <td>
                         [% missingissue.serialseq %]
                         </td>
                         <td>
-                            [% IF ( missingissue.status1 ) %]Expected[% END %]
-                            [% IF ( missingissue.status2 ) %]Arrived[% END %]
-                            [% IF ( missingissue.status3 ) %]Late[% END %]
-                            [% IF ( missingissue.status4 ) %]Missing[% END %]
-                            [% IF ( missingissue.status7 ) %]Claimed[% END %]
+                            [% IF ( missingissue.status1 ) %]<span class="status-expected">Expected</span>[% END %]
+                            [% IF ( missingissue.status3 ) %]<span class="status-late">Late</span>[% END %]
+                            [% IF ( missingissue.status4 ) %]<span class="status-missing">Missing</span>[% END %]
+                            [% IF ( missingissue.status41 ) %]<span class="status-missing_never_received">Missing (never received)</span>[% END %]
+                            [% IF ( missingissue.status42 ) %]<span class="status-missing_sold_out">Missing (sold out)</span>[% END %]
+                            [% IF ( missingissue.status43 ) %]<span class="status-missing_damaged">Missing (damaged)</span>[% END %]
+                            [% IF ( missingissue.status44 ) %]<span class="status-missing_lost">Missing (lost)</span>[% END %]
+                            [% IF ( missingissue.status7 ) %]<span class="status-claimed">Claimed</span>[% END %]
                         </td>
                         <td class="planneddate">
-                        [% missingissue.planneddate %]
+                            [% IF ( missingissue.planneddate ) %]
+                                <span title="[% missingissue.planneddateISO %]">[% missingissue.planneddate %]</span>
+                            [% ELSE %]
+                                <span title="0000-00-00"></span>
+                            [% END %]
                         </td>
                         <td>
-                        [% missingissue.claimdate %]
-                        </td>
-                        <td>
-                            <a href="/cgi-bin/koha/serials/lateissues-excel.pl?supplierid=[% missingissue.supplieri %]&amp;serialid=[% missingissue.serialid %]&amp;op=claims">Export item data</a>
+                            [% IF ( missingissue.claimdate ) %]
+                                <span title="[% missingissue.claimdateISO %]">[% missingissue.claimdate %]</span>
+                            [% ELSE %]
+                                <span title="0000-00-00"></span>
+                            [% END %]
                         </td>
                     </tr>
                 [% END %]</tbody>
             </table>
-	     <p><span class="exportSelected"></span></p>
 
-[% IF ( letter ) %]
+        [% IF csv_profiles %]
+          <fieldset class="action">
+            <label for="csv_code">Select CSV profile:</label>
+            <select id="csv_profile_for_export">
+              [% FOR csv IN csv_profiles %]
+                <option value="[% csv.export_format_id %]">[% csv.profile %]</option>
+               [% END %]
+            </select>
+            <span class="exportSelected"><a id="ExportSelected" href="/cgi-bin/koha/serials/claims.pl">Download selected claims</a></span>
+        [% END %]
+
+[% IF ( letters ) %]
         <fieldset class="action"> <label for="letter_code">Select notice:</label>
             <select name="letter_code" id="letter_code">
                 [% FOREACH letter IN letters %]

@@ -22,9 +22,8 @@ use strict;
 
 use C4::Accounts qw(recordpayment);
 use ILS;
-use base qw(ILS::Transaction);
+use parent qw(ILS::Transaction);
 
-use vars qw($VERSION @ISA $debug);
 
 our $debug   = 0;
 our $VERSION = 3.07.00.049;
@@ -47,8 +46,9 @@ sub pay {
     my $self           = shift;
     my $borrowernumber = shift;
     my $amt            = shift;
+    my $type           = shift;
     warn("RECORD:$borrowernumber::$amt");
-    recordpayment( $borrowernumber, $amt );
+    recordpayment( $borrowernumber, $amt,$type );
 }
 
 #sub DESTROY {

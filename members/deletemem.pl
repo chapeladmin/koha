@@ -66,9 +66,9 @@ if ($bor->{category_type} eq "S") {
     }
 }
 
-if (C4::Context->preference("IndependantBranches")) {
+if (C4::Context->preference("IndependentBranches")) {
     my $userenv = C4::Context->userenv;
-    if (($userenv->{flags} % 2 != 1) && $bor->{'branchcode'}){
+    if ( !C4::Context->IsSuperLibrarian() && $bor->{'branchcode'}){
         unless ($userenv->{branch} eq $bor->{'branchcode'}){
             print $input->redirect("/cgi-bin/koha/members/moremember.pl?borrowernumber=$member&error=CANT_DELETE_OTHERLIBRARY");
             exit;
@@ -83,7 +83,7 @@ my $data=$sth->fetchrow_hashref;
 if ($countissues > 0 or $flags->{'CHARGES'}  or $data->{'borrowernumber'}){
     #   print $input->header;
 
-    my ($picture, $dberror) = GetPatronImage($bor->{'cardnumber'});
+    my ($picture, $dberror) = GetPatronImage($bor->{'borrowernumber'});
     $template->param( picture => 1 ) if $picture;
 
     $template->param(borrowernumber => $member,
@@ -104,6 +104,7 @@ if ($countissues > 0 or $flags->{'CHARGES'}  or $data->{'borrowernumber'}){
         branchcode => $bor->{'branchcode'},
         branchname => GetBranchName($bor->{'branchcode'}),
 		activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+        RoutingSerials => C4::Context->preference('RoutingSerials'),
     );
     if ($countissues >0) {
         $template->param(ItemsOnIssues => $countissues);

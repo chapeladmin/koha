@@ -12,13 +12,10 @@ use ILS::Transaction;
 use C4::Reserves;	# AddReserve
 use C4::Members;	# GetMember
 use C4::Biblio;		# GetBiblioFromItemNumber GetBiblioItemByBiblioNumber
+use parent qw(ILS::Transaction);
 
-use vars qw($VERSION @ISA);
 
-BEGIN {
-    $VERSION = 3.07.00.049;
-	    @ISA = qw(ILS::Transaction);
-}
+our $VERSION = 3.07.00.049;
 
 my %fields = (
 	expiration_date => 0,
@@ -88,10 +85,13 @@ sub drop_hold {
 		return $self;
 	}
 	my $bib = GetBiblioFromItemNumber(undef, $self->{item}->id);
-	# FIXME: figure out if it is a item or title hold.  Till then, cancel both.
-	CancelReserve($bib->{biblionumber}, undef, $borrower->{borrowernumber});
-	CancelReserve(undef, $self->{item}->id, $borrower->{borrowernumber});
-		# unfortunately no meaningful return value here either
+
+      CancelReserve({
+            biblionumber   => $bib->{biblionumber},
+        itemnumber     => $self->{item}->id,
+           borrowernumber => $borrower->{borrowernumber}
+      });
+
 	$self->ok(1);
 	return $self;
 }
@@ -122,17 +122,11 @@ sub change_hold {
 		return $self;
 	}
 	my $bibno = $bib->{biblionumber};
-	ModReserve($bibno, $borrower->{borrowernumber}, $branch, GetBiblioItemByBiblioNumber($bibno));
-		# unfortunately no meaningful return value
-		# ModReserve needs to be fixed to maintain priority by iteself (Feb 2008)
+	ModReserve({ biblionumber => $bibno, borrowernumber => $borrower->{borrowernumber}, branchcode => $branch });
+
 	$self->ok(1);
 	return $self;
 }
+
 1;
 __END__
-
-# 11 friggin arguments
-AddReserve($branch,$borrowernumber,$biblionumber,$constraint,$bibitems,$priority,$startdate,$notes,$title,$checkitem,$found)
-
-ModReserve($rank, $biblio, $borrower, $branch , $itemnumber)
-

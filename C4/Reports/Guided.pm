@@ -45,6 +45,10 @@ BEGIN {
       get_column_type get_distinct_values save_dictionary get_from_dictionary
       delete_definition delete_report format_results get_sql
       nb_rows update_sql build_authorised_value_list
+      GetReservedAuthorisedValues
+      GetParametersFromSQL
+      IsAuthorisedValueValid
+      ValidateSQLParameters
     );
 }
 
@@ -62,9 +66,7 @@ C4::Reports::Guided - Module for generating guided reports
 
 =head1 METHODS
 
-=over 2
-
-=item get_report_areas()
+=head2 get_report_areas
 
 This will return a list of all the available report areas
 
@@ -129,7 +131,7 @@ if ( C4::Context->preference('item-level_itypes') ) {
     unshift @{ $criteria{'CAT'} }, 'biblioitems.itemtype';
 }
 
-=item get_report_types()
+=head2 get_report_types
 
 This will return a list of all the available report types
 
@@ -151,7 +153,7 @@ sub get_report_types {
 
 }
 
-=item get_report_groups()
+=head2 get_report_groups
 
 This will return a list of all the available report areas with groups
 
@@ -180,7 +182,7 @@ sub get_report_groups {
     return \%groups_with_subgroups
 }
 
-=item get_all_tables()
+=head2 get_all_tables
 
 This will return a list of all tables in the database 
 
@@ -200,7 +202,7 @@ sub get_all_tables {
 
 }
 
-=item get_columns($area)
+=head2 get_columns($area)
 
 This will return a list of all columns for a report area
 
@@ -244,7 +246,7 @@ sub _get_columns {
     return (@columns);
 }
 
-=item build_query($columns,$criteria,$orderby,$area)
+=head2 build_query($columns,$criteria,$orderby,$area)
 
 This will build the sql needed to return the results asked for, 
 $columns is expected to be of the format tablename.columnname.
@@ -316,7 +318,7 @@ sub _build_query {
     return ($query);
 }
 
-=item get_criteria($area,$cgi);
+=head2 get_criteria($area,$cgi);
 
 Returns an arraref to hashrefs suitable for using in a tmpl_loop. With the criteria and available values.
 
@@ -388,7 +390,7 @@ sub get_criteria {
     return ( \@criteria_array );
 }
 
-sub nb_rows($) {
+sub nb_rows {
     my $sql = shift or return;
     my $sth = C4::Context->dbh->prepare($sql);
     $sth->execute();
@@ -396,24 +398,27 @@ sub nb_rows($) {
     return scalar (@$rows);
 }
 
-=item execute_query
+=head2 execute_query
 
-  ($results, $error) = execute_query($sql, $offset, $limit)
+  ($sth, $error) = execute_query($sql, $offset, $limit[, \@sql_params])
 
 
-When passed C<$sql>, this function returns an array ref containing a result set
-suitably formatted for display in html or for output as a flat file when passed in
-C<$format> and C<$id>. It also returns the C<$total> records available for the
-supplied query. If passed any query other than a SELECT, or if there is a db error,
-C<$errors> an array ref is returned containing the error after this manner:
+This function returns a DBI statement handler from which the caller can
+fetch the results of the SQL passed via C<$sql>.
+
+If passed any query other than a SELECT, or if there is a DB error,
+C<$errors> is returned, and is a hashref containing the error after this
+manner:
 
 C<$error->{'sqlerr'}> contains the offending SQL keyword.
-C<$error->{'queryerr'}> contains the native db engine error returned for the query.
+C<$error->{'queryerr'}> contains the native db engine error returned
+for the query.
 
-Valid values for C<$format> are 'text,' 'tab,' 'csv,' or 'url. C<$sql>, C<$type>,
-C<$offset>, and C<$limit> are required parameters. If a valid C<$format> is passed
-in, C<$offset> and C<$limit> are ignored for obvious reasons. A LIMIT specified by
-the user in a user-supplied SQL query WILL apply in any case.
+C<$offset>, and C<$limit> are required parameters.
+
+C<\@sql_params> is an optional list of parameter values to paste in.
+The caller is reponsible for making sure that C<$sql> has placeholders
+and that the number placeholders matches the number of parameters.
 
 =cut
 
@@ -422,7 +427,7 @@ the user in a user-supplied SQL query WILL apply in any case.
 #  ~ remove any LIMIT clause
 #  ~ repace SELECT clause w/ SELECT count(*)
 
-sub select_2_select_count ($) {
+sub select_2_select_count {
     # Modify the query passed in to create a count query... (I think this covers all cases -crn)
     my ($sql) = strip_limit(shift) or return;
     $sql =~ s/\bSELECT\W+(?:\w+\W+){1,}?FROM\b|\bSELECT\W\*\WFROM\b/SELECT count(*) FROM /ig;
@@ -468,9 +473,11 @@ sub strip_limit {
     }
 }
 
-sub execute_query ($;$$$) {
+sub execute_query {
 
-    my ( $sql, $offset, $limit, $no_count ) = @_;
+    my ( $sql, $offset, $limit, $sql_params ) = @_;
+
+    $sql_params = [] unless defined $sql_params;
 
     # check parameters
     unless ($sql) {
@@ -504,7 +511,8 @@ sub execute_query ($;$$$) {
     $sql .= " LIMIT ?, ?";
 
     my $sth = C4::Context->dbh->prepare($sql);
-    $sth->execute($offset, $limit);
+    $sth->execute(@$sql_params, $offset, $limit);
+    return ( $sth, { queryerr => $sth->errstr } ) if ($sth->err);
     return ( $sth );
     # my @xmlarray = ... ;
     # my $url = "/cgi-bin/koha/reports/guided_reports.pl?phase=retrieve%20results&id=$id";
@@ -512,7 +520,7 @@ sub execute_query ($;$$$) {
     # store_results($id,$xml);
 }
 
-=item save_report($sql,$name,$type,$notes)
+=head2 save_report($sql,$name,$type,$notes)
 
 Given some sql and a name this will saved it so that it can reused
 Returns id of the newly created report
@@ -607,13 +615,13 @@ sub format_results {
 }	
 
 sub delete_report {
-    my ($id)  = @_;
-    my $dbh   = C4::Context->dbh();
-    my $query = "DELETE FROM saved_sql WHERE id = ?";
-    my $sth   = $dbh->prepare($query);
-    $sth->execute($id);
-}	
-
+    my (@ids) = @_;
+    return unless @ids;
+    my $dbh = C4::Context->dbh;
+    my $query = 'DELETE FROM saved_sql WHERE id IN (' . join( ',', ('?') x @ids ) . ')';
+    my $sth = $dbh->prepare($query);
+    return $sth->execute(@ids);
+}
 
 my $SAVED_REPORTS_BASE_QRY = <<EOQ;
 SELECT s.*, r.report, r.date_run, $AREA_NAME_SQL_SNIPPET, av_g.lib AS groupname, av_sg.lib AS subgroupname,
@@ -671,7 +679,6 @@ sub get_saved_reports {
     $query .= " ORDER by date_created";
     
     my $result = $dbh->selectall_arrayref($query, {Slice => {}}, @args);
-    $_->{date_created} = format_date($_->{date_created}) foreach @$result;
 
     return $result;
 }
@@ -700,7 +707,7 @@ sub get_saved_report {
     return $dbh->selectrow_hashref($query, undef, $report_arg);
 }
 
-=item create_compound($masterID,$subreportID)
+=head2 create_compound($masterID,$subreportID)
 
 This will take 2 reports and create a compound report using both of them
 
@@ -730,7 +737,7 @@ sub create_compound {
     return ( $mastertables, $subtables );
 }
 
-=item get_column_type($column)
+=head2 get_column_type($column)
 
 This takes a column name of the format table.column and will return what type it is
 (free text, set values, date)
@@ -758,7 +765,7 @@ sub get_column_type {
 	}
 }
 
-=item get_distinct_values($column)
+=head2 get_distinct_values($column)
 
 Given a column name, return an arrary ref of hashrefs suitable for use as a tmpl_loop 
 with the distinct values of the column
@@ -833,26 +840,30 @@ sub get_sql {
 }
 
 sub _get_column_defs {
-	my ($cgi) = @_;
-	my %columns;
-	my $columns_def_file = "columns.def";
-	my $htdocs = C4::Context->config('intrahtdocs');                       
-	my $section='intranet';
-    my ($theme, $lang, $availablethemes) = C4::Templates::themelanguage($htdocs, $columns_def_file, $section,$cgi);
+    my ($cgi) = @_;
+    my %columns;
+    my $columns_def_file = "columns.def";
+    my $htdocs = C4::Context->config('intrahtdocs');
+    my $section = 'intranet';
 
-	my $full_path_to_columns_def_file="$htdocs/$theme/$lang/$columns_def_file";    
-	open (COLUMNS,$full_path_to_columns_def_file);
-	while (my $input = <COLUMNS>){
-		chomp $input;
-		my @row =split(/\t/,$input);
-		$columns{$row[0]}= $row[1];
-	}
+    # We need the theme and the lang
+    # Since columns.def is not in the modules directory, we cannot sent it for the $tmpl var
+    my ($theme, $lang, $availablethemes) = C4::Templates::themelanguage($htdocs, 'about.tt', $section, $cgi);
 
-	close COLUMNS;
-	return \%columns;
+    my $full_path_to_columns_def_file="$htdocs/$theme/$lang/$columns_def_file";
+    open (my $fh, $full_path_to_columns_def_file);
+    while ( my $input = <$fh> ){
+        chomp $input;
+        if ( $input =~ m|<field name="(.*)">(.*)</field>| ) {
+            my ( $field, $translation ) = ( $1, $2 );
+            $columns{$field} = $translation;
+        }
+    }
+    close $fh;
+    return \%columns;
 }
 
-=item build_authorised_value_list($authorised_value)
+=head2 build_authorised_value_list($authorised_value)
 
 Returns an arrayref - hashref pair. The hashref consists of
 various code => name lists depending on the $authorised_value.
@@ -917,10 +928,97 @@ sub build_authorised_value_list {
     return (\@authorised_values, \%authorised_lib);
 }
 
+=head2 GetReservedAuthorisedValues
+
+    my %reserved_authorised_values = GetReservedAuthorisedValues();
+
+Returns a hash containig all reserved words
+
+=cut
+
+sub GetReservedAuthorisedValues {
+    my %reserved_authorised_values =
+            map { $_ => 1 } ( 'date',
+                              'branches',
+                              'itemtypes',
+                              'cn_source',
+                              'categorycode' );
+
+   return \%reserved_authorised_values;
+}
+
+
+=head2 IsAuthorisedValueValid
+
+    my $is_valid_ath_value = IsAuthorisedValueValid($authorised_value)
+
+Returns 1 if $authorised_value is on the reserved authorised values list or
+in the authorised value categories defined in
+
+=cut
+
+sub IsAuthorisedValueValid {
+
+    my $authorised_value = shift;
+    my $reserved_authorised_values = GetReservedAuthorisedValues();
+
+    if ( exists $reserved_authorised_values->{$authorised_value} ||
+         IsAuthorisedValueCategory($authorised_value)   ) {
+        return 1;
+    }
+
+    return 0;
+}
+
+=head2 GetParametersFromSQL
+
+    my @sql_parameters = GetParametersFromSQL($sql)
+
+Returns an arrayref of hashes containing the keys name and authval
+
+=cut
+
+sub GetParametersFromSQL {
+
+    my $sql = shift ;
+    my @split = split(/<<|>>/,$sql);
+    my @sql_parameters = ();
+
+    for ( my $i = 0; $i < ($#split/2) ; $i++ ) {
+        my ($name,$authval) = split(/\|/,$split[$i*2+1]);
+        push @sql_parameters, { 'name' => $name, 'authval' => $authval };
+    }
+
+    return \@sql_parameters;
+}
+
+=head2 ValidateSQLParameters
+
+    my @problematic_parameters = ValidateSQLParameters($sql)
+
+Returns an arrayref of hashes containing the keys name and authval of
+those SQL parameters that do not correspond to valid authorised names
+
+=cut
+
+sub ValidateSQLParameters {
+
+    my $sql = shift;
+    my @problematic_parameters = ();
+    my $sql_parameters = GetParametersFromSQL($sql);
+
+    foreach my $sql_parameter (@$sql_parameters) {
+        if ( defined $sql_parameter->{'authval'} ) {
+            push @problematic_parameters, $sql_parameter unless
+                IsAuthorisedValueValid($sql_parameter->{'authval'});
+        }
+    }
+
+    return \@problematic_parameters;
+}
+
 1;
 __END__
-
-=back
 
 =head1 AUTHOR
 

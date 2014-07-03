@@ -29,28 +29,44 @@ my $cgi = CGI->new;
 
 # get the status of the user, this will check his credentials and rights
 my ($status, $cookie, $sessionId) = C4::Auth::check_api_auth($cgi, undef);
+($status, $sessionId) = C4::Auth::check_cookie_auth($cgi, undef) if ($status ne 'ok');
 
 my $result;
 
 if ($status eq 'ok') { # if authentication is ok
+
+    my $userid     = $cgi->param('userid')     || '';
+    my $branchcode = $cgi->param('branchcode') || '';
+    my $timestamp  = $cgi->param('timestamp')  || '';
+    my $action     = $cgi->param('action')     || '';
+    my $barcode    = $cgi->param('barcode')    || '';
+    my $amount     = $cgi->param('amount')     || 0;
+    $barcode    =~ s/^\s+//;
+    $barcode    =~ s/\s+$//;
+    my $cardnumber = $cgi->param('cardnumber') || '';
+    $cardnumber =~ s/^\s+//;
+    $cardnumber =~ s/\s+$//;
+
     if ( $cgi->param('pending') eq 'true' ) { # if the 'pending' flag is true, we store the operation in the db instead of directly processing them
         $result = AddOfflineOperation(
-            $cgi->param('userid')     || '',
-            $cgi->param('branchcode') || '',
-            $cgi->param('timestamp')  || '',
-            $cgi->param('action')     || '',
-            $cgi->param('barcode')    || '',
-            $cgi->param('cardnumber') || '',
+            $userid,
+            $branchcode,
+            $timestamp,
+            $action,
+            $barcode,
+            $cardnumber,
+            $amount
         );
     } else {
         $result = ProcessOfflineOperation(
             {
-                'userid'      => $cgi->param('userid'),
-                'branchcode'  => $cgi->param('branchcode'),
-                'timestamp'   => $cgi->param('timestamp'),
-                'action'      => $cgi->param('action'),
-                'barcode'     => $cgi->param('barcode'),
-                'cardnumber'  => $cgi->param('cardnumber'),
+                'userid'      => $userid,
+                'branchcode'  => $branchcode,
+                'timestamp'   => $timestamp,
+                'action'      => $action,
+                'barcode'     => $barcode,
+                'cardnumber'  => $cardnumber,
+                'amount'      => $amount
             }
         );
     }

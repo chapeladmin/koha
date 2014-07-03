@@ -104,6 +104,7 @@ else {
     $template->param(
         categoryname    => $data->{'description'},
         branchname      => GetBranchName($data->{'branchcode'}),
+        RoutingSerials => C4::Context->preference('RoutingSerials'),
     );
 
     if (C4::Context->preference('ExtendedPatronAttributes')) {
@@ -114,7 +115,7 @@ else {
         );
     }
 
-    my ($picture, $dberror) = GetPatronImage($data->{'cardnumber'});
+    my ($picture, $dberror) = GetPatronImage($data->{'borrowernumber'});
     $template->param( picture => 1 ) if $picture;
 
     $template->param(

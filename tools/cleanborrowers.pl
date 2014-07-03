@@ -17,7 +17,6 @@
 #
 #   Written by Antoine Farnault antoine@koha-fr.org on Nov. 2006.
 
-
 =head1 cleanborrowers.pl
 
 This script allows to do 2 things.
@@ -33,14 +32,15 @@ This script allows to do 2 things.
 =cut
 
 use strict;
+
 #use warnings; FIXME - Bug 2505
 use CGI;
 use C4::Auth;
 use C4::Output;
-use C4::Dates qw/format_date format_date_in_iso/;
 use C4::Members;        # GetBorrowersWhoHavexxxBorrowed.
 use C4::Circulation;    # AnonymiseIssueHistory.
-use C4::VirtualShelves (); #no import
+use C4::VirtualShelves ();    #no import
+use Koha::DateUtils qw( dt_from_string output_pref );
 use Date::Calc qw/Today Add_Delta_YM/;
 
 my $cgi = new CGI;
@@ -51,13 +51,25 @@ my $cgi = new CGI;
 #  * multivalued CGI paramaters are returned as a packaged string separated by "\0" (null)
 my $params = $cgi->Vars;
 
-my $filterdate1;               # the date which filter on issue history.
-my $filterdate2;               # the date which filter on borrowers last issue.
+my $step = $params->{step} || 1;
+my $not_borrowered_since =    # the date which filter on issue history.
+  $params->{not_borrowered_since}
+  ? dt_from_string $params->{not_borrowered_since}
+  : undef;
+my $last_issue_date =         # the date which filter on borrowers last issue.
+  $params->{last_issue_date}
+  ? dt_from_string $params->{last_issue_date}
+  : undef;
+my $borrower_dateexpiry =
+  $params->{borrower_dateexpiry}
+  ? dt_from_string $params->{borrower_dateexpiry}
+  : undef;
+
+my $borrower_categorycode = $params->{'borrower_categorycode'} || q{};
 
 # getting the template
 my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
-    {
-        template_name   => "tools/cleanborrowers.tmpl",
+    {   template_name   => "tools/cleanborrowers.tmpl",
         query           => $cgi,
         type            => "intranet",
         authnotrequired => 0,
@@ -65,106 +77,113 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     }
 );
 
-if ( $params->{'step2'} ) {
-    $filterdate1 = format_date_in_iso($params->{'filterdate1'});
-    $filterdate2 = format_date_in_iso($params->{'filterdate2'});
+if ( $step == 2 ) {
+
     my %checkboxes = map { $_ => 1 } split /\0/, $params->{'checkbox'};
 
     my $totalDel;
     my $membersToDelete;
-    if ($checkboxes{borrower}) {
-        $membersToDelete = GetBorrowersWhoHaveNotBorrowedSince($filterdate1, 1);
+    if ( $checkboxes{borrower} ) {
+        $membersToDelete = GetBorrowersToExpunge(
+            _get_selection_params($not_borrowered_since, $borrower_dateexpiry, $borrower_categorycode)
+        );
+        _skip_borrowers_with_nonzero_balance( $membersToDelete );
         $totalDel = scalar @$membersToDelete;
-            
+
     }
     my $totalAno;
     my $membersToAnonymize;
-    if ($checkboxes{issue}) {
-        $membersToAnonymize =
-          GetBorrowersWithIssuesHistoryOlderThan($filterdate2);
-        $totalAno = scalar @$membersToAnonymize;
+    if ( $checkboxes{issue} ) {
+        $membersToAnonymize = GetBorrowersWithIssuesHistoryOlderThan($last_issue_date);
+        $totalAno           = scalar @$membersToAnonymize;
     }
 
     $template->param(
-        step2            => 1,
-        totalToDelete    => $totalDel,
-        totalToAnonymize => $totalAno,
-        memberstodelete_list => $membersToDelete,    
-        memberstoanonymize_list => $membersToAnonymize,    
-        filterdate1      => format_date($filterdate1),
-        filterdate2      => format_date($filterdate2),
+        totalToDelete           => $totalDel,
+        totalToAnonymize        => $totalAno,
+        memberstodelete_list    => $membersToDelete,
+        memberstoanonymize_list => $membersToAnonymize,
     );
-### TODO : Use GetBorrowersNamesAndLatestIssue function in order to get the borrowers to delete or anonymize.
-### Now, we are only using total, which is not enough imlo
-    #writing the template
-    output_html_with_http_headers $cgi, $cookie, $template->output;
-    exit;
 }
 
-if ( $params->{'step3'} ) {
-    $filterdate1 = format_date_in_iso($params->{'filterdate1'});
-    $filterdate2 = format_date_in_iso($params->{'filterdate2'});
+elsif ( $step == 3 ) {
     my $do_delete = $params->{'do_delete'};
     my $do_anonym = $params->{'do_anonym'};
 
     my ( $totalDel, $totalAno, $radio ) = ( 0, 0, 0 );
-    
+
     # delete members
     if ($do_delete) {
-        my $membersToDelete = GetBorrowersWhoHaveNotBorrowedSince($filterdate1, 1);
+        my $membersToDelete = GetBorrowersToExpunge(
+            _get_selection_params($not_borrowered_since, $borrower_dateexpiry, $borrower_categorycode)
+        );
+        _skip_borrowers_with_nonzero_balance( $membersToDelete );
         $totalDel = scalar(@$membersToDelete);
         $radio    = $params->{'radio'};
-        if ( $radio eq 'trash' ) {
-            my $i;
-            for ( $i = 0 ; $i < $totalDel ; $i++ ) {
-                MoveMemberToDeleted( $membersToDelete->[$i]->{'borrowernumber'} );
-                C4::VirtualShelves::HandleDelBorrower($membersToDelete->[$i]->{'borrowernumber'});
-                DelMember( $membersToDelete->[$i]->{'borrowernumber'} );
-            }
-        }
-        else {    # delete completly.
-            my $i;
-            for ( $i = 0 ; $i < $totalDel ; $i++ ) {
-                C4::VirtualShelves::HandleDelBorrower($membersToDelete->[$i]->{'borrowernumber'});
-                DelMember($membersToDelete->[$i]->{'borrowernumber'});
-            }
+        for ( my $i = 0 ; $i < $totalDel ; $i++ ) {
+            $radio eq 'testrun' && last;
+            my $borrowernumber = $membersToDelete->[$i]->{'borrowernumber'};
+            $radio eq 'trash' && MoveMemberToDeleted( $borrowernumber );
+            C4::VirtualShelves::HandleDelBorrower( $borrowernumber );
+            DelMember( $borrowernumber );
         }
         $template->param(
             do_delete => '1',
             TotalDel  => $totalDel
         );
     }
-    
+
     # Anonymising all members
     if ($do_anonym) {
-        $totalAno = AnonymiseIssueHistory($filterdate2);
+        #FIXME: anonymisation errors are not handled
+        ($totalAno,my $anonymisation_error) = AnonymiseIssueHistory($last_issue_date);
         $template->param(
-            filterdate1 => $filterdate2,
             do_anonym   => '1',
         );
     }
-    
-    $template->param(
-        step3 => '1',
-        trash => ( $radio eq "trash" ) ? (1) : (0),
-    );
 
-    #writing the template
-    output_html_with_http_headers $cgi, $cookie, $template->output;
-    exit;
+    $template->param(
+        trash => ( $radio eq "trash" ) ? (1) : (0),
+        testrun => ( $radio eq "testrun" ) ? 1: 0,
+    );
 }
 
-#default value set to the template are the 'CNIL' value.
-my ( $year, $month, $day ) = &Today();
-$filterdate1 = format_date(sprintf("%-04.4d-%-02.2d-%02.2d", Add_Delta_YM($year, $month, $day, -1, 0)));
-$filterdate2 = format_date(sprintf("%-04.4d-%-02.2d-%02.2d", Add_Delta_YM($year, $month, $day, 0, -3)));
-
 $template->param(
-    step1       => '1',
-    filterdate1 => $filterdate1,
-    filterdate2 => $filterdate2,
-    DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
+    step                   => $step,
+    not_borrowered_since   => $not_borrowered_since,
+    borrower_dateexpiry    => $borrower_dateexpiry,
+    last_issue_date        => $last_issue_date,
+    borrower_categorycodes => GetBorrowercategoryList(),
+    borrower_categorycode  => $borrower_categorycode,
 );
 
 #writing the template
 output_html_with_http_headers $cgi, $cookie, $template->output;
+
+sub _skip_borrowers_with_nonzero_balance {
+    my $borrowers = shift;
+    my $balance;
+    @$borrowers = map {
+        (undef, undef, $balance) = GetMemberIssuesAndFines( $_->{borrowernumber} );
+        ($balance != 0) ? (): ($_);
+    } @$borrowers;
+}
+
+sub _get_selection_params {
+    my ($not_borrowered_since, $borrower_dateexpiry, $borrower_categorycode) = @_;
+
+    my $params = {};
+    $params->{not_borrowered_since} = output_pref({
+        dt         => $not_borrowered_since,
+        dateformat => 'iso',
+        dateonly   => 1
+    }) if $not_borrowered_since;
+    $params->{expired_before} = output_pref({
+        dt         => $borrower_dateexpiry,
+        dateformat => 'iso',
+        dateonly   => 1
+    }) if $borrower_dateexpiry;
+    $params->{borrower_categorycode} = $borrower_categorycode if $borrower_categorycode;
+
+    return $params;
+};

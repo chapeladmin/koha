@@ -1,3 +1,4 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %][% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %]
 [% IF ( opacuserlogin ) %]
  catalog &rsaquo;  Log in to your account
@@ -84,8 +85,17 @@ please choose against which one you would like to authenticate: </p>
 </ol></fieldset>
 
 <input type="submit" value="Log In" class="submit" />
-<div id="nologininstructions">  <h5>Don't have a password yet?</h5><p> If you don't have a password yet, stop by the circulation desk the next time you're in the library. We'll happily set one up for you.</p>
-<h5>Don't have a library card?</h5><p> If you don't have a library card, stop by your local library to sign up.  </p></div>
+<div id="nologininstructions">
+[% IF Koha.Preference('NoLoginInstructions') %]
+    [% Koha.Preference('NoLoginInstructions') %]
+[% ELSE %]
+    <h5>Don't have a password yet?</h5>
+    <p>If you don't have a password yet, stop by the circulation desk the next time you're in the library. We'll happily set one up for you.</p>
+    <h5>Don't have a library card?</h5>
+    <p>If you don't have a library card, stop by your local library to sign up.</p>
+[% END %]
+[% IF PatronSelfRegistration && PatronSelfRegistrationDefaultCategory %]<span id="registrationinstructions">You may <a href="/cgi-bin/koha/opac-memberentry.pl">register here</a>.</span>[% END %]
+</div>
 </form>
 
 
@@ -97,7 +107,13 @@ please choose against which one you would like to authenticate: </p>
           <a href="mailto:[% admin %]">email the Koha Administrator</a>.</li>
   <li>Use top menu bar to navigate to another part of Koha.</li>
 </ul>
-[% END %]</div>
+[% END %]
+
+[% IF persona %]
+<a href="#" class="persona-button" id="browserid" ><span>Sign in with your Email</span></a>
+[% END %]
+
+</div>
 </div>
 </div>
 </div>

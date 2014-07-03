@@ -1,10 +1,3 @@
-$(document).ready(function() {
-    $("table.preferences").tablesorter({
-        sortList: [[0,0]],
-        headers: { 1: { sorter:false}}
-    });
-});
-
 // We can assume 'KOHA' exists, as we depend on KOHA.AJAX
 
 KOHA.Preferences = {
@@ -15,7 +8,7 @@ KOHA.Preferences = {
             humanMsg.displayAlert( MSG_NOTHING_TO_SAVE );
             return;
         }
-        KOHA.AJAX.MarkRunning( $( form ).find( '.save-all' ), _( MSG_SAVING ) );
+        KOHA.AJAX.MarkRunning( $( form ).find( '.save-all' ), MSG_SAVING );
         KOHA.AJAX.Submit( {
             data: data,
             url: '/cgi-bin/koha/svc/config/systempreferences/',
@@ -28,7 +21,7 @@ KOHA.Preferences = {
         modified_prefs.each(function(){
             var modified_pref = $(this).attr("id");
             modified_pref = modified_pref.replace("pref_","");
-            msg += '<strong>Saved preference '+modified_pref+'</strong>\n';
+            msg += "<strong>"+ MSG_SAVED_PREFERENCE.format(modified_pref) + "</strong>\n";
         });
         humanMsg.displayAlert(msg);
 
@@ -40,6 +33,15 @@ KOHA.Preferences = {
 };
 
 $( document ).ready( function () {
+
+    $("table.preferences").dataTable($.extend(true, {}, dataTablesDefaults, {
+        "sDom": 't',
+        "aoColumnDefs": [
+            { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false }
+        ],
+        "bPaginate": false
+    }));
+
     function mark_modified() {
         $( this.form ).find( '.save-all' ).removeAttr( 'disabled' );
         $( this ).addClass( 'modified' );
@@ -58,6 +60,16 @@ $( document ).ready( function () {
         $('.preference-checkbox').addClass('modified');
         mark_modified.call(this);
     } );
+
+    $(".set_syspref").click(function() {
+        var s = $(this).attr('data-syspref');
+        var v = $(this).attr('data-value');
+        // populate the input with the value in data-value
+        $("#pref_"+s).val(v);
+        // pass the DOM element to trigger "modified" to enable submit button
+        mark_modified.call($("#pref_"+s)[0]);
+        return false;
+    });
 
     window.onbeforeunload = function () {
         if ( KOHA.Preferences.Modified ) {
@@ -83,22 +95,22 @@ $( document ).ready( function () {
     $("h3").attr("class","expanded").attr("title",MSG_CLICK_TO_EXPAND);
     var collapsible = $(".collapsed,.expanded");
 
-    $(collapsible).toggle(
-        function () {
+    $(collapsible).on("click",function(){
+        var panel = $(this).next("div");
+        if(panel.is(":visible")){
             $(this).addClass("collapsed").removeClass("expanded").attr("title",MSG_CLICK_TO_EXPAND);
-            $(this).next("table").hide();
-        },
-        function () {
+            panel.hide();
+        } else {
             $(this).addClass("expanded").removeClass("collapsed").attr("title",MSG_CLICK_TO_COLLAPSE);
-            $(this).next("table").show();
+            panel.show();
         }
-    );
+    });
 
     if ( to_highlight ) {
         var words = to_highlight.split( ' ' );
         $( '.prefs-tab table' ).find( 'td, th' ).not( '.name-cell' ).each( function ( i, td ) {
             $.each( words, function ( i, word ) { $( td ).highlight( word ) } );
-        } ).find( 'option' ).removeHighlight();
+        } ).find( 'option, textarea' ).removeHighlight();
     }
 
     if ( search_jumped ) {

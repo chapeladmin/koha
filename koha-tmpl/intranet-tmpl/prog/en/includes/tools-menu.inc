@@ -17,6 +17,9 @@
 </ul>
 <h5>Patrons and circulation</h5>
 <ul>
+    [% IF ( CAN_user_tools_manage_patron_lists ) %]
+	<li><a href="/cgi-bin/koha/patron_lists/lists.pl">Patron lists</a></li>
+    [% END %]
     [% IF ( CAN_user_tools_moderate_comments ) %]
 	<li><a href="/cgi-bin/koha/reviews/reviewswaiting.pl">Comments</a></li>
     [% END %]
@@ -33,7 +36,7 @@
     <li><a href="/cgi-bin/koha/patroncards/home.pl">Patron card creator</a></li>
     [% END %]
     [% IF ( CAN_user_tools_delete_anonymize_patrons ) %]
-    <li><a href="/cgi-bin/koha/tools/cleanborrowers.pl">Patrons (anonymize, bulk-delete)</a></li>
+    <li><a href="/cgi-bin/koha/tools/cleanborrowers.pl">Batch patron deletion/anonymization</a></li>
     [% END %]
     [% IF ( CAN_user_tools_edit_patrons ) %]
     <li><a href="/cgi-bin/koha/tools/modborrowers.pl">Batch patron modification</a></li>
@@ -68,6 +71,9 @@
     <li><a href="/cgi-bin/koha/rotating_collections/rotatingCollections.pl">Rotating collections</a></li>
     [% END %]
 -->
+    [% IF ( CAN_user_tools_marc_modification_templates ) %]
+        <li><a href="/cgi-bin/koha/tools/marc_modification_templates.pl">Manage MARC modification templates</a></li>
+    [% END %]
     [% IF ( CAN_user_tools_stage_marc_import ) %]
 	<li><a href="/cgi-bin/koha/tools/stage-marc-import.pl">Stage MARC for import</a></li>
     [% END %]

@@ -35,6 +35,7 @@ use C4::Branch; # GetBranches
 use C4::Overdues;
 use C4::Debug;
 use Koha::DateUtils;
+use Date::Calc qw/Today Date_to_Days/;
 # use Data::Dumper;
 
 my $MAXIMUM_NUMBER_OF_RESERVES = C4::Context->preference("maxreserves");
@@ -64,6 +65,17 @@ sub get_out {
 
 # get borrower information ....
 my ( $borr ) = GetMemberDetails( $borrowernumber );
+
+# check if this user can place a reserve, -1 means use sys pref, 0 means dont block, 1 means block
+if ( $borr->{'BlockExpiredPatronOpacActions'} ) {
+
+    if ( $borr->{'is_expired'} ) {
+
+        # cannot reserve, their card has expired and the rules set mean this is not allowed
+        $template->param( message => 1, expired_patron => 1 );
+        get_out( $query, $cookie, $template->output );
+    }
+}
 
 # Pass through any reserve charge
 if ($borr->{reservefee} > 0){
@@ -108,8 +120,7 @@ my $branch = $query->param('branch') || $borr->{'branchcode'} || C4::Context->us
 $template->param( branch => $branch );
 
 # make branch selection options...
-my $CGIbranchloop = GetBranchesLoop($branch);
-$template->param( CGIbranch => $CGIbranchloop );
+my $branchloop = GetBranchesLoop($branch);
 
 # Is the person allowed to choose their branch
 my $OPACChooseBranch = (C4::Context->preference("OPACAllowUserToChooseBranch")) ? 1 : 0;
@@ -148,8 +159,8 @@ foreach my $biblioNumber (@biblionumbers) {
     }
 
     # Compute the priority rank.
-    my ( $rank, $reserves ) =
-      GetReservesFromBiblionumber( $biblioNumber, 1 );
+    my $reserves = GetReservesFromBiblionumber({ biblionumber => $biblioNumber, all_dates => 1 });
+    my $rank = scalar( @$reserves );
     $biblioData->{reservecount} = 1;    # new reserve
     foreach my $res (@{$reserves}) {
         my $found = $res->{found};
@@ -171,7 +182,6 @@ foreach my $biblioNumber (@biblionumbers) {
 #
 #
 if ( $query->param('place_reserve') ) {
-    my $notes = $query->param('notes');
     my $reserve_cnt = 0;
     if ($MAXIMUM_NUMBER_OF_RESERVES) {
         $reserve_cnt = GetReservesFromBorrowernumber( $borrowernumber );
@@ -255,6 +265,7 @@ if ( $query->param('place_reserve') ) {
             # Inserts a null into the 'itemnumber' field of 'reserves' table.
             $itemNum = undef;
         }
+        my $notes = $query->param('notes_'.$biblioNum)||'';
 
         if (   $MAXIMUM_NUMBER_OF_RESERVES
             && $reserve_cnt >= $MAXIMUM_NUMBER_OF_RESERVES )
@@ -308,7 +319,7 @@ if ( $borr->{lost} && ($borr->{lost} == 1) ) {
                      lost    => 1
                     );
 }
-if ( CheckBorrowerDebarred($borrowernumber) ) {
+if ( $borr->{'debarred'} ) {
     $noreserves = 1;
     $template->param(
                      message  => 1,
@@ -350,7 +361,7 @@ my $notforloan_label_of = get_notforloan_label_of();
 my $biblioLoop = [];
 my $numBibsAvailable = 0;
 my $itemdata_enumchron = 0;
-my $anyholdable;
+my $anyholdable = 0;
 my $itemLevelTypes = C4::Context->preference('item-level_itypes');
 $template->param('item_level_itypes' => $itemLevelTypes);
 
@@ -358,7 +369,7 @@ foreach my $biblioNum (@biblionumbers) {
 
     my $record = GetMarcBiblio($biblioNum);
     # Init the bib item with the choices for branch pickup
-    my %biblioLoopIter = ( branchChoicesLoop => $CGIbranchloop );
+    my %biblioLoopIter = ( branchloop => $branchloop );
 
     # Get relevant biblio data.
     my $biblioData = $biblioDataHash{$biblioNum};
@@ -374,6 +385,7 @@ foreach my $biblioNum (@biblionumbers) {
     $biblioLoopIter{rank} = $biblioData->{rank};
     $biblioLoopIter{reservecount} = $biblioData->{reservecount};
     $biblioLoopIter{already_reserved} = $biblioData->{already_reserved};
+    $biblioLoopIter{mandatorynotes}=0; #FIXME: For future use
 
     if (!$itemLevelTypes && $biblioData->{itemtype}) {
         $biblioLoopIter{description} = $itemTypes->{$biblioData->{itemtype}}{description};
@@ -426,18 +438,18 @@ foreach my $biblioNum (@biblionumbers) {
         # change the background color.
         my $issues= GetItemIssue($itemNum);
         if ( $issues->{'date_due'} ) {
-            $itemLoopIter->{dateDue} = format_sqlduedatetime($issues->{date_due});
+            $itemLoopIter->{dateDue} = output_pref({ dt => dt_from_string($issues->{date_due}, 'sql'), as_due_date => 1 });
             $itemLoopIter->{backgroundcolor} = 'onloan';
         }
 
         # checking reserve
-        my ($reservedate,$reservedfor,$expectedAt) = GetReservesFromItemnumber($itemNum);
+        my ($reservedate,$reservedfor,$expectedAt,undef,$wait) = GetReservesFromItemnumber($itemNum);
         my $ItemBorrowerReserveInfo = GetMemberDetails( $reservedfor, 0);
 
-	# the item could be reserved for this borrower vi a host record, flag this
-	if ($reservedfor eq $borrowernumber){
-		$itemLoopIter->{already_reserved} = 1;
-	}
+        # the item could be reserved for this borrower vi a host record, flag this
+        if ($reservedfor eq $borrowernumber){
+            $itemLoopIter->{already_reserved} = 1;
+        }
 
         if ( defined $reservedate ) {
             $itemLoopIter->{backgroundcolor} = 'reserved';
@@ -446,6 +458,8 @@ foreach my $biblioNum (@biblionumbers) {
             $itemLoopIter->{ReservedForSurname}        = $ItemBorrowerReserveInfo->{'surname'};
             $itemLoopIter->{ReservedForFirstname}      = $ItemBorrowerReserveInfo->{'firstname'};
             $itemLoopIter->{ExpectedAtLibrary}         = $expectedAt;
+            #waiting status
+            $itemLoopIter->{waitingdate} = $wait;
         }
 
         $itemLoopIter->{notforloan} = $itemInfo->{notforloan};
@@ -490,7 +504,7 @@ foreach my $biblioNum (@biblionumbers) {
         # If there is no loan, return and transfer, we show a checkbox.
         $itemLoopIter->{notforloan} = $itemLoopIter->{notforloan} || 0;
 
-        my $branch = C4::Circulation::_GetCircControlBranch($itemLoopIter, $borr);
+        my $branch = GetReservesControlBranch( $itemInfo, $borr );
 
         my $branchitemrule = GetBranchItemRule( $branch, $itemInfo->{'itype'} );
         my $policy_holdallowed = 1;
@@ -505,14 +519,7 @@ foreach my $biblioNum (@biblionumbers) {
             $numCopiesAvailable++;
         }
 
-	# FIXME: move this to a pm
-        my $dbh = C4::Context->dbh;
-        my $sth2 = $dbh->prepare("SELECT * FROM reserves WHERE borrowernumber=? AND itemnumber=? AND found='W'");
-        $sth2->execute($itemLoopIter->{ReservedForBorrowernumber}, $itemNum);
-        while (my $wait_hashref = $sth2->fetchrow_hashref) {
-            $itemLoopIter->{waitingdate} = format_date($wait_hashref->{waitingdate});
-        }
-	$itemLoopIter->{imageurl} = getitemtypeimagelocation( 'opac', $itemTypes->{ $itemInfo->{itype} }{imageurl} );
+        $itemLoopIter->{imageurl} = getitemtypeimagelocation( 'opac', $itemTypes->{ $itemInfo->{itype} }{imageurl} );
 
     # Show serial enumeration when needed
         if ($itemLoopIter->{enumchron}) {
@@ -527,31 +534,38 @@ foreach my $biblioNum (@biblionumbers) {
         $numBibsAvailable++;
         $biblioLoopIter{bib_available} = 1;
         $biblioLoopIter{holdable} = 1;
-        $anyholdable = 1;
     }
     if ($biblioLoopIter{already_reserved}) {
         $biblioLoopIter{holdable} = undef;
-        $anyholdable = undef;
     }
     if(not CanBookBeReserved($borrowernumber,$biblioNum)){
         $biblioLoopIter{holdable} = undef;
-        $anyholdable = undef;
     }
+    if(not C4::Context->preference('AllowHoldsOnPatronsPossessions') and CheckIfIssuedToPatron($borrowernumber,$biblioNum)) {
+        $biblioLoopIter{holdable} = undef;
+        $biblioLoopIter{already_patron_possession} = 1;
+    }
+
+    if( $biblioLoopIter{holdable} ){ $anyholdable++; }
 
     push @$biblioLoop, \%biblioLoopIter;
 }
 
-if ( $numBibsAvailable == 0 || !$anyholdable) {
+if ( $numBibsAvailable == 0 || $anyholdable == 0) {
     $template->param( none_available => 1 );
 }
 
-my $itemTableColspan = 7;
+my $itemTableColspan = 9;
 if (! $template->{VARS}->{'OPACItemHolds'}) {
     $itemTableColspan--;
 }
 if (! $template->{VARS}->{'singleBranchMode'}) {
     $itemTableColspan--;
 }
+$itemTableColspan-- if !$show_holds_count && !$show_priority;
+my $show_notes=C4::Context->preference('OpacHoldNotes');
+$template->param(OpacHoldNotes=>$show_notes);
+$itemTableColspan-- if !$show_notes;
 $template->param(itemtable_colspan => $itemTableColspan);
 
 # display infos
@@ -567,8 +581,6 @@ if (
 	    reserve_in_future         => 1,
     );
 }
-
-$template->param( DHTMLcalendar_dateformat  => C4::Dates->DHTMLcalendar() );
 
 output_html_with_http_headers $query, $cookie, $template->output;
 

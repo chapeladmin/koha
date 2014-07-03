@@ -3,25 +3,17 @@
     [% IF ( print_basket ) %]
 
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<link rel="shortcut icon" href="[% IF ( IntranetFavicon ) %][% IntranetFavicon %][% ELSE %][% themelang %]/includes/favicon.ico[% END %]" type="image/x-icon" />
+<link rel="shortcut icon" href="[% IF ( IntranetFavicon ) %][% IntranetFavicon %][% ELSE %][% interface %]/[% theme %]/img/favicon.ico[% END %]" type="image/x-icon" />
 <meta http-equiv="Content-Language" content="en-us" />
 <style type="text/css">
     @import url([% themelang %]/css/print.css);
 </style>
     [% ELSE %][% INCLUDE 'doc-head-close.inc' %]
-	<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
-	<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-	<script type="text/javascript">
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">
 	//<![CDATA[
-
-$(document).ready(function()
-    {
-        $("#itemst").tablesorter({
-                        headers: { 0: { sorter: false }}
-                });
-    }
-);
-
 
 function placeHold () {
     var checkedItems = $("input:checkbox:checked");
@@ -49,9 +41,8 @@ function placeHold () {
     window.close();
 }
 
-
-
 	$(document).ready(function(){
+                $("#items-popover").popover();
 		$("#CheckAll").click(function(){
 		var checked = [];
 		$("#bookbag_form").checkCheckboxes("*", true).each(
@@ -72,9 +63,19 @@ function placeHold () {
 	    });
         $(".holdsep").text("| ");
         $(".hold").text(_("Place Hold"));
+        $("#downloadcartc").empty();
+
+        $("#itemst").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "sDom": 't',
+            "aoColumnDefs": [
+                { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false },
+                { "aTargets": [ 3 ], "sType": 'callnumbers' },
+            ],
+            "aaSorting": [[ 1, "asc" ]],
+            "bPaginate": false
+        }));
+
 	});
-
-
 	//]]>
 	</script>
 	[% END %]
@@ -86,39 +87,23 @@ function placeHold () {
 [% UNLESS ( print_basket ) %]
 <h1>Your cart</h1>
 
-<div id="toolbar">
-<ul class="toolbar">
-	<li>
-	    <span id="addchild" class="yui-button yui-link-button"><span class="first-child">
-        [% IF ( verbose ) %]<a href="basket.pl" class="brief" onclick="showLess(); return false;">Brief display</a>[% ELSE %]<a href="basket.pl" class="detail" onclick="showMore(); return false;">More details</a>[% END %]
-	    </span></span>
-	</li>
-	<li>
-	    <span id="receive" class="yui-button yui-link-button"><span class="first-child">
-		<a class="send" href="basket.pl" onclick="sendBasket(); return false;">Send</a>
-	    </span></span>
-	</li>
-	<li>
-	    <span id="savemenuc" class="yui-button yui-link-button"><span class="first-child">
-		<a class="download" href="basket.pl" onclick="downloadBasket(); return false;">Download</a>
-	    </span></span>
-	</li>
-	<li>
-	    <span id="printmenuc" class="yui-button yui-link-button"><span class="first-child">
-		<a class="print" href="basket.pl" onclick="printBasket(); return false;">Print</a>
-	    </span></span>
-	</li>
-	<li>
-	    <span id="delete" class="yui-button yui-link-button"><span class="first-child">
-        <a class="empty" href="basket.pl" onclick="delBasket('popup'); return false;">Empty and close</a>
-	    </span></span>
-	</li>
-	<li>
-	    <span id="hide" class="yui-button yui-link-button"><span class="first-child">
-        <a class="hide close" href="basket.pl">Hide window</a>
-	    </span></span>
-	</li>
-</ul>
+<div id="toolbar" class="btn-toolbar">
+    [% IF ( verbose ) %]<a href="basket.pl" class="btn btn-small" onclick="showLess(); return false;"><i class="icon-zoom-out"></i> Brief display</a>[% ELSE %]<a href="basket.pl" class="btn btn-small" onclick="showMore(); return false;"><i class="icon-zoom-in"></i> More details</a>[% END %]
+    <a class="btn btn-small" href="basket.pl" onclick="sendBasket(); return false;"><i class="icon-envelope"></i> Send</a>
+    <div class="btn-group">
+        <a class="btn btn-small dropdown-toggle" data-toggle="dropdown" href="#" id="downloadcart"><i class="icon-download-alt"></i> Download <span class="caret"></span> </a>
+        <ul class="dropdown-menu">
+            <li><a href="/cgi-bin/koha/basket/downloadcart.pl?format=iso2709&amp;bib_list=[% bib_list %]">iso2709</a></li>
+            <li><a href="/cgi-bin/koha/basket/downloadcart.pl?format=ris&amp;bib_list=[% bib_list %]">RIS</a></li>
+            <li><a href="/cgi-bin/koha/basket/downloadcart.pl?format=bibtex&amp;bib_list=[% bib_list %]">BibTex</a></li>
+        [% FOREACH csv_profile IN csv_profiles %]
+            <li><a href="/cgi-bin/koha/basket/downloadcart.pl?format=[% csv_profile.export_format_id %]&amp;bib_list=[% bib_list %]">CSV - [% csv_profile.profile %]</a></li>
+        [% END %]
+        </ul>
+    </div>
+    <a class="btn btn-small" href="basket.pl" onclick="printBasket(); return false;"><i class="icon-print"></i> Print</a>
+    <a class="btn btn-small" href="basket.pl" onclick="delBasket('popup'); return false;"><i class="icon-trash"></i> Empty and close</a>
+    <a class="btn btn-small close" href="basket.pl"><i class="icon-remove-sign"></i> Hide window</a>
 </div>
         [% END %]
 
@@ -151,7 +136,7 @@ function placeHold () {
         [% END %]
     </h3>
 	    <!-- COinS / Openurl -->
-    <span class="Z3988" title="ctx_ver=Z39.88-2004&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.au=[% BIBLIO_RESULT.author %]&amp;rft.btitle=[% BIBLIO_RESULT.title |url %]&amp;rft.date=[% BIBLIO_RESULT.publicationyear %]&amp;rft.tpages=[% BIBLIO_RESULT.size %]&amp;rft.isbn=[% BIBLIO_RESULT.isbn |url %]&amp;rft.aucorp=&amp;rft.place=[% BIBLIO_RESULT.place %]&amp;rft.pub=[% BIBLIO_RESULT.publisher |url %]&amp;rft.edition=[% BIBLIO_RESULT.edition %]&amp;rft.series=[% BIBLIO_RESULT.series %]&amp;rft.genre="></span>
+    <span class="Z3988" title="ctx_ver=Z39.88-2004&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.au=[% BIBLIO_RESULT.author %]&amp;rft.btitle=[% BIBLIO_RESULT.title |url %]&amp;rft.date=[% BIBLIO_RESULT.publicationyear %]&amp;rft.tpages=[% BIBLIO_RESULT.item('size') %]&amp;rft.isbn=[% BIBLIO_RESULT.isbn |url %]&amp;rft.aucorp=&amp;rft.place=[% BIBLIO_RESULT.place %]&amp;rft.pub=[% BIBLIO_RESULT.publisher |url %]&amp;rft.edition=[% BIBLIO_RESULT.edition %]&amp;rft.series=[% BIBLIO_RESULT.series %]&amp;rft.genre="></span>
     <table>
         [% IF ( BIBLIO_RESULT.isbn ) %]
         <tr>
@@ -190,7 +175,7 @@ function placeHold () {
         [% IF ( BIBLIO_RESULT.pages ) %]
             <tr>
                 <th scope="row">Details</th>
-                <td>[% BIBLIO_RESULT.pages %] [% BIBLIO_RESULT.illus %] [% BIBLIO_RESULT.size %]</td>
+                <td>[% BIBLIO_RESULT.pages %] [% BIBLIO_RESULT.illus %] [% BIBLIO_RESULT.item('size') %]</td>
             </tr>
         [% END %]
         [% IF ( BIBLIO_RESULT.seriestitle ) %]
@@ -303,23 +288,19 @@ function placeHold () {
      | <a href="#" onclick="placeHold(); return false;">Place hold</a>
 [% END %]
 
-
 [% END %]
+
 </p>
     <table id="itemst">
 	<thead><tr>
 	    [% UNLESS ( print_basket ) %]<th>&nbsp;</th>[% END %]
 	    <th>Title</th>
         <th>Item type</th>
-	    <th>Location</th>
+        <th><a id="items-popover" href="#" data-trigger="hover" data-toggle="popover" data-placement="top" title="Item sorting" data-content="Items are sorted by the highest or lowest callnumber in a group of items respectively.">Items</a></th>
         </tr></thead>
 
         [% FOREACH BIBLIO_RESULT IN BIBLIO_RESULTS %]
-            [% IF ( BIBLIO_RESULT.even ) %]
-                <tr class="highlight">
-            [% ELSE %]
                 <tr>
-            [% END %]
             [% UNLESS ( print_basket ) %]<td>
                         <input type="checkbox" value="[% BIBLIO_RESULT.biblionumber %]" name="bib[% BIBLIO_RESULT.biblionumber %]" id="bib[% BIBLIO_RESULT.biblionumber %]" onclick="selRecord(value,checked);" />
 
@@ -330,25 +311,26 @@ function placeHold () {
                         [% BIBLIO_RESULT.author %]
                         <p>[% IF ( BIBLIO_RESULT.publishercode ) %]- [% BIBLIO_RESULT.publishercode %]
                         [% IF ( BIBLIO_RESULT.place ) %] [% BIBLIO_RESULT.place %][% END %][% END %]
-                        [% IF ( BIBLIO_RESULT.pages ) %] - [% BIBLIO_RESULT.pages %][% IF ( BIBLIO_RESULT.size ) %] [% BIBLIO_RESULT.size %]
+                        [% IF ( BIBLIO_RESULT.pages ) %] - [% BIBLIO_RESULT.pages %][% IF ( BIBLIO_RESULT.item('size') ) %] [% BIBLIO_RESULT.item('size') %]
                         [% END %]
                         [% END %]</p>
                         [% IF ( BIBLIO_RESULT.notes ) %]
                         <p>[% BIBLIO_RESULT.notes %]</p>
                         [% END %]
 						    <!-- COinS / Openurl -->
-    <span class="Z3988" title="ctx_ver=Z39.88-2004&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.au=[% BIBLIO_RESULT.author %]&amp;rft.btitle=[% BIBLIO_RESULT.title |url %]&amp;rft.date=[% BIBLIO_RESULT.publicationyear %]&amp;rft.tpages=[% BIBLIO_RESULT.size %]&amp;rft.isbn=[% BIBLIO_RESULT.isbn |url %]&amp;rft.aucorp=&amp;rft.place=[% BIBLIO_RESULT.place %]&amp;rft.pub=[% BIBLIO_RESULT.publisher |url %]&amp;rft.edition=[% BIBLIO_RESULT.edition %]&amp;rft.series=[% BIBLIO_RESULT.series %]&amp;rft.genre="></span>
+    <span class="Z3988" title="ctx_ver=Z39.88-2004&amp;rft_val_fmt=info%3Aofi%2Ffmt%3Akev%3Amtx%3Abook&amp;rft.au=[% BIBLIO_RESULT.author %]&amp;rft.btitle=[% BIBLIO_RESULT.title |url %]&amp;rft.date=[% BIBLIO_RESULT.publicationyear %]&amp;rft.tpages=[% BIBLIO_RESULT.item('size') %]&amp;rft.isbn=[% BIBLIO_RESULT.isbn |url %]&amp;rft.aucorp=&amp;rft.place=[% BIBLIO_RESULT.place %]&amp;rft.pub=[% BIBLIO_RESULT.publisher |url %]&amp;rft.edition=[% BIBLIO_RESULT.edition %]&amp;rft.series=[% BIBLIO_RESULT.series %]&amp;rft.genre="></span>
 
 						</td>
             <td>[% BIBLIO_RESULT.description %]</td>
-                <td>[% IF ( BIBLIO_RESULT.ITEM_RESULTS ) %][% FOREACH ITEM_RESULT IN BIBLIO_RESULT.ITEM_RESULTS %]
-                    <p>
-                        [% ITEM_RESULT.branchname %] [% ITEM_RESULT.location_description %]
-                        [% IF ( ITEM_RESULT.itemcallnumber ) %]
-                            ([% ITEM_RESULT.itemcallnumber %])
-                        [% END %]
-                    </p>
-                    [% END %][% ELSE %]This record has no items.[% END %]</td>
+            <td>
+                [% IF ( BIBLIO_RESULT.ITEM_RESULTS ) %]
+                    [% FOREACH ITEM_RESULT IN BIBLIO_RESULT.ITEM_RESULTS %]
+                        <div><span class="nowrap"><strong><span class="callnumber">[% ITEM_RESULT.itemcallnumber %]</span></strong> [% ITEM_RESULT.branchname %] <span class="shelvingloc inline">[% ITEM_RESULT.location_description %]</span></span></div>
+                    [% END %]
+                [% ELSE %]
+                    This record has no items.
+                [% END %]
+            </td>
             </tr>
         [% END %]
     </table></form>

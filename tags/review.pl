@@ -41,7 +41,7 @@ sub ajax_auth_cgi ($) {		# returns CGI object
 	my $needed_flags = shift;
 	my %cookies = fetch CGI::Cookie;
 	my $input = CGI->new;
-	my $sessid = $cookies{'CGISESSID'}->value || $input->param('CGISESSID');
+    my $sessid = $cookies{'CGISESSID'}->value;
 	my ($auth_status, $auth_sessid) = check_cookie_auth($sessid, $needed_flags);
 	$debug and
 	print STDERR "($auth_status, $auth_sessid) = check_cookie_auth($sessid," . Dumper($needed_flags) . ")\n";
@@ -89,7 +89,12 @@ my ($template, $borrowernumber, $cookie) = get_template_and_user({
 });
 
 my ($op, @errors, @tags);
-$op   = lc($input->param('op')) || 'none';
+
+foreach (qw( approve reject test )) {
+    $op = $_ if ( $input->param("op-$_") );
+}
+$op ||= 'none';
+
 @tags = $input->param('tags');
 
 $borrowernumber == 0 and push @errors, {op_zero=>1};
@@ -197,9 +202,6 @@ if ($filter = $input->param('approved_by')) {	# borrowernumber from link
 }
 $debug and print STDERR "filters: " . Dumper(\%filters);
 my $tagloop = get_approval_rows(\%filters);
-for ( @{$tagloop} ) {
-    $_->{date_approved} = format_date( $_->{date_approved} );
-}
 my $qstring = $input->query_string;
 $qstring =~ s/([&;])*\blimit=\d+//;		# remove pagination var
 $qstring =~ s/^;+//;					# remove leading delims
@@ -207,7 +209,6 @@ $qstring = "limit=$pagesize" . ($qstring ? '&amp;' . $qstring : '');
 $debug and print STDERR "number of approval_rows: " . scalar(@$tagloop) . "rows\n";
 (scalar @errors) and $template->param(message_loop=>\@errors);
 $template->param(
-	DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
 	offset => $offset,	# req'd for EXPR
 	op => $op,
 	op_count => scalar(@tags),

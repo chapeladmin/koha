@@ -19,7 +19,7 @@ package Koha::Borrower::Files;
 
 use Modern::Perl;
 
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
+use vars qw($VERSION);
 
 use C4::Context;
 use C4::Output;
@@ -30,18 +30,15 @@ BEGIN {
 
     # set the version for version checking
     $VERSION = 0.01;
-    require Exporter;
-    @ISA    = qw(Exporter);
-    @EXPORT = qw(
-
-    );
-
-    my $debug = C4::Context->preference("DebugLevel");
 }
 
 =head1 NAME
 
 Koha::Borrower::Files - Module for managing borrower files
+
+=head1 METHODS
+
+=over
 
 =cut
 
@@ -82,8 +79,11 @@ sub GetFilesInfo {
 }
 
 =item AddFile()
+
     my $bf = Koha::Borrower::Files->new( borrowernumber => $borrowernumber );
-    $bh->AddFile( name => $filename, type => $mimetype, description => $description, content => $content );
+    $bh->AddFile( name => $filename, type => $mimetype,
+                  description => $description, content => $content );
+
 =cut
 
 sub AddFile {
@@ -107,8 +107,10 @@ sub AddFile {
 }
 
 =item GetFile()
+
     my $bf = Koha::Borrower::Files->new( borrowernumber => $borrowernumber );
     my $file = $bh->GetFile( file_id => $file_id );
+
 =cut
 
 sub GetFile {
@@ -126,8 +128,10 @@ sub GetFile {
 }
 
 =item DelFile()
+
     my $bf = Koha::Borrower::Files->new( borrowernumber => $borrowernumber );
     $bh->DelFile( file_id => $file_id );
+
 =cut
 
 sub DelFile {

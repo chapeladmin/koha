@@ -13,6 +13,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
   <xslo:template match="text()" mode="index_subfields"/>
   <xslo:template match="text()" mode="index_data_field"/>
   <xslo:template match="text()" mode="index_heading"/>
+  <xslo:template match="text()" mode="index_heading_conditional"/>
   <xslo:template match="text()" mode="index_match_heading"/>
   <xslo:template match="text()" mode="index_subject_thesaurus"/>
   <xslo:template match="/">
@@ -26,17 +27,19 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
     </xslo:if>
   </xslo:template>
   <xslo:template match="marc:record">
-    <xslo:variable name="controlField001" select="normalize-space(marc:controlfield[@tag='001'])"/>
+    <xslo:variable name="idfield" select="normalize-space(marc:datafield[@tag='999']/marc:subfield[@code='c'])"/>
     <z:record type="update">
       <xslo:attribute name="z:id">
-        <xslo:value-of select="$controlField001"/>
+        <xslo:value-of select="$idfield"/>
       </xslo:attribute>
       <xslo:apply-templates/>
       <xslo:apply-templates mode="index_subfields"/>
       <xslo:apply-templates mode="index_data_field"/>
       <xslo:apply-templates mode="index_heading"/>
+      <xslo:apply-templates mode="index_heading_conditional"/>
       <xslo:apply-templates mode="index_match_heading"/>
       <xslo:apply-templates mode="index_subject_thesaurus"/>
+      <xslo:apply-templates mode="index_all"/>
     </z:record>
   </xslo:template>
   <xslo:template match="marc:leader">
@@ -157,7 +160,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
   <xslo:template mode="index_subfields" match="marc:datafield[@tag='041']">
     <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('a', @code)">
-        <z:index name="ln:w">
+        <z:index name="ln:w ln-audio:w">
           <xslo:value-of select="."/>
         </z:index>
       </xslo:if>
@@ -177,8 +180,15 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
       </xslo:if>
     </xslo:for-each>
     <xslo:for-each select="marc:subfield">
+      <xslo:if test="contains('h', @code)">
+        <z:index name="language-original:w">
+          <xslo:value-of select="."/>
+        </z:index>
+      </xslo:if>
+    </xslo:for-each>
+    <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('j', @code)">
-        <z:index name="ln:w">
+        <z:index name="ln:w ln-subtitle:w">
           <xslo:value-of select="."/>
         </z:index>
       </xslo:if>
@@ -441,7 +451,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
   <xslo:template mode="index_subfields" match="marc:datafield[@tag='521']">
     <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('a', @code)">
-        <z:index name="lex:n">
+        <z:index name="lex:w lex:p lex:n">
           <xslo:value-of select="."/>
         </z:index>
       </xslo:if>
@@ -584,6 +594,13 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
   </xslo:template>
   <xslo:template mode="index_subfields" match="marc:datafield[@tag='653']">
     <xslo:for-each select="marc:subfield">
+      <xslo:if test="contains('a', @code)">
+        <z:index name="Index-term-uncontrolled:w Index-term-uncontrolled:p Subject:w Subject:p">
+          <xslo:value-of select="."/>
+        </z:index>
+      </xslo:if>
+    </xslo:for-each>
+    <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('9', @code)">
         <z:index name="Koha-Auth-Number:w">
           <xslo:value-of select="."/>
@@ -601,6 +618,13 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
     </xslo:for-each>
   </xslo:template>
   <xslo:template mode="index_subfields" match="marc:datafield[@tag='655']">
+    <xslo:for-each select="marc:subfield">
+      <xslo:if test="contains('a', @code)">
+        <z:index name="Index-term-genre:w Index-term-genre:p Subject:w Subject:p">
+          <xslo:value-of select="."/>
+        </z:index>
+      </xslo:if>
+    </xslo:for-each>
     <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('9', @code)">
         <z:index name="Koha-Auth-Number:w">
@@ -1208,7 +1232,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
     </xslo:for-each>
     <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('i', @code)">
-        <z:index name="stocknumber:w">
+        <z:index name="Number-local-acquisition:w">
           <xslo:value-of select="."/>
         </z:index>
       </xslo:if>
@@ -1463,7 +1487,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
     </z:index>
   </xslo:template>
   <xslo:template mode="index_data_field" match="marc:datafield[@tag='028']">
-    <z:index name="Number-music-publisher:w Identifier-standard:w">
+    <z:index name="Identifier-publisher-for-music:w Identifier-standard:w">
       <xslo:variable name="raw_heading">
         <xslo:for-each select="marc:subfield">
           <xslo:if test="position() &gt; 1">
@@ -2320,7 +2344,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
       <xslo:value-of select="normalize-space($raw_heading)"/>
     </z:index>
   </xslo:template>
-  <xslo:template match="*">
+  <xslo:template mode="index_all" match="text()">
     <z:index name="Any:w Any:p">
       <xslo:value-of select="."/>
     </z:index>

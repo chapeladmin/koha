@@ -18,7 +18,7 @@
 <listen id="mergeserver">tcp:@:__MERGE_SERVER_PORT__</listen>
 <server id="mergeserver"  listenref="mergeserver">
     <directory>/var/lib/koha/__KOHASITE__/biblios</directory>
-    <config>/var/lib/koha/__KOHASITE__/zebra-biblios.cfg</config>
+    <config>/etc/koha/sites/__KOHASITE__/__ZEBRA_BIBLIOS_CFG__</config>
     <cql2rpn>/var/lib/koha/__KOHASITE__/pqf.properties</cql2rpn>
 </server>
 -->
@@ -26,56 +26,58 @@
 <!-- BIBLIOGRAPHIC RECORDS -->
 <server id="biblioserver"  listenref="biblioserver">
     <directory>/var/lib/koha/__KOHASITE__/biblios</directory>
-    <config>/etc/koha/sites/__KOHASITE__/zebra-biblios.cfg</config>
+    <config>/etc/koha/sites/__KOHASITE__/__ZEBRA_BIBLIOS_CFG__</config>
     <cql2rpn>/etc/koha/zebradb/pqf.properties</cql2rpn>
-     <retrievalinfo>
-       <retrieval syntax="usmarc" name="F"/>
-       <retrieval syntax="usmarc" name="B"/>
+
+    __START_BIBLIOS_RETRIEVAL_INFO__
+       <retrieval syntax="__ZEBRA_MARC_FORMAT__" name="F"/>
+       <retrieval syntax="__ZEBRA_MARC_FORMAT__" name="B"/>
        <retrieval syntax="xml" name="F"/>
        <retrieval syntax="xml" name="B"/>
        <retrieval syntax="xml" name="marcxml"
                   identifier="info:srw/schema/1/marcxml-v1.1">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="dc">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2DC.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="mods">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2MODS.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="rdfdc">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2RDFDC.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="rss2">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2RSS2.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="utils">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slimUtils.xsl"/>
          </backend>
        </retrieval>
-     </retrievalinfo>
+    __END_BIBLIOS_RETRIEVAL_INFO__
+
     <!-- The stuff below is used to enable SRU. It's currently disabled
          until we come up with a good way to make it get magically set up by
          the packaging system. If you need it, uncomment and set it up
@@ -102,52 +104,49 @@
 <!-- AUTHORITY RECORDS -->
 <server id="authorityserver"  listenref="authorityserver" >
     <directory>/var/lib/koha/__KOHASITE__/authorities</directory>
-    <config>/etc/koha/sites/__KOHASITE__/zebra-authorities-dom.cfg</config>
+    <config>/etc/koha/sites/__KOHASITE__/__ZEBRA_AUTHORITIES_CFG__</config>
     <cql2rpn>/etc/koha/zebradb/pqf.properties</cql2rpn>
-    <xi:include href="/etc/koha/zebradb/retrieval-info-auth-dom.xml"
-                xmlns:xi="http://www.w3.org/2001/XInclude">
-      <xi:fallback>
-     <retrievalinfo>
-       <retrieval syntax="usmarc" name="F"/>
-       <retrieval syntax="usmarc" name="B"/>
+
+    __START_AUTHORITIES_RETRIEVAL_INFO__
+       <retrieval syntax="__ZEBRA_MARC_FORMAT__" name="F"/>
+       <retrieval syntax="__ZEBRA_MARC_FORMAT__" name="B"/>
        <retrieval syntax="xml" name="marcxml"
                   identifier="info:srw/schema/1/marcxml-v1.1">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="dc">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2DC.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="mods">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2MODS.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="rdfdc">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2RDFDC.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="utils">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slimUtils.xsl"/>
          </backend>
        </retrieval>
-     </retrievalinfo>
-      </xi:fallback>
-    </xi:include>
+    __END_AUTHORITIES_RETRIEVAL_INFO__
+
     <!-- The stuff below is used to enable SRU. It's currently disabled
          until we come up with a good way to make it get magically set up by
          the packaging system. If you need it, uncomment and set it up
@@ -176,56 +175,58 @@
 
 <server id="publicserver"  listenref="publicserver">
     <directory>/var/lib/koha/__KOHASITE__/biblios</directory>
-    <config>/etc/koha/sites/__KOHASITE__/zebra-biblios.cfg</config>
+    <config>/etc/koha/sites/__KOHASITE__/__ZEBRA_BIBLIOS_CFG__</config>
     <cql2rpn>/etc/koha/zebradb/pqf.properties</cql2rpn>
-     <retrievalinfo>
-       <retrieval syntax="usmarc" name="F"/>
-       <retrieval syntax="usmarc" name="B"/>
+
+    __START_BIBLIOS_RETRIEVAL_INFO__
+       <retrieval syntax="__ZEBRA_MARC_FORMAT__" name="F"/>
+       <retrieval syntax="__ZEBRA_MARC_FORMAT__" name="B"/>
        <retrieval syntax="xml" name="F"/>
        <retrieval syntax="xml" name="B"/>
        <retrieval syntax="xml" name="marcxml"
                   identifier="info:srw/schema/1/marcxml-v1.1">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="dc">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2DC.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="mods">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2MODS.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="rdfdc">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2RDFDC.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="rss2">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slim2RSS2.xsl"/>
          </backend>
        </retrieval>
        <retrieval syntax="xml" name="utils">
-         <backend syntax="usmarc" name="F">
+         <backend syntax="__ZEBRA_MARC_FORMAT__" name="F">
            <marc inputformat="marc" outputformat="marcxml"
                  inputcharset="utf-8"/>
            <xslt stylesheet="/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/xslt/MARC21slimUtils.xsl"/>
          </backend>
        </retrieval>
-     </retrievalinfo>
+    __END_BIBLIOS_RETRIEVAL_INFO__
+
     <xi:include href="__KOHA_CONF_DIR__/zebradb/explain-biblios.xml"
                 xmlns:xi="http://www.w3.org/2001/XInclude">
       <xi:fallback>
@@ -257,12 +258,15 @@
  <biblioservershadow>1</biblioservershadow>
  <authorityserver>authorities</authorityserver>
  <authorityservershadow>1</authorityservershadow>
+ <pluginsdir>__PLUGINS_DIR__</pluginsdir>
+ <enable_plugins>0</enable_plugins>
  <intranetdir>/usr/share/koha/intranet/cgi-bin</intranetdir>
  <opacdir>/usr/share/koha/opac/cgi-bin/opac</opacdir>
  <opachtdocs>/usr/share/koha/opac/htdocs/opac-tmpl</opachtdocs>
  <intrahtdocs>/usr/share/koha/intranet/htdocs/intranet-tmpl</intrahtdocs>
  <includes>/usr/share/koha/intranet/htdocs/intranet-tmpl/prog/en/includes/</includes>
  <logdir>/var/log/koha/__KOHASITE__</logdir>
+ <docdir>/usr/share/doc/koha-common</docdir>
  <backupdir>/var/spool/koha/__KOHASITE__</backupdir>
  <!-- Enable the two following to allow superlibrarians to download
       database and configuration dumps (respectively) from the Export
@@ -272,8 +276,12 @@
  <!-- <pazpar2url>http://__PAZPAR2_HOST__:__PAZPAR2_PORT__/search.pz2</pazpar2url> -->
  <install_log>/usr/share/koha/misc/koha-install-log</install_log>
  <useldapserver>0</useldapserver><!-- see C4::Auth_with_ldap for extra configs you must add if you want to turn this on -->
- <memcached_servers></memcached_servers>
- <memcached_namespace></memcached_namespace>
+ <memcached_servers>__MEMCACHED_SERVERS__</memcached_servers>
+ <memcached_namespace>__MEMCACHED_NAMESPACE__</memcached_namespace>
+ <zebra_bib_index_mode>__BIBLIOS_INDEXING_MODE__</zebra_bib_index_mode>
+ <zebra_auth_index_mode>__AUTHORITIES_INDEXING_MODE__</zebra_auth_index_mode>
+ <zebra_lockdir>/var/lock/koha/__KOHASITE__</zebra_lockdir>
+ <queryparser_config>/etc/koha/searchengine/queryparser.yaml</queryparser_config>
 </config>
 
 </yazgfs>

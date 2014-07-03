@@ -50,15 +50,12 @@
     <dd>Define extended attributes (identifiers and statistical categories) for patron records</dd>
     <dt><a href="/cgi-bin/koha/admin/branch_transfer_limits.pl">Library transfer limits</a></dt>
 	<dd>Limit the ability to transfer items between libraries based on the library sending, the library receiving, and the item type involved. These rules only go into effect if the preference UseBranchTransferLimits is set to ON.</dd>
-    <dt><a href="/cgi-bin/koha/admin/transport-cost-matrix.pl">Transport Cost Matrix</a></dt>
+    <dt><a href="/cgi-bin/koha/admin/transport-cost-matrix.pl">Transport cost matrix</a></dt>
     <dd>Define transport costs between branches</dd>
     <dt><a href="/cgi-bin/koha/admin/item_circulation_alerts.pl">Item circulation alerts</a></dt>
 	<dd>Define rules for check-in and checkout notifications for combinations of libraries, patron categories, and item types</dd>
     <dt><a href="/cgi-bin/koha/admin/cities.pl">Cities and towns</a></dt>
     <dd>Define cities and towns that your patrons live in.</dd>
-    <dt><a href="/cgi-bin/koha/admin/roadtype.pl" >Road types</a>
-    </dt>
-    <dd>Define road types (street, avenue, way, etc.). Road types display as authorized values when adding/editing patrons and can be used in geographic statistics.</dd>
 </dl>
 </div>
 <div class="yui-u">
@@ -68,8 +65,8 @@
 	<dd>Create and manage Bibliographic frameworks that define the characteristics of your MARC Records (field and subfield definitions) as well as templates for the MARC editor.</dd>
 	<dt><a href="/cgi-bin/koha/admin/koha2marclinks.pl">Koha to MARC mapping</a></dt>
 	<dd>Define the mapping between the Koha transactional database (SQL) and the MARC Bibliographic records. Note that the mapping can be defined through MARC Bibliographic Framework. This tool is just a shortcut to speed up linkage.</dd>
-	<dt><a href="/cgi-bin/koha/admin/fieldmapping.pl">Keywords to MARC mapping</a></dt>
-	<dd>Define the mapping between keywords and MARC fields, those keywords are used to find some datas independently of the framework.</dd>
+        <dt><a href="/cgi-bin/koha/admin/fieldmapping.pl">Keywords to MARC mapping</a></dt>
+        <dd>Define the mapping between keywords and MARC fields, those keywords are used to find some datas independently of the framework.</dd>
 	<dt><a href="/cgi-bin/koha/admin/checkmarc.pl">MARC Bibliographic framework test</a></dt>
 	<dd>Checks the MARC structure. If you change your MARC Bibliographic framework it's recommended that you run this tool to test for errors in your definition.</dd>
     <dt><a href="/cgi-bin/koha/admin/authtypes.pl">Authority types</a></dt>
@@ -101,12 +98,12 @@
 
 <h3>Additional parameters</h3>
 <dl>
-	[% IF ( NoZebra ) %]<dt><a href="/cgi-bin/koha/admin/stopwords.pl">Stop words</a></dt>
-	<dd>Words ignored during search.</dd>[% END %]
 	<!-- <dt><a href="/cgi-bin/koha/admin/printers.pl">Network Printers</a></dt>
 	<dd>Printers (UNIX paths).</dd> -->
     <dt><a href="/cgi-bin/koha/admin/z3950servers.pl">Z39.50 client targets</a></dt>
 	<dd>Define which servers to query for MARC data in the integrated Z39.50 client.</dd>
+    <dt><a href="/cgi-bin/koha/admin/didyoumean.pl">Did you mean?</a></dt>
+    <dd>Choose which plugins to use to suggest searches to patrons and staff.</dd>
 </dl>
 </div>
 

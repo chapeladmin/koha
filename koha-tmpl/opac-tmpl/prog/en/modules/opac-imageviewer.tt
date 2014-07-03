@@ -1,3 +1,4 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %]
 [% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo; Images for: [% biblio.title |html %]
 [% INCLUDE 'doc-head-close.inc' %]
@@ -5,7 +6,7 @@
 //<![CDATA[
 
 $(document).ready(function(){
-    $("#largeCoverImg").attr("src","/opac-tmpl/prog/images/loading.gif");
+    $("#largeCoverImg").attr("src","[% interface %]/[% theme %]/images/loading.gif");
     showCover([% imagenumber %]);
 });
 

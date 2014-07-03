@@ -43,8 +43,7 @@ To know on which branch this script have to display late order.
 
 =cut
 
-use strict;
-use warnings;
+use Modern::Perl;
 use CGI;
 use C4::Bookseller qw( GetBooksellersWithLateOrders );
 use C4::Auth;
@@ -54,6 +53,7 @@ use C4::Context;
 use C4::Acquisition;
 use C4::Letters;
 use C4::Branch; # GetBranches
+use Koha::DateUtils;
 
 my $input = new CGI;
 my ($template, $loggedinuser, $cookie) = get_template_and_user({
@@ -66,9 +66,32 @@ my ($template, $loggedinuser, $cookie) = get_template_and_user({
 });
 
 my $booksellerid = $input->param('booksellerid') || undef; # we don't want "" or 0
-my $delay      = $input->param('delay');
+my $delay        = $input->param('delay') // 0;
+
+# Get the "date from" param if !defined is today
 my $estimateddeliverydatefrom = $input->param('estimateddeliverydatefrom');
 my $estimateddeliverydateto   = $input->param('estimateddeliverydateto');
+
+my $estimateddeliverydatefrom_dt =
+  $estimateddeliverydatefrom
+  ? dt_from_string($estimateddeliverydatefrom)
+  : undef;
+
+# Get the "date to" param. If it is not defined and $delay is not defined too, it is the today's date.
+my $estimateddeliverydateto_dt = $estimateddeliverydateto
+    ? dt_from_string($estimateddeliverydateto)
+    : ( not defined $delay and not defined $estimateddeliverydatefrom)
+        ? dt_from_string()
+        : undef;
+
+# Format the output of "date from" and "date to"
+if ($estimateddeliverydatefrom_dt) {
+    $estimateddeliverydatefrom = output_pref({dt => $estimateddeliverydatefrom_dt, dateonly => 1});
+}
+if ($estimateddeliverydateto_dt) {
+    $estimateddeliverydateto = output_pref({dt => $estimateddeliverydateto_dt, dateonly => 1});
+}
+
 my $branch     = $input->param('branch');
 my $op         = $input->param('op');
 
@@ -78,7 +101,7 @@ if ( $delay and not $delay =~ /^\d{1,3}$/ ) {
 }
 
 if ($op and $op eq "send_alert"){
-    my @ordernums = $input->param("claim_for");# FIXME: Fallback values?
+    my @ordernums = $input->param("ordernumber");# FIXME: Fallback values?
     my $err;
     eval {
         $err = SendAlerts( 'claimacquisition', \@ordernums, $input->param("letter_code") );    # FIXME: Fallback value?
@@ -86,6 +109,7 @@ if ($op and $op eq "send_alert"){
             AddClaim ( $_ ) for @ordernums;
         }
     };
+
     if ( $@ ) {
         $template->param(error_claim => $@);
     } elsif ( ref $err and exists $err->{error} and $err->{error} eq "no_email" ) {
@@ -95,12 +119,16 @@ if ($op and $op eq "send_alert"){
     }
 }
 
-my %supplierlist = GetBooksellersWithLateOrders(
-    $delay,
-    $branch,
-    C4::Dates->new($estimateddeliverydatefrom)->output("iso"),
-    C4::Dates->new($estimateddeliverydateto)->output("iso")
-);
+my @parameters = ( $delay );
+push @parameters, $estimateddeliverydatefrom_dt
+    ? $estimateddeliverydatefrom_dt->ymd()
+    : undef;
+
+push @parameters, $estimateddeliverydateto_dt
+    ? $estimateddeliverydateto_dt->ymd()
+    : undef;
+
+my %supplierlist = GetBooksellersWithLateOrders(@parameters);
 
 my (@sloopy);	# supplier loop
 foreach (keys %supplierlist){
@@ -113,34 +141,34 @@ $template->param(SUPPLIER_LOOP => \@sloopy);
 $template->param(Supplier=>$supplierlist{$booksellerid}) if ($booksellerid);
 $template->param(booksellerid=>$booksellerid) if ($booksellerid);
 
-my @lateorders = GetLateOrders(
-    $delay,
-    $booksellerid,
-    $branch,
-    C4::Dates->new($estimateddeliverydatefrom)->output("iso"),
-    C4::Dates->new($estimateddeliverydateto)->output("iso")
-);
+@parameters =
+  ( $delay, $booksellerid, $branch );
+if ($estimateddeliverydatefrom_dt) {
+    push @parameters, $estimateddeliverydatefrom_dt->ymd();
+}
+else {
+    push @parameters, undef;
+}
+if ($estimateddeliverydateto_dt) {
+    push @parameters, $estimateddeliverydateto_dt->ymd();
+}
+my @lateorders = GetLateOrders( @parameters );
 
 my $total;
 foreach (@lateorders){
 	$total += $_->{subtotal};
 }
 
-my @letters;
-my $letters=GetLetters("claimacquisition");
-foreach (keys %$letters){
-	push @letters, {code=>$_,name=>$letters->{$_}};
-}
-$template->param(letters=>\@letters) if (@letters);
+my $letters = GetLetters({ module => "claimacquisition" });
 
 $template->param(ERROR_LOOP => \@errors) if (@errors);
 $template->param(
 	lateorders => \@lateorders,
 	delay => $delay,
+    letters => $letters,
     estimateddeliverydatefrom => $estimateddeliverydatefrom,
     estimateddeliverydateto   => $estimateddeliverydateto,
 	total => $total,
 	intranetcolorstylesheet => C4::Context->preference("intranetcolorstylesheet"),
-    DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
 );
 output_html_with_http_headers $input, $cookie, $template->output;

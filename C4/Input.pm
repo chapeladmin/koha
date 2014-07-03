@@ -52,7 +52,6 @@ number or ISBN is valid.
 @ISA = qw(Exporter);
 @EXPORT = qw(
 	&checkdigit
-	&buildCGIsort
 );
 
 =item checkdigit
@@ -109,43 +108,6 @@ sub checkdigit ($;$) {
 	return 0;
 } # sub checkdigit
 
-=item buildCGISort
-
-  $CGIScrollingList = &buildCGISort($name string, $input_name string);
-
-Returns the scrolling list with name $input_name, built on authorised Values named $name.
-Returns NULL if no authorised values found
-
-=cut
-
-sub buildCGIsort {
-	my ($name,$input_name,$data) = @_;
-	my $dbh=C4::Context->dbh;
-	my $query=qq{SELECT * FROM authorised_values WHERE category=? order by lib};
-	my $sth=$dbh->prepare($query);
-	$sth->execute($name);
-	my $CGISort;
-	if ($sth->rows>0){
-		my @values;
-		my %labels;
-
-		for (my $i =0;$i<$sth->rows;$i++){
-			my $results = $sth->fetchrow_hashref;
-			push @values, $results->{authorised_value};
-			$labels{$results->{authorised_value}}=$results->{lib};
-		}
-		$CGISort= CGI::scrolling_list(
-					-name => $input_name,
-					-id =>   $input_name,
-					-values => \@values,
-					-labels => \%labels,
-					-default=> $data,
-					-size => 1,
-					-multiple => 0);
-	}
-	$sth->finish;
-	return $CGISort;
-}
 END { }       # module clean-up code here (global destructor)
 
 1;

@@ -4,7 +4,8 @@
 <script type="text/javascript">
 //<![CDATA[
 $(document).ready(function(){
-	$("fieldset.rows input").keydown(function(e){ return checkEnter(e); });
+        $('#mancredit').preventDoubleFormSubmit();
+        $("fieldset.rows input, fieldset.rows select").addClass("noEnterSubmit");
 });
 //]]>
 </script>
@@ -32,12 +33,12 @@ $(document).ready(function(){
 </ul>
 <div class="tabs-container">
 
-<form action="/cgi-bin/koha/members/mancredit.pl" method="post">
+<form action="/cgi-bin/koha/members/mancredit.pl" method="post" id="mancredit">
 <input type="hidden" name="borrowernumber" id="borrowernumber" value="[% borrowernumber %]" />
 
 <fieldset class="rows">
 <legend>Manual credit</legend><ol>
-	<li><label for="type">Credit Type: </label><select name="type" id="type">
+	<li><label for="type">Credit type: </label><select name="type" id="type">
 <option value="C">Credit</option>
 <option value="FOR">Forgiven</option>
 </select></li>

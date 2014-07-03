@@ -1,24 +1,22 @@
+[% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Circulation &rsaquo; Holds awaiting pickup</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-<script type="text/javascript" language="JavaScript">
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">
 //<![CDATA[
-$.tablesorter.addParser({
-    id: 'articles',
-    is: function(s) {return false;  },
-    format: function(s) { return s.toLowerCase().replace(/^(the|an|a) /,''); },
-    type: 'text'
-});
      $(document).ready(function() {
          $('#resultlist').tabs();
          $("th a").hide();
-         $.tablesorter.defaults.widgets = ['zebra'];
-         $("#holdst,#holdso").tablesorter({[% IF ( dateformat == 'metric' ) %]
-            dateFormat: 'uk',[% END %]
-            sortList: [[3,0]],
-            headers: { 1:{sorter:'articles'},3: { sorter: 'articles' },4:{sorter:false}}
-        }); 
+        $("#holdst,#holdso").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "aoColumnDefs": [
+                { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false },
+                { "sType": "anti-the", "aTargets" : [ "anti-the" ] },
+                { "sType": "title-string", "aTargets" : [ "title-string" ] }
+            ],
+            "sPaginationType": "four_button"
+        }));
       });
 //]]>
 </script>
@@ -47,23 +45,24 @@ $.tablesorter.addParser({
     [% IF ( cancel_result ) %]
         [% FOREACH cancel_result %]
             [% IF ( messagetransfert ) %]
-                <div>
-                    <h2>Hold find for ([% nextreservtitle %]), must be transferred</h2>
-                    <p>This hold placed by : <b> [% nextreservsurname %] [% nextreservfirstname %]</b> at the library : <b> [% branchname %] </b>, Please transfer this hold.
+                <div class="dialog message">
+                    <h2>This item is on hold for pick-up at [% branchname %]</h2>
+                    <p><strong>[% nextreservtitle %]</strong> is on hold for <strong> [% nextreservsurname %], [% nextreservfirstname %]</strong>.
+                    Please retain this item and check it in to process the hold.
                     </p>
                     <form name="cancelReservewithtransfert" action="waitingreserves.pl" method="post">
-                        <input type="submit" class="button" />
+                        <input type="submit" class="submit" value="OK" />
                     </form>
                 </div>
             [% END %]
             [% IF ( waiting ) %]
-                <div id="bloc25">
-                    <h2>This hold is waiting</h2>
-                    <p>This hold ([% nextreservtitle %]) was placed by <b> : [% nextreservsurname %] [% nextreservfirstname %]</b>,
-                    Please retain this hold.
+                <div class="dialog message">
+                    <h2>This item is on hold for pick-up at your library</h2>
+                    <p><strong>[% nextreservtitle %]</strong> is on hold for <strong>[% nextreservsurname %], [% nextreservfirstname %]</strong>.
+                    Please retain this item and check it in to process the hold.
                     </p>
                     <form name="cancelReservewithwaiting" action="waitingreserves.pl" method="post">
-                        <input type="submit" />
+                        <input type="submit" class="submit" value="OK"/>
                     </form>
                 </div>
             [% END %]
@@ -78,8 +77,8 @@ $.tablesorter.addParser({
             [% IF ( reserveloop ) %]
                <table id="holdst">
                <thead><tr>
-                    <th>Available since</th>
-                    <th>Title</th>
+                    <th class="title-string">Available since</th>
+                    <th class="anti-the">Title</th>
                     <th>Patron</th>
                     <th>Location</th>
                     <th>Copy number</th>
@@ -88,7 +87,7 @@ $.tablesorter.addParser({
                </tr></thead>
                <tbody>[% FOREACH reserveloo IN reserveloop %]
                 <tr>
-                    <td><p>[% reserveloo.waitingdate %]</p></td>
+                    <td><span title="[% reserveloo.waitingdate %]">[% reserveloo.waitingdate | $KohaDates %]</span></td>
                     <td>[% INCLUDE 'biblio-default-view.inc' biblionumber = reserveloo.biblionumber %]
                         [% reserveloo.title |html %] [% reserveloo.subtitle |html %]
                         </a>
@@ -138,8 +137,8 @@ $.tablesorter.addParser({
                <br/>
                <table id="holdso">
                <thead><tr>
-                    <th>Available since</th>
-                    <th>Title</th>
+                    <th class="title-string">Available since</th>
+                    <th class="anti-the">Title</th>
                     <th>Patron</th>
                     <th>Location</th>
                     <th>Copy number</th>
@@ -148,7 +147,7 @@ $.tablesorter.addParser({
                </tr></thead>
                <tbody>[% FOREACH overloo IN overloop %]
                     <tr>
-                        <td><p>[% overloo.waitingdate %]</p></td>
+                        <td><p><span title="[% overloo.waitingdate %]">[% overloo.waitingdate | $KohaDates %]</span></p></td>
                         <td>[% INCLUDE 'biblio-default-view.inc' biblionumber = overloo.biblionumber %][% overloo.title |html %] [% overloo.subtitle |html %]
                         </a>
                             [% UNLESS ( item_level_itypes ) %][% IF ( overloo.itemtype ) %]&nbsp; (<b>[% overloo.itemtype %]</b>)[% END %][% END %]

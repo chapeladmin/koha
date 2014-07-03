@@ -9,6 +9,14 @@ I18N/L10N:
               iso: yyyy-mm-dd
         - .
     -
+        - Format times in
+        - pref: TimeFormat
+          default: 24hr
+          choices:
+              24hr: 24 hour format ( e.g. "14:18" )
+              12hr: 12 hour format ( e.g. "02:18 PM" )
+        - .
+    -
         - Use
         - pref: CalendarFirstDayOfWeek
           default: Sunday
@@ -31,3 +39,8 @@ I18N/L10N:
         - "Enable the following languages on the OPAC:"
         - pref: opaclanguages
           type: opac-languages
+    -
+        - "Use the alphabet"
+        - pref: alphabet
+          class: long
+        - for lists of browsable letters. This should be a space separated list of uppercase letters.

@@ -24,6 +24,7 @@ use strict;
 use warnings;
 
 use CGI;
+use C4::Acquisition qw( SearchOrders );
 use C4::Auth qw(:DEFAULT get_session);
 use C4::Branch;
 use C4::Koha;
@@ -49,6 +50,8 @@ use MARC::Field;
 use List::MoreUtils qw/any none/;
 use C4::Images;
 use Koha::DateUtils;
+use C4::HTML5Media;
+use C4::CourseReserves qw(GetItemCourseReservesInfo);
 
 BEGIN {
 	if (C4::Context->preference('BakerTaylorEnabled')) {
@@ -68,13 +71,57 @@ my ( $template, $borrowernumber, $cookie ) = get_template_and_user(
     }
 );
 
-my $biblionumber = $query->param('biblionumber') || $query->param('bib');
+my $biblionumber = $query->param('biblionumber') || $query->param('bib') || 0;
+$biblionumber = int($biblionumber);
+
+my @all_items = GetItemsInfo($biblionumber);
+my @hiddenitems;
+if (scalar @all_items >= 1) {
+    push @hiddenitems, GetHiddenItemnumbers(@all_items);
+
+    if (scalar @hiddenitems == scalar @all_items ) {
+        print $query->redirect("/cgi-bin/koha/errors/404.pl"); # escape early
+        exit;
+    }
+}
 
 my $record       = GetMarcBiblio($biblionumber);
 if ( ! $record ) {
     print $query->redirect("/cgi-bin/koha/errors/404.pl"); # escape early
     exit;
 }
+
+# redirect if opacsuppression is enabled and biblio is suppressed
+if (C4::Context->preference('OpacSuppression')) {
+    # FIXME hardcoded; the suppression flag ought to be materialized
+    # as a column on biblio or the like
+    my $opacsuppressionfield = '942';
+    my $opacsuppressionfieldvalue = $record->field($opacsuppressionfield);
+    # redirect to opac-blocked info page or 404?
+    my $opacsuppressionredirect;
+    if ( C4::Context->preference("OpacSuppressionRedirect") ) {
+        $opacsuppressionredirect = "/cgi-bin/koha/opac-blocked.pl";
+    } else {
+        $opacsuppressionredirect = "/cgi-bin/koha/errors/404.pl";
+    }
+    if ( $opacsuppressionfieldvalue &&
+         $opacsuppressionfieldvalue->subfield("n") &&
+         $opacsuppressionfieldvalue->subfield("n") == 1) {
+        # if OPAC suppression by IP address
+        if (C4::Context->preference('OpacSuppressionByIPRange')) {
+            my $IPAddress = $ENV{'REMOTE_ADDR'};
+            my $IPRange = C4::Context->preference('OpacSuppressionByIPRange');
+            if ($IPAddress !~ /^$IPRange/)  {
+                print $query->redirect($opacsuppressionredirect);
+                exit;
+            }
+        } else {
+            print $query->redirect($opacsuppressionredirect);
+            exit;
+        }
+    }
+}
+
 $template->param( biblionumber => $biblionumber );
 
 # get biblionumbers stored in the cart
@@ -140,6 +187,7 @@ if ($session->param('busc')) {
 
         my $expanded_facet = $arrParamsBusc->{'expand'};
         my $branches = GetBranches();
+        my $itemtypes = GetItemTypes;
         my @servers;
         @servers = @{$arrParamsBusc->{'server'}} if $arrParamsBusc->{'server'};
         @servers = ("biblioserver") unless (@servers);
@@ -150,7 +198,7 @@ if ($session->param('busc')) {
         $sort_by[0] = $default_sort_by if !$sort_by[0] && defined($default_sort_by);
         my ($error, $results_hashref, $facets);
         eval {
-            ($error, $results_hashref, $facets) = getRecords($arrParamsBusc->{'query'},$arrParamsBusc->{'simple_query'},\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$arrParamsBusc->{'query_type'},$arrParamsBusc->{'scan'});
+            ($error, $results_hashref, $facets) = getRecords($arrParamsBusc->{'query'},$arrParamsBusc->{'simple_query'},\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$itemtypes,$arrParamsBusc->{'query_type'},$arrParamsBusc->{'scan'});
         };
         my $hits;
         my @newresults;
@@ -359,20 +407,21 @@ if ($session->param('busc')) {
         my $newbusc = rebuildBuscParam(\%arrParamsBusc);
         $session->param("busc" => $newbusc);
     }
-    my ($previous, $next, $dataBiblioPaging);
+    my ($numberBiblioPaging, $dataBiblioPaging);
     # Previous biblio
-    if ($paging{'previous'}->{biblionumber}) {
-        $previous = 'opac-detail.pl?biblionumber=' . $paging{'previous'}->{biblionumber};
-        $dataBiblioPaging = GetBiblioData($paging{'previous'}->{biblionumber});
+    $numberBiblioPaging = $paging{'previous'}->{biblionumber};
+    if ($numberBiblioPaging) {
+        $template->param( 'previousBiblionumber' => $numberBiblioPaging );
+        $dataBiblioPaging = GetBiblioData($numberBiblioPaging);
         $template->param('previousTitle' => $dataBiblioPaging->{'title'}) if ($dataBiblioPaging);
     }
     # Next biblio
-    if ($paging{'next'}->{biblionumber}) {
-        $next = 'opac-detail.pl?biblionumber=' . $paging{'next'}->{biblionumber};
-        $dataBiblioPaging = GetBiblioData($paging{'next'}->{biblionumber});
+    $numberBiblioPaging = $paging{'next'}->{biblionumber};
+    if ($numberBiblioPaging) {
+        $template->param( 'nextBiblionumber' => $numberBiblioPaging );
+        $dataBiblioPaging = GetBiblioData($numberBiblioPaging);
         $template->param('nextTitle' => $dataBiblioPaging->{'title'}) if ($dataBiblioPaging);
     }
-    $template->param('previous' => $previous, 'next' => $next);
     # Partial list of biblio results
     my @listResults;
     for (my $j = 0; $j < @arrBiblios; $j++) {
@@ -394,8 +443,6 @@ $template->param( 'ItemsIssued' => CountItemsIssued( $biblionumber ) );
 
 $template->param('OPACShowCheckoutName' => C4::Context->preference("OPACShowCheckoutName") );
 $template->param('OPACShowBarcode' => C4::Context->preference("OPACShowBarcode") );
-# change back when ive fixed request.pl
-my @all_items = GetItemsInfo( $biblionumber );
 
 # adding items linked via host biblios
 
@@ -418,9 +465,6 @@ foreach my $hostfield ( $record->field($analyticfield)) {
 
 my @items;
 
-# Getting items to be hidden
-my @hiddenitems = GetHiddenItemnumbers(@all_items);
-
 # Are there items to hide?
 my $hideitems;
 $hideitems = 1 if C4::Context->preference('hidelostitems') or scalar(@hiddenitems) > 0;
@@ -437,6 +481,41 @@ if ($hideitems) {
 } else {
     # Or not
     @items = @all_items;
+}
+
+my $branches = GetBranches();
+my $branch = '';
+if (C4::Context->userenv){
+    $branch = C4::Context->userenv->{branch};
+}
+if ( C4::Context->preference('HighlightOwnItemsOnOPAC') ) {
+    if (
+        ( ( C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'PatronBranch' ) && $branch )
+        ||
+        C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'OpacURLBranch'
+    ) {
+        my $branchname;
+        if ( C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'PatronBranch' ) {
+            $branchname = $branches->{$branch}->{'branchname'};
+        }
+        elsif (  C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'OpacURLBranch' ) {
+            $branchname = $branches->{ $ENV{'BRANCHCODE'} }->{'branchname'};
+        }
+
+        my @our_items;
+        my @other_items;
+
+        foreach my $item ( @items ) {
+           if ( $item->{'branchname'} eq $branchname ) {
+               $item->{'this_branch'} = 1;
+               push( @our_items, $item );
+           } else {
+               push( @other_items, $item );
+           }
+        }
+
+        @items = ( @our_items, @other_items );
+    }
 }
 
 my $dat = &GetBiblioData($biblionumber);
@@ -470,6 +549,8 @@ foreach my $subscription (@subscriptions) {
     $cell{branchcode}        = $subscription->{branchcode};
     $cell{branchname}        = GetBranchName($subscription->{branchcode});
     $cell{hasalert}          = $subscription->{hasalert};
+    $cell{callnumber}        = $subscription->{callnumber};
+    $cell{closed}            = $subscription->{closed};
     #get the three latest serials.
     $serials_to_display = $subscription->{opacdisplaycount};
     $serials_to_display = C4::Context->preference('OPACSerialIssueDisplayCount') unless $serials_to_display;
@@ -481,13 +562,6 @@ foreach my $subscription (@subscriptions) {
 
 $dat->{'count'} = scalar(@items);
 
-# If there is a lot of items, and the user has not decided
-# to view them all yet, we first warn him
-# TODO: The limit of 50 could be a syspref
-my $viewallitems = $query->param('viewallitems');
-if ($dat->{'count'} >= 50 && !$viewallitems) {
-    $template->param('lotsofitems' => 1);
-}
 
 my $biblio_authorised_value_images = C4::Items::get_authorised_value_images( C4::Biblio::get_biblio_authorised_values( $biblionumber, $record ) );
 
@@ -499,8 +573,8 @@ for ( C4::Context->preference("OPACShowHoldQueueDetails") ) {
 }
 my $has_hold;
 if ( $show_holds_count || $show_priority) {
-    my ($reserve_count,$reserves) = GetReservesFromBiblionumber($biblionumber);
-    $template->param( holds_count  => $reserve_count ) if $show_holds_count;
+    my $reserves = GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
+    $template->param( holds_count  => scalar( @$reserves ) ) if $show_holds_count;
     foreach (@$reserves) {
         $item_reserves{ $_->{itemnumber} }++ if $_->{itemnumber};
         if ($show_priority && $_->{borrowernumber} == $borrowernumber) {
@@ -514,26 +588,56 @@ if ( $show_holds_count || $show_priority) {
 $template->param( show_priority => $has_hold ) ;
 
 my $norequests = 1;
-my $branches = GetBranches();
 my %itemfields;
-for my $itm (@items) {
+my (@itemloop, @otheritemloop);
+my $currentbranch = C4::Context->userenv ? C4::Context->userenv->{branch} : undef;
+if ($currentbranch and C4::Context->preference('OpacSeparateHoldings')) {
+    $template->param(SeparateHoldings => 1);
+}
+my $separatebranch = C4::Context->preference('OpacSeparateHoldingsBranch');
+my $viewallitems = $query->param('viewallitems');
+my $max_items_to_display = C4::Context->preference('OpacMaxItemsToDisplay') // 50;
+
+# Get items on order
+my ( @itemnumbers_on_order );
+if ( C4::Context->preference('OPACAcquisitionDetails' ) ) {
+    my $orders = C4::Acquisition::SearchOrders({
+        biblionumber => $biblionumber,
+        ordered => 1,
+    });
+    my $total_quantity = 0;
+    for my $order ( @$orders ) {
+        if ( C4::Context->preference('AcqCreateItem') eq 'ordering' ) {
+            for my $itemnumber ( C4::Acquisition::GetItemnumbersFromOrder( $order->{ordernumber} ) ) {
+                push @itemnumbers_on_order, $itemnumber;
+            }
+        }
+        $total_quantity += $order->{quantity};
+    }
+    $template->{VARS}->{acquisition_details} = {
+        total_quantity => $total_quantity,
+    };
+}
+
+if ( not $viewallitems and @items > $max_items_to_display ) {
+    $template->param(
+        too_many_items => 1,
+        items_count => scalar( @items ),
+    );
+} else {
+  for my $itm (@items) {
     $itm->{holds_count} = $item_reserves{ $itm->{itemnumber} };
     $itm->{priority} = $priority{ $itm->{itemnumber} };
     $norequests = 0
-       if ( (not $itm->{'wthdrawn'} )
+       if ( (not $itm->{'withdrawn'} )
          && (not $itm->{'itemlost'} )
          && ($itm->{'itemnotforloan'}<0 || not $itm->{'itemnotforloan'} )
 		 && (not $itemtypes->{$itm->{'itype'}}->{notforloan} )
          && ($itm->{'itemnumber'} ) );
 
-    if ( defined $itm->{'publictype'} ) {
-        # I can't actually find any case in which this is defined. --amoore 2008-12-09
-        $itm->{ $itm->{'publictype'} } = 1;
-    }
-
     # get collection code description, too
     my $ccode = $itm->{'ccode'};
-    $itm->{'ccode'} = $collections->{$ccode} if ( defined($collections) && exists( $collections->{$ccode} ) );
+    $itm->{'ccode'} = $collections->{$ccode} if defined($ccode) && $collections && exists( $collections->{$ccode} );
     my $copynumber = $itm->{'copynumber'};
     $itm->{'copynumber'} = $copynumbers->{$copynumber} if ( defined($copynumbers) && defined($copynumber) && exists( $copynumbers->{$copynumber} ) );
     if ( defined $itm->{'location'} ) {
@@ -556,7 +660,7 @@ for my $itm (@items) {
          $itm->{'lostimageurl'}   = $lostimageinfo->{ 'imageurl' };
          $itm->{'lostimagelabel'} = $lostimageinfo->{ 'label' };
      }
-     my ($reserve_status) = C4::Reserves::CheckReserves($itm->{itemnumber});
+     my $reserve_status = C4::Reserves::GetReserveStatus($itm->{itemnumber});
       if( $reserve_status eq "Waiting"){ $itm->{'waiting'} = 1; }
       if( $reserve_status eq "Reserved"){ $itm->{'onhold'} = 1; }
     
@@ -566,6 +670,33 @@ for my $itm (@items) {
         $itm->{transfertfrom} = $branches->{$transfertfrom}{branchname};
         $itm->{transfertto}   = $branches->{$transfertto}{branchname};
      }
+    
+    if (    C4::Context->preference('OPACAcquisitionDetails')
+        and C4::Context->preference('AcqCreateItem') eq 'ordering' )
+    {
+        $itm->{on_order} = 1
+          if grep /^$itm->{itemnumber}$/, @itemnumbers_on_order;
+    }
+
+    my $itembranch = $itm->{$separatebranch};
+    if ($currentbranch and C4::Context->preference('OpacSeparateHoldings')) {
+        if ($itembranch and $itembranch eq $currentbranch) {
+            push @itemloop, $itm;
+        } else {
+            push @otheritemloop, $itm;
+        }
+    } else {
+        push @itemloop, $itm;
+    }
+  }
+}
+
+# Display only one tab if one items list is empty
+if (scalar(@itemloop) == 0 || scalar(@otheritemloop) == 0) {
+    $template->param(SeparateHoldings => 0);
+    if (scalar(@itemloop) == 0) {
+        @itemloop = @otheritemloop;
+    }
 }
 
 ## get notes and subjects from MARC record
@@ -694,7 +825,8 @@ if(C4::Context->preference("ISBD")) {
 }
 
 $template->param(
-    ITEM_RESULTS        => \@items,
+    itemloop            => \@itemloop,
+    otheritemloop       => \@otheritemloop,
     subscriptionsnumber => $subscriptionsnumber,
     biblionumber        => $biblionumber,
     subscriptions       => \@subs,
@@ -753,6 +885,11 @@ if (scalar(@serialcollections) > 0) {
 # Local cover Images stuff
 if (C4::Context->preference("OPACLocalCoverImages")){
 		$template->param(OPACLocalCoverImages => 1);
+}
+
+# HTML5 Media
+if ( (C4::Context->preference("HTML5MediaEnabled") eq 'both') or (C4::Context->preference("HTML5MediaEnabled") eq 'opac') ) {
+    $template->param( C4::HTML5Media->gethtml5media($record));
 }
 
 my $syndetics_elements;
@@ -854,24 +991,27 @@ if ( C4::Context->preference( "SocialNetworks" ) ) {
 
 # Shelf Browser Stuff
 if (C4::Context->preference("OPACShelfBrowser")) {
-    # pick the first itemnumber unless one was selected by the user
-    my $starting_itemnumber = $query->param('shelfbrowse_itemnumber'); # || $items[0]->{itemnumber};
+    my $starting_itemnumber = $query->param('shelfbrowse_itemnumber');
     if (defined($starting_itemnumber)) {
         $template->param( OpenOPACShelfBrowser => 1) if $starting_itemnumber;
-        my $nearby = GetNearbyItems($starting_itemnumber,3);
+        my $nearby = GetNearbyItems($starting_itemnumber);
 
         $template->param(
+            starting_itemnumber => $starting_itemnumber,
             starting_homebranch => $nearby->{starting_homebranch}->{description},
             starting_location => $nearby->{starting_location}->{description},
             starting_ccode => $nearby->{starting_ccode}->{description},
-            starting_itemnumber => $nearby->{starting_itemnumber},
-            shelfbrowser_prev_itemnumber => $nearby->{prev_itemnumber},
-            shelfbrowser_next_itemnumber => $nearby->{next_itemnumber},
-            shelfbrowser_prev_biblionumber => $nearby->{prev_biblionumber},
-            shelfbrowser_next_biblionumber => $nearby->{next_biblionumber},
-            PREVIOUS_SHELF_BROWSE => $nearby->{prev},
-            NEXT_SHELF_BROWSE => $nearby->{next},
+            shelfbrowser_prev_item => $nearby->{prev_item},
+            shelfbrowser_next_item => $nearby->{next_item},
+            shelfbrowser_items => $nearby->{items},
         );
+
+        # in which tab shelf browser should open ?
+        if (grep { $starting_itemnumber == $_->{itemnumber} } @itemloop) {
+            $template->param(shelfbrowser_tab => 'holdings');
+        } else {
+            $template->param(shelfbrowser_tab => 'otherholdings');
+        }
     }
 }
 
@@ -938,14 +1078,19 @@ my $marcissns = GetMarcISSN ( $record, $marcflavour );
 my $issn = $marcissns->[0] || '';
 
 if (my $search_for_title = C4::Context->preference('OPACSearchForTitleIn')){
-    $dat->{author} ? $search_for_title =~ s/{AUTHOR}/$dat->{author}/g : $search_for_title =~ s/{AUTHOR}//g;
     $dat->{title} =~ s/\/+$//; # remove trailing slash
     $dat->{title} =~ s/\s+$//; # remove trailing space
-    $dat->{title} ? $search_for_title =~ s/{TITLE}/$dat->{title}/g : $search_for_title =~ s/{TITLE}//g;
-    $isbn ? $search_for_title =~ s/{ISBN}/$isbn/g : $search_for_title =~ s/{ISBN}//g;
-    $issn ? $search_for_title =~ s/{ISSN}/$issn/g : $search_for_title =~ s/{ISSN}//g;
-    $marccontrolnumber ? $search_for_title =~ s/{CONTROLNUMBER}/$marccontrolnumber/g : $search_for_title =~ s/{CONTROLNUMBER}//g;
-    $search_for_title =~ s/{BIBLIONUMBER}/$biblionumber/g;
+    $search_for_title = parametrized_url(
+        $search_for_title,
+        {
+            TITLE         => $dat->{title},
+            AUTHOR        => $dat->{author},
+            ISBN          => $isbn,
+            ISSN          => $issn,
+            CONTROLNUMBER => $marccontrolnumber,
+            BIBLIONUMBER  => $biblionumber,
+        }
+    );
     $template->param('OPACSearchForTitleIn' => $search_for_title);
 }
 
@@ -957,12 +1102,12 @@ my $defaulttab =
         ? 'subscriptions' :
     $opac_serial_default eq 'serialcollection' && @serialcollections > 0
         ? 'serialcollection' :
-    $opac_serial_default eq 'holdings' && $dat->{'count'} > 0
+    $opac_serial_default eq 'holdings' && scalar (@itemloop) > 0
         ? 'holdings' :
     $subscriptionsnumber
         ? 'subscriptions' :
     @serialcollections > 0 
-        ? 'serialcollection' : 'subscription';
+        ? 'serialcollection' : 'subscriptions';
 $template->param('defaulttab' => $defaulttab);
 
 if (C4::Context->preference('OPACLocalCoverImages') == 1) {
@@ -970,8 +1115,25 @@ if (C4::Context->preference('OPACLocalCoverImages') == 1) {
     $template->{VARS}->{localimages} = \@images;
 }
 
+$template->{VARS}->{IDreamBooksReviews} = C4::Context->preference('IDreamBooksReviews');
+$template->{VARS}->{IDreamBooksReadometer} = C4::Context->preference('IDreamBooksReadometer');
+$template->{VARS}->{IDreamBooksResults} = C4::Context->preference('IDreamBooksResults');
+$template->{VARS}->{OPACPopupAuthorsSearch} = C4::Context->preference('OPACPopupAuthorsSearch');
+
 if (C4::Context->preference('OpacHighlightedWords')) {
     $template->{VARS}->{query_desc} = $query->param('query_desc');
 }
+$template->{VARS}->{'trackclicks'} = C4::Context->preference('TrackClicks');
+
+if ( C4::Context->preference('UseCourseReserves') ) {
+    foreach my $i ( @items ) {
+        $i->{'course_reserves'} = GetItemCourseReservesInfo( itemnumber => $i->{'itemnumber'} );
+    }
+}
+
+$template->param(
+    'OpacLocationBranchToDisplay'         => C4::Context->preference('OpacLocationBranchToDisplay') ,
+    'OpacLocationBranchToDisplayShelving' => C4::Context->preference('OpacLocationBranchToDisplayShelving'),
+);
 
 output_html_with_http_headers $query, $cookie, $template->output;

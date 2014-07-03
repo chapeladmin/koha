@@ -5,14 +5,14 @@
   [% IF ( OPACFinesTab ) %]
   [% IF ( accountview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-account.pl">my fines</a></li>
   [% END %]
-  [% IF ( userupdateview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-userupdate.pl">my personal details</a></li>
+  [% IF ( userupdateview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-memberentry.pl">my personal details</a></li>
   [% IF ( TagsEnabled ) %]
     [% IF ( tagsview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-tags.pl?mine=1">my tags</a></li>
   [% END %]
   [% IF ( OpacPasswordChange ) %]
     [% IF ( passwdview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-passwd.pl">change my password</a></li>
   [% END %]
-  [% IF ( ShowOpacRecentSearchLink ) %]
+  [% IF EnableOpacSearchHistory %]
   [% IF ( searchhistoryview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-search-history.pl">my search history</a></li>
   [% END %]
   [% IF ( opacreadinghistory ) %]

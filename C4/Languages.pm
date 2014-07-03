@@ -19,9 +19,12 @@ package C4::Languages;
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 
-use strict; 
-#use warnings; FIXME - Bug 2505
+use strict;
+use warnings;
+
 use Carp;
+use CGI;
+use List::MoreUtils qw( any );
 use C4::Context;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $DEBUG);
 
@@ -43,9 +46,10 @@ BEGIN {
     @EXPORT = qw(
         &getFrameworkLanguages
         &getTranslatedLanguages
+        &getLanguages
         &getAllLanguages
     );
-    @EXPORT_OK = qw(getFrameworkLanguages getTranslatedLanguages getAllLanguages get_bidi regex_lang_subtags language_get_description accept_language);
+    @EXPORT_OK = qw(getFrameworkLanguages getTranslatedLanguages getAllLanguages getLanguages get_bidi regex_lang_subtags language_get_description accept_language getlanguage);
     $DEBUG = 0;
 }
 
@@ -119,7 +123,6 @@ Returns a reference to an array of hashes:
 sub getTranslatedLanguages {
     my ($interface, $theme, $current_language, $which) = @_;
     my $htdocs;
-    my $all_languages = getAllLanguages();
     my @languages;
     my @enabled_languages;
  
@@ -161,7 +164,7 @@ sub getTranslatedLanguages {
         $seen{$_}++ for @languages;
         @languages = keys %seen;
     }
-    return _build_languages_arrayref($all_languages,\@languages,$current_language,\@enabled_languages);
+    return _build_languages_arrayref(\@languages,$current_language,\@enabled_languages);
 }
 
 =head2 getAllLanguages
@@ -176,22 +179,57 @@ Returns a reference to an array of hashes:
     print "$language->{language_locale_name}\n";
  }
 
+This routine is a wrapper for getLanguages().
+
 =cut
 
 sub getAllLanguages {
+    return getLanguages(shift);
+}
+
+=head2 getLanguages
+
+    my $lang_arrayref = getLanguages([$lang[, $isFiltered]]);
+
+Returns a reference to an array of hashes of languages.
+
+- If no parameter is passed to the function, it returns english languages names
+- If a $lang parameter conforming to RFC4646 syntax is passed, the function returns languages names translated in $lang
+  If a language name is not translated in $lang in database, the function returns english language name
+- If $isFiltered is set to true, only the detail of the languages selected in system preferences AdvanceSearchLanguages is returned.
+
+=cut
+
+sub getLanguages {
+    my $lang = shift;
+    my $isFiltered = shift;
+
     my @languages_loop;
     my $dbh=C4::Context->dbh;
-    my $current_language = shift || 'en';
+    my $default_language = 'en';
+    my $current_language = $default_language;
+    my $language_list = $isFiltered ? C4::Context->preference("AdvancedSearchLanguages") : undef;
+    if ($lang) {
+        $current_language = regex_lang_subtags($lang)->{'language'};
+    }
     my $sth = $dbh->prepare('SELECT * FROM language_subtag_registry WHERE type=\'language\'');
     $sth->execute();
     while (my $language_subtag_registry = $sth->fetchrow_hashref) {
-
-        # pull out all the script descriptions for each language
+        my $desc;
+        # check if language name is stored in current language
+        my $sth4= $dbh->prepare("SELECT description FROM language_descriptions WHERE type='language' AND subtag =? AND lang = ?");
+        $sth4->execute($language_subtag_registry->{subtag},$current_language);
+        while (my $language_desc = $sth4->fetchrow_hashref) {
+             $desc=$language_desc->{description};
+        }
         my $sth2= $dbh->prepare("SELECT * FROM language_descriptions LEFT JOIN language_rfc4646_to_iso639 on language_rfc4646_to_iso639.rfc4646_subtag = language_descriptions.subtag WHERE type='language' AND subtag =? AND language_descriptions.lang = ?");
-        $sth2->execute($language_subtag_registry->{subtag},$current_language);
-
+        if ($desc) {
+            $sth2->execute($language_subtag_registry->{subtag},$current_language);
+        }
+        else {
+            $sth2->execute($language_subtag_registry->{subtag},$default_language);
+        }
         my $sth3 = $dbh->prepare("SELECT description FROM language_descriptions WHERE type='language' AND subtag=? AND lang=?");
-
         # add the correct description info
         while (my $language_descriptions = $sth2->fetchrow_hashref) {
             $sth3->execute($language_subtag_registry->{subtag},$language_subtag_registry->{subtag});
@@ -211,7 +249,9 @@ sub getAllLanguages {
                 $language_subtag_registry->{language_description} = $language_descriptions->{description};
             }
         }
-        push @languages_loop, $language_subtag_registry;
+        if ( !$language_list || index (  $language_list, $language_subtag_registry->{ iso639_2_code } ) >= 0) {
+            push @languages_loop, $language_subtag_registry;
+        }
     }
     return \@languages_loop;
 }
@@ -229,7 +269,7 @@ sub _get_themes {
     my $interface = shift;
     my $htdocs;
     my @themes;
-    if ( $interface eq 'intranet' ) {
+    if ( $interface && $interface eq 'intranet' ) {
         $htdocs = C4::Context->config('intrahtdocs');
     }
     else {
@@ -252,16 +292,19 @@ Internal function, returns an array of directory names, excluding non-language d
 
 sub _get_language_dirs {
     my ($htdocs,$theme) = @_;
+    $htdocs //= '';
+    $theme //= '';
     my @lang_strings;
     opendir D, "$htdocs/$theme";
     for my $lang_string ( readdir D ) {
         next if $lang_string =~/^\./;
         next if $lang_string eq 'all';
         next if $lang_string =~/png$/;
+        next if $lang_string =~/js$/;
         next if $lang_string =~/css$/;
         next if $lang_string =~/CVS$/;
         next if $lang_string =~/\.txt$/i;     #Don't read the readme.txt !
-        next if $lang_string =~/img|images|famfam|sound|pdf/;
+        next if $lang_string =~/img|images|famfam|js|less|lib|sound|pdf/;
         push @lang_strings, $lang_string;
     }
         return (@lang_strings);
@@ -276,7 +319,8 @@ FIXME: this could be rewritten and simplified using map
 =cut
 
 sub _build_languages_arrayref {
-        my ($all_languages,$translated_languages,$current_language,$enabled_languages) = @_;
+        my ($translated_languages,$current_language,$enabled_languages) = @_;
+        $current_language //= '';
         my @translated_languages = @$translated_languages;
         my @languages_loop; # the final reference to an array of hashrefs
         my @enabled_languages = @$enabled_languages;
@@ -314,7 +358,7 @@ sub _build_languages_arrayref {
             my $enabled;
             for my $enabled_language (@enabled_languages) {
                 my $regex_enabled_language = regex_lang_subtags($enabled_language);
-                $enabled = 1 if $key eq $regex_enabled_language->{language};
+                $enabled = 1 if $key eq ($regex_enabled_language->{language} // '');
             }
             push @languages_loop,  {
                             # this is only use if there is one
@@ -323,7 +367,7 @@ sub _build_languages_arrayref {
                             language => $key,
                             sublanguages_loop => $value,
                             plural => $track_language_groups->{$key} >1 ? 1 : 0,
-                            current => $current_language_regex->{language} eq $key ? 1 : 0,
+                            current => ($current_language_regex->{language} // '') eq $key ? 1 : 0,
                             group_enabled => $enabled,
                            };
         }
@@ -514,6 +558,56 @@ sub accept_language {
     return $secondaryMatch if $secondaryMatch;
     return undef;   # else, we got nothing.
 }
+
+=head2 getlanguage
+
+    Select a language based on the URL parameter 'language', a cookie,
+    syspref available languages & browser
+
+=cut
+
+sub getlanguage {
+    my ($cgi) = @_;
+
+    $cgi //= new CGI;
+    my $interface = C4::Context->interface;
+    my $language;
+
+    my $preference_to_check =
+      $interface eq 'intranet' ? 'language' : 'opaclanguages';
+    # Get the available/valid languages list
+    my @languages = split /,/, C4::Context->preference($preference_to_check);
+
+    # Chose language from the URL
+    $language = $cgi->param( 'language' );
+    if ( defined $language && any { $_ eq $language } @languages) {
+        return $language;
+    }
+
+    # cookie
+    if ($language = $cgi->cookie('KohaOpacLanguage') ) {
+        $language =~ s/[^a-zA-Z_-]*//; # sanitize cookie
+    }
+
+    # HTTP_ACCEPT_LANGUAGE
+    if ( !$language && $ENV{HTTP_ACCEPT_LANGUAGE} ) {
+        $language = accept_language( $ENV{HTTP_ACCEPT_LANGUAGE},
+            getTranslatedLanguages( $interface, 'prog' ) );
+    }
+
+    # Ignore a lang not selected in sysprefs
+    if ( $language && any { $_ eq $language } @languages ) {
+        return $language;
+    }
+
+    # Pick the first selected syspref language
+    $language = shift @languages;
+    return $language if $language;
+
+    # Fall back to English if necessary
+    return 'en';
+}
+
 1;
 
 __END__

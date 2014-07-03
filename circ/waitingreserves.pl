@@ -73,7 +73,7 @@ if ($item) {
     push @cancel_result, $res if $res;
 }
 
-if ( C4::Context->preference('IndependantBranches') ) {
+if ( C4::Context->preference('IndependentBranches') ) {
     undef $all_branches;
 } else {
     $template->param( all_branches_link => $input->url . '?allbranches=1' )
@@ -96,12 +96,6 @@ foreach my $num (@getreserves) {
     my $holdingbranch = $gettitle->{'holdingbranch'};
     my $homebranch = $gettitle->{'homebranch'};
 
-    if ($cancelall) {
-        my $res = cancel( $itemnumber, $borrowernum, $holdingbranch, $homebranch, !$transfer_when_cancel_all );
-        push @cancel_result, $res if $res;
-        next;
-    }
-
     my %getreserv = (
         itemnumber => $itemnumber,
         borrowernum => $borrowernum,
@@ -111,7 +105,7 @@ foreach my $num (@getreserves) {
     $gettitle->{'itemtype'} = C4::Context->preference('item-level_itypes') ? $gettitle->{'itype'} : $gettitle->{'itemtype'};
     my $getborrower = GetMember(borrowernumber => $num->{'borrowernumber'});
     my $itemtypeinfo = getitemtypeinfo( $gettitle->{'itemtype'} );  # using the fixed up itype/itemtype
-    $getreserv{'waitingdate'} = format_date( $num->{'waitingdate'} );
+    $getreserv{'waitingdate'} = $num->{'waitingdate'};
     my ( $waiting_year, $waiting_month, $waiting_day ) = split (/-/, $num->{'waitingdate'});
     ( $waiting_year, $waiting_month, $waiting_day ) =
       Add_Delta_Days( $waiting_year, $waiting_month, $waiting_day,
@@ -139,8 +133,14 @@ foreach my $num (@getreserves) {
     }
  
     if ($today > $calcDate) {
-        push @overloop,   \%getreserv;
-        $overcount++;
+        if ($cancelall) {
+            my $res = cancel( $itemnumber, $borrowernum, $holdingbranch, $homebranch, !$transfer_when_cancel_all );
+            push @cancel_result, $res if $res;
+            next;
+        } else {
+            push @overloop,   \%getreserv;
+            $overcount++;
+        }
     }else{
         push @reservloop, \%getreserv;
         $reservcount++;
@@ -155,7 +155,6 @@ $template->param(
     overloop    => \@overloop,
     overcount   => $overcount,
     show_date   => format_date(C4::Dates->today('iso')),
-    dateformat  => C4::Context->preference("dateformat"),
     ReservesMaxPickUpDelay => C4::Context->preference('ReservesMaxPickUpDelay')
 );
 

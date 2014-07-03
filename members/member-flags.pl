@@ -160,7 +160,7 @@ if ($input->param('newflags')) {
     }
 	
 $template->param( adultborrower => 1 ) if ( $bor->{'category_type'} eq 'A' );
-    my ($picture, $dberror) = GetPatronImage($bor->{'cardnumber'});
+    my ($picture, $dberror) = GetPatronImage($bor->{'borrowernumber'});
     $template->param( picture => 1 ) if $picture;
 
 if (C4::Context->preference('ExtendedPatronAttributes')) {
@@ -192,6 +192,7 @@ $template->param(
 		loop => \@loop,
 		is_child        => ($bor->{'category_type'} eq 'C'),
 		activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+        RoutingSerials => C4::Context->preference('RoutingSerials'),
 		);
 
     output_html_with_http_headers $input, $cookie, $template->output;

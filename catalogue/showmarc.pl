@@ -9,7 +9,7 @@
 #
 # Koha is free software; you can redistribute it and/or modify it under the
 # terms of the GNU General Public License as published by the Free Software
-# Foundation; either version 2 of the License, or (at your option) any later
+# Foundation; either version 3 of the License, or (at your option) any later
 # version.
 #
 # Koha is distributed in the hope that it will be useful, but WITHOUT ANY
@@ -21,9 +21,7 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use strict;
-#use warnings; FIXME - Bug 2505
-
-use open OUT=>":encoding(UTF-8)", ':std';
+use warnings;
 
 # standard or CPAN modules used
 use CGI qw(:standard);
@@ -36,59 +34,48 @@ use C4::Output;
 use C4::Auth;
 use C4::Biblio;
 use C4::ImportBatch;
-use XML::LibXSLT;
-use XML::LibXML;
+use C4::XSLT ();
 
-my $input       = new CGI;
-my $biblionumber = $input->param('id');
-my $importid		=	$input->param('importid');
-my $view		= $input->param('viewas');
+my $input= new CGI;
+my $biblionumber= $input->param('id');
+my $importid= $input->param('importid');
+my $view= $input->param('viewas')||'';
 
-my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
-    {
+my $record;
+if ($importid) {
+    my ($marc) = GetImportRecordMarc($importid);
+    $record = MARC::Record->new_from_usmarc($marc);
+}
+else {
+    $record =GetMarcBiblio($biblionumber);
+}
+if(!ref $record) {
+    print $input->redirect("/cgi-bin/koha/errors/404.pl");
+    exit;
+}
+
+if($view eq 'card') {
+    my $themelang =  '/' . C4::Languages::getlanguage($input);
+    my $xmlrecord= $importid? $record->as_xml(): GetXmlBiblio($biblionumber);
+    my $xslfile =
+      C4::Context->config('intrahtdocs') . '/prog' . $themelang . "/xslt/compact.xsl";
+    if ( ! -f $xslfile && $themelang ne '/en' ) {
+        $xslfile=~s#$themelang#/en#;
+    }
+    my $newxmlrecord = C4::XSLT::engine->transform($xmlrecord, $xslfile);
+    print $input->header(-charset => 'UTF-8'), Encode::encode_utf8($newxmlrecord);
+}
+else {
+    my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
+      {
         template_name   => "catalogue/showmarc.tmpl",
         query           => $input,
         type            => "intranet",
         authnotrequired => 0,
         flagsrequired   => { catalogue => 1  },
         debug           => 1,
-    }
-);
-
-$template->param( SCRIPT_NAME => $ENV{'SCRIPT_NAME'}, );
-my ($record, $xmlrecord);
-if($importid) {
-	my ($marc,$encoding) = GetImportRecordMarc($importid);
-		$record = MARC::Record->new_from_usmarc($marc) ;
- 	if($view eq 'card') {
-		$xmlrecord = $record->as_xml();
-	} 
-}
-
-if($view eq 'card') {
-    my $themelang = '/' . C4::Context->preference("opacthemes") .  '/' . C4::Templates::_current_language();
-    $xmlrecord = GetXmlBiblio($biblionumber) unless $xmlrecord;
-    my $xslfile =
-      C4::Context->config('intrahtdocs') . $themelang . "/xslt/compact.xsl";
-    my $parser       = XML::LibXML->new();
-    my $xslt         = XML::LibXSLT->new();
-    my $source       = $parser->parse_string($xmlrecord);
-    my $style_doc    = $parser->parse_file($xslfile);
-    my $stylesheet   = $xslt->parse_stylesheet($style_doc);
-    my $results      = $stylesheet->transform($source);
-    my $newxmlrecord = $stylesheet->output_string($results);
-    $newxmlrecord = Encode::decode_utf8($newxmlrecord)
-      unless utf8::is_utf8($newxmlrecord)
-    ;    #decode only if not in perl internal format
-    print $input->header( -charset => 'UTF-8' ), $newxmlrecord;
-}
-else {
-    $record =GetMarcBiblio($biblionumber) unless $record;
-
-    my $formatted = $record->as_formatted;
-    $template->param( MARC_FORMATTED => $formatted );
-
-    my $output= $template->output;
-    $output=Encode::decode_utf8($output) unless utf8::is_utf8($output);
-    output_html_with_http_headers $input, $cookie, $output;
+      }
+    );
+    $template->param( MARC_FORMATTED => $record->as_formatted );
+    output_html_with_http_headers $input, $cookie, $template->output;
 }

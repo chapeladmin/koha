@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # koha-create -- Create a new Koha instance.
 # Copyright 2010  Catalyst IT, Ltd
@@ -19,16 +19,56 @@
 
 set -e
 
-usage="Usage: $0 [--create-db|--request-db|--populate-db|--use-db] \
-    [--marcflavor marc21|normarc|unimarc] \
-    [--zebralang en|nb|fr] \
-    [--defaultsql /path/to/some.sql] \
-    [--configfile /path/to/config] [--passwdfile /path/to/passwd] \
-    [--database database] [--adminuser n] instancename"
-
-die() {
-    echo "$@" 1>&2
+# include helper functions
+if [ -f "/usr/share/koha/bin/koha-functions.sh" ]; then
+    . "/usr/share/koha/bin/koha-functions.sh"
+else
+    echo "Error: /usr/share/koha/bin/koha-functions.sh not present." 1>&2
     exit 1
+fi
+
+usage()
+{
+    local scriptname=$0
+    cat <<EOF
+
+Creates new Koha instances.
+
+Usage:
+
+  $scriptname [DB usage mode] [options] instancename
+
+DB usage mode:
+  --create-db               Create a new database on localhost. (default).
+  --request-db              Creates a instancename-db-request.txt file where
+                            you adjust your DB settings and re-run with --populate-db.
+  --populate-db             Finish the installation you started with --request-db after
+                            you adjusted the instancename-db-request.txt file.
+  --use-db                  Use this option if you already created and populated your DB.
+
+Options:
+  --marcflavor flavor       Set the MARC flavor. Valid values are marc21 (default),
+                            normarc and unimarc.
+  --zebralang lang          Choose the primary language for Zebra indexing. Valid
+                            values are en (default), es, fr, nb, ru and uk.
+  --auth-idx idx_mode       Set the indexing mode for authority records. Valid
+                            values are dom (default) and grs1.
+  --biblio-idx idx_mode     Set the indexing mode for bibliographic records.
+                            Valid values are dom (default) and grs1.
+  --use-memcached           Set the instance to make use of memcache.
+  --memcached-servers str   Set a comma-separated list of host:port memcached servers.
+  --memcached-prefix str    Set the desired prefix for the instance memcached namespace.
+  --defaultsql some.sql     Specify a default SQL file to be loaded on the DB.
+  --configfile cfg_file     Specify an alternate config file for reading default values.
+  --passwdfile passwd       Specify an alternate passwd file.
+  --database dbname         Enforce the use of the specified DB name (64 char limit)
+  --adminuser n             Explicit the admin user ID in the DB. Relevant in
+                            conjunction with --defaultsql and --populate-db.
+  --help,-h                 Show this help.
+
+Note: the instance name cannot be longer that 11 chars.
+
+EOF
 }
 
 # UPPER CASE VARIABLES - from configfile or default value
@@ -45,13 +85,25 @@ generate_config_file() {
         -e "s/__ZEBRA_PASS__/$zebrapwd/g" \
         -e "s/__ZEBRA_MARC_FORMAT__/$ZEBRA_MARC_FORMAT/g" \
         -e "s/__ZEBRA_LANGUAGE__/$ZEBRA_LANGUAGE/g" \
+        -e "s/__BIBLIOS_INDEXING_MODE__/$BIBLIOS_INDEXING_MODE/g" \
+        -e "s/__AUTHORITIES_INDEXING_MODE__/$AUTHORITIES_INDEXING_MODE/g" \
+        -e "s/__ZEBRA_BIBLIOS_CFG__/$ZEBRA_BIBLIOS_CFG/g" \
+        -e "s/__ZEBRA_AUTHORITIES_CFG__/$ZEBRA_AUTHORITIES_CFG/g" \
+        -e "s/__START_BIBLIOS_RETRIEVAL_INFO__/`echo $START_BIBLIOS_RETRIEVAL_INFO`/g" \
+        -e "s/__END_BIBLIOS_RETRIEVAL_INFO__/`echo $END_BIBLIOS_RETRIEVAL_INFO`/g" \
+        -e "s/__START_AUTHORITIES_RETRIEVAL_INFO__/`echo $START_AUTHORITIES_RETRIEVAL_INFO`/g" \
+        -e "s/__END_AUTHORITIES_RETRIEVAL_INFO__/`echo $END_AUTHORITIES_RETRIEVAL_INFO`/g" \
         -e "s/__DB_NAME__/$mysqldb/g" \
         -e "s/__DB_HOST__/$mysqlhost/g" \
         -e "s/__DB_USER__/$mysqluser/g" \
         -e "s/__DB_PASS__/$mysqlpwd/g" \
         -e "s/__UNIXUSER__/$username/g" \
         -e "s/__UNIXGROUP__/$username/g" \
+        -e "s/__PLUGINS_DIR__/\/var\/lib\/koha\/$name\/plugins/g" \
+        -e "s/__MEMCACHED_NAMESPACE__/$MEMCACHED_NAMESPACE/g" \
+        -e "s/__MEMCACHED_SERVERS__/$MEMCACHED_SERVERS/g" \
         "/etc/koha/$1" > "$2"
+
 }
 
 getmysqlhost() {
@@ -74,6 +126,158 @@ getinstancemysqldatabase() {
     xmlstarlet sel -t -v 'yazgfs/config/database' "/etc/koha/sites/$1/koha-conf.xml"
 }
 
+check_apache_config()
+{
+
+    # Check that mpm_itk is installed and enabled
+    if ! /usr/sbin/apachectl -M 2> /dev/null | grep -q 'mpm_itk'; then
+        # Check Apache version
+        APACHE_DISABLE_MPM_MSG=""
+        if /usr/sbin/apache2ctl -v | grep -q "Server version: Apache/2.4"; then
+            # mpm_event or mpm_worker need to be disabled first. mpm_itk depends
+            # on mpm_prefork, which is enabled if needed. See
+            # https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=734865
+            if /usr/sbin/apachectl -M 2> /dev/null | grep -q 'mpm_event'; then
+                APACHE_DISABLE_MPM_MSG=" sudo a2dismod mpm_event ;"
+            elif /usr/sbin/apachectl -M 2> /dev/null | grep -q 'mpm_worker'; then
+                APACHE_DISABLE_MPM_MSG=" sudo a2dismod mpm_worker ;"
+            # else mpm_prefork: a2enmod mpm_itk works
+            fi
+        # else Apache 2.2: a2enmod mpm_itk works
+        fi
+
+        cat 1>&2  <<EOM
+
+Koha requires mpm_itk to be enabled within Apache in order to run.
+Typically this can be enabled with:
+
+   $APACHE_DISABLE_MPM_MSG sudo a2enmod mpm_itk
+EOM
+
+        die
+    fi
+
+    # Check that mod_rewrite is installed and enabled.
+    if ! /usr/sbin/apachectl -M 2> /dev/null | grep -q 'rewrite_module'; then
+        cat 1>&2  <<EOM
+
+Koha requires mod_rewrite to be enabled within Apache in order to run.
+Typically this can be enabled with:
+
+    sudo a2enmod rewrite
+EOM
+        die
+    fi
+
+    # Check that the CGI module is installed and enabled
+    # (Apache 2.4 may not have it by default.)
+    if ! /usr/sbin/apachectl -M 2> /dev/null | grep -q 'cgi_module'; then
+        cat 1>&2 << EOM
+Koha requires mod_cgi to be enabled within Apache in order to run.
+Typically this can be enabled with:
+
+    sudo a2enmod cgi
+EOM
+        die
+    fi
+
+}
+
+set_biblios_indexing_mode()
+{
+    local indexing_mode=$1
+    local marc_format=$2
+
+    case $indexing_mode in
+        "dom")
+            START_BIBLIOS_RETRIEVAL_INFO=`cat <<EOF
+    <xi:include href="\/etc\/koha\/$marc_format-retrieval-info-bib-dom.xml"\n
+                xmlns:xi="http:\/\/www.w3.org\/2001\/XInclude">\n
+     <xi:fallback>\n
+      <retrievalinfo>
+EOF`
+
+            END_BIBLIOS_RETRIEVAL_INFO=`cat <<EOF
+      <\/retrievalinfo>\n
+     <\/xi:fallback>\n
+    <\/xi:include>
+EOF`
+            BIBLIOS_INDEXING_MODE="dom"
+            ZEBRA_BIBLIOS_CFG="zebra-biblios-dom.cfg"
+            ;;
+        "grs1")
+            START_BIBLIOS_RETRIEVAL_INFO="    <retrievalinfo>"
+            END_BIBLIOS_RETRIEVAL_INFO="    <\/retrievalinfo>"
+            BIBLIOS_INDEXING_MODE="grs1"
+            ZEBRA_BIBLIOS_CFG="zebra-biblios.cfg"
+            ;;
+        *)
+            die "Error: '$indexing_mode' is not a valid indexing mode for bibliographic records."
+            ;;
+    esac
+}
+
+
+set_authorities_indexing_mode()
+{
+    local indexing_mode=$1
+    local marc_format=$2
+
+    case $indexing_mode in
+        "dom")
+            START_AUTHORITIES_RETRIEVAL_INFO=`cat <<EOF
+    <xi:include href="\/etc\/koha\/$marc_format-retrieval-info-auth-dom.xml"\n
+                xmlns:xi="http:\/\/www.w3.org\/2001\/XInclude">\n
+     <xi:fallback>\n
+      <retrievalinfo>
+EOF`
+
+            END_AUTHORITIES_RETRIEVAL_INFO=`cat <<EOF
+      <\/retrievalinfo>\n
+     <\/xi:fallback>\n
+    <\/xi:include>\n
+EOF`
+            AUTHORITIES_INDEXING_MODE="dom"
+            ZEBRA_AUTHORITIES_CFG="zebra-authorities-dom.cfg"
+            ;;
+        "grs1")
+            START_AUTHORITIES_RETRIEVAL_INFO="    <retrievalinfo>"
+            END_AUTHORITIES_RETRIEVAL_INFO="    <\/retrievalinfo>"
+            AUTHORITIES_INDEXING_MODE="grs1"
+            ZEBRA_AUTHORITIES_CFG="zebra-authorities.cfg"
+            ;;
+        *)
+            die "Error: '$indexing_mode' is not a valid indexing mode for authority records."
+            ;;
+    esac
+}
+
+
+set_memcached()
+{
+    local instance="$1"
+
+    if [ "$CLO_MEMCACHED_SERVERS" != "" ]; then
+        MEMCACHED_SERVERS=$CLO_MEMCACHED_SERVERS
+    else
+        if [ "$MEMCACHED_SERVERS" = "" ]; then
+            MEMCACHED_SERVERS=$DEFAULT_MEMCACHED_SERVERS
+        # else: was set by the koha-sites.conf file
+        fi
+    fi
+
+    if [ "$CLO_MEMCACHED_PREFIX" != "" ]; then
+        MEMCACHED_NAMESPACE="$CLO_MEMCACHED_PREFIX$instance"
+    else
+        if [ "$MEMCACHED_PREFIX" != "" ]; then
+            MEMCACHED_NAMESPACE="$MEMCACHED_PREFIX$instance"
+        else
+            MEMCACHED_NAMESPACE="$DEFAULT_MEMCACHED_PREFIX$instance"
+        fi
+    fi
+
+}
+
 # Set defaults and read config file, if it exists.
 DOMAIN=""
 OPACPORT="80"
@@ -87,14 +291,32 @@ ZEBRA_MARC_FORMAT="marc21"
 ZEBRA_LANGUAGE="en"
 ADMINUSER="1"
 PASSWDFILE="/etc/koha/passwd"
+
+# memcached variables
+USE_MEMCACHED="no"
+MEMCACHED_SERVERS=""
+MEMCACHED_PREFIX=""
+# hardcoded memcached defaults
+DEFAULT_MEMCACHED_SERVERS="127.0.0.1:11211"
+DEFAULT_MEMCACHED_PREFIX="koha_"
+
+# Indexing mode variables (default is DOM)
+BIBLIOS_INDEXING_MODE="dom"
+AUTHORITIES_INDEXING_MODE="dom"
+
+START_BIBLIOS_RETRIEVAL_INFO=""
+END_BIBLIOS_RETRIEVAL_INFO=""
+START_AUTHORITIES_RETRIEVAL_INFO=""
+END_AUTHORITIES_RETRIEVAL_INFO=""
+
 if [ -e /etc/koha/koha-sites.conf ]
 then
     . /etc/koha/koha-sites.conf
 fi
 
-[ $# -ge 2 ] && [ $# -le 16 ] || die $usage
+[ $# -ge 1 ] && [ $# -le 16 ] || ( usage ; die "Error: wrong parameters" )
 
-TEMP=`getopt -o crpm:l:d:f:a: -l create-db,request-db,populate-db,use-db,marcflavor:,zebralang:,defaultsql:,configfile:,passwdfile:,adminuser: \
+TEMP=`getopt -o chrpm:l:d:f:b:a: -l create-db,request-db,populate-db,use-db,use-memcached,help,marcflavor:,auth-idx:,biblio-idx:,zebralang:,defaultsql:,configfile:,passwdfile:,database:,adminuser:,memcached-servers:,memcached-prefix:, \
      -n "$0" -- "$@"`
 
 # Note the quotes around `$TEMP': they are essential!
@@ -105,23 +327,53 @@ CLO_ZEBRA_MARC_FORMAT=""
 CLO_ZEBRA_LANGUAGE=""
 CLO_DEFAULTSQL=""
 CLO_ADMINUSER=""
+CLO_BIBLIOS_INDEXING_MODE=""
+CLO_AUTHORITIES_INDEXING_MODE=""
+CLO_MEMCACHED_SERVERS=""
+CLO_MEMCACHED_PREFIX=""
+
 
 while true ; do
-	case "$1" in
-		-c|--create-db) op=create ; shift ;;
-		-r|--request-db) op=request ; shift ;;
-		-p|--populate-db) op=populate ; shift ;;
-        -u|--use-db) op=use ; shift ;;
-		-m|--marcflavor) CLO_ZEBRA_MARC_FORMAT="$2" ; shift 2 ;;
-		-l|--zebralang) CLO_ZEBRA_LANGUAGE="$2" ; shift 2 ;;
-		-d|--defaultsql) CLO_DEFAULTSQL="$2" ; shift 2 ;;
-		-f|--configfile) configfile="$2" ; shift 2 ;;
-        -s|--passwdfile) CLO_PASSWDFILE="$2" ; shift 2 ;;
-        -b|--database) CLO_DATABASE="$2" ; shift 2 ;;
-		-a|--adminuser) CLO_ADMINUSER="$2" ; shift 2 ;;
-		--) shift ; break ;;
-		*) die "Internal error processing command line arguments" ;;
-	esac
+    case "$1" in
+        -c|--create-db)
+            op=create ; shift ;;
+        -r|--request-db)
+            op=request ; shift ;;
+        -p|--populate-db)
+            op=populate ; shift ;;
+        -u|--use-db)
+            op=use ; shift ;;
+        --use-memcached)
+            USE_MEMCACHED="yes" ; shift ;;
+        --memcached-servers)
+            CLO_MEMCACHED_SERVERS="$2" ; shift 2 ;;
+        --memcached-prefix)
+            CLO_MEMCACHED_PREFIX="$2" ; shift 2;;
+        -m|--marcflavor)
+            CLO_ZEBRA_MARC_FORMAT="$2" ; shift 2 ;;
+        -l|--zebralang)
+            CLO_ZEBRA_LANGUAGE="$2" ; shift 2 ;;
+        --auth-idx)
+            CLO_AUTHORITIES_INDEXING_MODE="$2" ; shift 2 ;;
+        --biblio-idx)
+            CLO_BIBLIOS_INDEXING_MODE="$2" ; shift 2 ;;
+        -d|--defaultsql)
+            CLO_DEFAULTSQL="$2" ; shift 2 ;;
+        -f|--configfile)
+            configfile="$2" ; shift 2 ;;
+        -s|--passwdfile)
+            CLO_PASSWDFILE="$2" ; shift 2 ;;
+        -b|--database)
+            CLO_DATABASE="$2" ; shift 2 ;;
+        -a|--adminuser)
+            CLO_ADMINUSER="$2" ; shift 2 ;;
+        -h|--help)
+            usage ; exit 0 ;;
+        --)
+            shift ; break ;;
+        *)
+            die "Internal error processing command line arguments" ;;
+    esac
 done
 
 # Load the configfile given on the command line
@@ -157,7 +409,50 @@ then
     PASSWDFILE="$CLO_PASSWDFILE"
 fi
 
+if [ "$CLO_BIBLIOS_INDEXING_MODE" !=  "" ]; then
+    BIBLIOS_INDEXING_MODE=$CLO_BIBLIOS_INDEXING_MODE
+fi
+
+set_biblios_indexing_mode $BIBLIOS_INDEXING_MODE $ZEBRA_MARC_FORMAT
+
+
+if [ "$CLO_AUTHORITIES_INDEXING_MODE" !=  "" ]; then
+    AUTHORITIES_INDEXING_MODE=$CLO_AUTHORITIES_INDEXING_MODE
+fi
+
+set_authorities_indexing_mode $AUTHORITIES_INDEXING_MODE $ZEBRA_MARC_FORMAT
+
 name="$1"
+
+if [ "$USE_MEMCACHED" = "yes" ]; then
+    set_memcached $name
+elif [ "$CLO_MEMCACHED_SERVERS" != "" ] || \
+     [ "$CLO_MEMCACHED_PREFIX" != "" ]; then
+
+    MSG=`cat <<EOF
+
+Error: you provided memcached configuration switches but memcached is not enabled.
+Please set USE_MEMCACHED="yes" on /etc/koha/koha-sites.conf or use the
+--use-memcached option switch to enable it.
+
+EOF`
+
+    usage ; die $MSG
+else
+    # Unset memcached-related variables
+    MEMCACHED_SERVERS=""
+    MEMCACHED_PREFIX=""
+fi
+
+# Are we root? If not, the mod_rewrite check will fail and be confusing, so
+# we look into this first.
+if [[ $UID -ne 0 ]]
+then
+    die "This script must be run with root privileges."
+fi
+
+# Check everything is ok with Apache, die otherwise
+check_apache_config
 
 opacdomain="$OPACPREFIX$name$OPACSUFFIX$DOMAIN"
 intradomain="$INTRAPREFIX$name$INTRASUFFIX$DOMAIN"
@@ -192,7 +487,7 @@ if [ "$op" = create ] || [ "$op" = request ] || [ "$op" = use ]
 then
     if [ "$mysqlpwd" = "" ]
     then
-        mysqlpwd="$(pwgen -1)"
+        mysqlpwd="$(pwgen -s 16 1)"
     fi
 else
     mysqlpwd="$(getinstancemysqlpassword $name)"
@@ -220,7 +515,7 @@ then
     koha-create-dirs "$name"
 
     # Generate Zebra database password.
-    zebrapwd="$(pwgen -s 12 1)"
+    zebrapwd="$(pwgen -s 16 1)"
     # Future enhancement: make this configurable for when your db is on
     # another server.
     mysql_hostname="localhost"
@@ -248,7 +543,7 @@ eof
 
     # Generate and install Apache site-available file and log dir.
     generate_config_file apache-site.conf.in \
-        "/etc/apache2/sites-available/$name"
+        "/etc/apache2/sites-available/$name.conf"
     mkdir "/var/log/koha/$name"
     chown "$username:$username" "/var/log/koha/$name"
 
@@ -260,6 +555,8 @@ eof
     # Generate and install Zebra config files.
     generate_config_file zebra-biblios-site.cfg.in \
         "/etc/koha/sites/$name/zebra-biblios.cfg"
+    generate_config_file zebra-biblios-dom-site.cfg.in \
+        "/etc/koha/sites/$name/zebra-biblios-dom.cfg"
     generate_config_file zebra-authorities-site.cfg.in \
         "/etc/koha/sites/$name/zebra-authorities.cfg"
     generate_config_file zebra-authorities-dom-site.cfg.in \
@@ -308,7 +605,7 @@ then
 
 
         # Change the default user's password.
-        staffpass="$(pwgen -1)"
+        staffpass="$(pwgen 12 1)"
         staffdigest=$(echo -n "$staffpass" |
                       perl -e '
                             use Digest::MD5 qw(md5_base64); 
@@ -335,7 +632,12 @@ fi
 if [ "$op" = create ] || [ "$op" = populate ] || [ "$op" = use ]
 then
     # Reconfigure Apache.
-    a2ensite "$name"
+    if ! {
+        a2ensite "$name" > /dev/null 2>&1 ||
+            a2ensite "${name}.conf" > /dev/null 2>&1
+    }; then
+        echo "Warning: problem enabling $name in Apache" >&2
+    fi
     service apache2 restart
 
     # Start Zebra.

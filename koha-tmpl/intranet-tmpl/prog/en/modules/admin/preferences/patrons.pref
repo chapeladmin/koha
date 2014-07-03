@@ -80,18 +80,12 @@ Patrons:
          - '[% local_currency %].'
          - Empty value means no limit. Single item caps are specified in the circulation rules matrix.
      -
-         - pref: memberofinstitution
-           choices:
-               yes: Do
-               no: "Don't"
-         - allow patrons to be linked to institutions (which must be set up as Institution patrons).
-     -
          - Login passwords for staff and patrons must be at least
          - pref: minPasswordLength
            class: integer
          - characters long.
      -
-         - Show a notice that a patron is about to expire
+         - Show a notice if the patron is about to expire or has expired
          - pref: NotifyBorrowerDeparture
            class: integer
          - days beforehand.
@@ -139,3 +133,8 @@ Patrons:
                yes: Do
                no: "Don't"
          - enable the ability to upload and attach arbitrary files to a borrower record.
+     -
+         - Card numbers for patrons must be
+         - pref: CardnumberLength
+         - "characters long. The length can be a single number to specify an exact length, a range separated by a comma (i.e., 'Min,Max'), or a maximum with no minimum (i.e., ',Max')."
+         - "If 'cardnumber' is included in the BorrowerMandatoryField list, the minimum length, if not specified here, defaults to one."

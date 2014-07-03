@@ -76,8 +76,8 @@
     <li><span class="label">Category: </span>[% description %] ([% categorycode %])</li>
     <li><span class="label">Registration date: </span>[% dateenrolled %]</li>
     <li><span class="label">Expiration date: </span>
-    [% IF ( reregistration ) %]
-            <strong class="reregistrinfo">[% dateexpiry %]</span>
+    [% IF ( was_renewed ) %]
+            <strong class="reregistrinfo">[% dateexpiry %]</strong>
     [% ELSE %]
             [% dateexpiry %]
     [% END %]

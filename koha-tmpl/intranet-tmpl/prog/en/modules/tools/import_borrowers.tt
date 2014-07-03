@@ -72,6 +72,12 @@
             <br /><code>[% missing_critical.lineraw %]</code>
         </li>
         [% END %]
+        [% IF ERROR.invalid_cardnumber %]
+            <li class="line_error">
+                Cardnumber [% ERROR.cardnumber %] is not a valid cardnumber
+                [% IF ERROR.borrowernumber %] (for patron with borrowernumber [% ERROR.borrowernumber %])[% END %]
+            </li>
+        [% END %]
     [% END %]
     </ul>
     </div>
@@ -108,7 +114,7 @@
 <ol>
     [% FOREACH columnkey IN columnkeys %]
 	<li>
-		<label class="widelabel" for="[% columnkey.key %]">[% columnkey.key %]</label>
+        <label class="widelabel" for="[% columnkey.key %]">[% columnkey.key %]: </label>
 		<input id="[% columnkey.key %]" name="[% columnkey.key %]" />
 	</li>
     [% END %]
@@ -125,12 +131,12 @@
     </fieldset>
     [% IF ( ExtendedPatronAttributes ) %]
 	<fieldset class="rows">
-	<legend>Patron Attributes</legend>
+    <legend>Patron attributes</legend>
     <ol><li class="radio">
-        <input type="radio" id="ext_preserve_0" name="ext_preserve" value="0" checked="checked" /><label for="ext_preserve_0">Replace all Patron Attributes</label>
+        <input type="radio" id="ext_preserve_0" name="ext_preserve" value="0" checked="checked" /><label for="ext_preserve_0">Replace all patron attributes</label>
         </li>
         <li class="radio">
-        <input type="radio" id="ext_preserve_1" name="ext_preserve" value="1" /><label for="ext_preserve_1">Replace only included Patron Attributes</label>
+        <input type="radio" id="ext_preserve_1" name="ext_preserve" value="1" /><label for="ext_preserve_1">Replace only included patron attributes</label>
         </li>
     </ol>
     </fieldset>
@@ -152,7 +158,7 @@
 </li>
 [% END %]
 <li>The fields 'branchcode' and 'categorycode' are <b>required</b> and <b>must match</b> valid entries in your database.</li>
-<li>'password' should be stored in plaintext, and will be converted to a MD5 hash (if your passwords are already encrypted, talk to your system administrator about options).</li>
+<li>'password' should be stored in plaintext, and will be converted to a Bcrypt hash (if your passwords are already encrypted, talk to your system administrator about options).</li>
 <li>Date formats should match your system preference, and <b>must</b> be zero-padded, e.g. '01/02/2008'.  Alternatively,
 you can supply dates in ISO format (e.g., '2010-10-28').
 </li>

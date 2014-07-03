@@ -41,6 +41,8 @@ C<$supplier> is the string with which we search for a supplier
 
 =back
 
+=over 4
+
 =item id or booksellerid
 
 The id of the supplier whose baskets we will display
@@ -53,16 +55,17 @@ use strict;
 use warnings;
 use C4::Auth;
 use C4::Biblio;
+use C4::Budgets;
 use C4::Output;
 use CGI;
 
-use C4::Acquisition qw/ GetBasketsInfosByBookseller /;
+use C4::Acquisition qw/ GetBasketsInfosByBookseller CanUserManageBasket /;
 use C4::Bookseller qw/ GetBookSellerFromId GetBookSeller /;
 use C4::Members qw/GetMember/;
 use C4::Context;
 
 my $query = CGI->new;
-my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
+my ( $template, $loggedinuser, $cookie, $userflags ) = get_template_and_user(
     {   template_name   => 'acqui/booksellers.tmpl',
         query           => $query,
         type            => 'intranet',
@@ -75,6 +78,7 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
 #parameters
 my $supplier = $query->param('supplier');
 my $booksellerid = $query->param('booksellerid');
+my $allbaskets= $query->param('allbaskets')||0;
 my @suppliers;
 
 if ($booksellerid) {
@@ -87,7 +91,8 @@ my $supplier_count = @suppliers;
 if ( $supplier_count == 1 ) {
     $template->param(
         supplier_name => $suppliers[0]->{'name'},
-        booksellerid  => $suppliers[0]->{'booksellerid'}
+        booksellerid  => $suppliers[0]->{'id'},
+        basketcount   => $suppliers[0]->{'basketcount'}
     );
 }
 
@@ -101,36 +106,41 @@ my $viewbaskets = C4::Context->preference('AcqViewBaskets');
 
 my $userbranch = $userenv->{branch};
 
+my $budgets = GetBudgetHierarchy;
+my $has_budgets = 0;
+foreach my $r (@{$budgets}) {
+    if (!defined $r->{budget_amount} || $r->{budget_amount} == 0) {
+        next;
+    }
+    next unless (CanUserUseBudget($loggedinuser, $r, $userflags));
+
+    $has_budgets = 1;
+    last;
+}
+
 #build result page
 my $loop_suppliers = [];
 
 for my $vendor (@suppliers) {
-    my $baskets = GetBasketsInfosByBookseller( $vendor->{id} );
+    my $baskets = GetBasketsInfosByBookseller( $vendor->{id}, $allbaskets );
 
     my $loop_basket = [];
 
     for my $basket ( @{$baskets} ) {
-        my $authorisedby = $basket->{authorisedby};
-        my $basketbranch = ''; # set a blank branch to start with
-        my $member = GetMember( borrowernumber => $authorisedby );
-        if ( $member ) {
-           $basketbranch = $member->{branchcode};
-        }
-
-        if ($userenv->{'flags'} & 1 || #user is superlibrarian
-               (haspermission( $uid, { acquisition => q{*} } ) && #user has acq permissions and
-                   ($viewbaskets eq 'all' || #user is allowed to see all baskets
-                   ($viewbaskets eq 'branch' && $authorisedby && $userbranch eq $basketbranch) || #basket belongs to user's branch
-                   ($basket->{authorisedby} &&  $viewbaskets eq 'user' && $authorisedby == $loggedinuser) #user created this basket
-                   ) 
-                ) 
-           ) { 
+        if (CanUserManageBasket($loggedinuser, $basket, $userflags)) {
+            my $member = GetMember( borrowernumber => $basket->{authorisedby} );
             foreach (qw(total_items total_biblios expected_items)) {
                 $basket->{$_} ||= 0;
             }
             if($member) {
                 $basket->{authorisedby_firstname} = $member->{firstname};
                 $basket->{authorisedby_surname} = $member->{surname};
+            }
+            if ($basket->{basketgroupid}) {
+                my $basketgroup = C4::Acquisition::GetBasketgroup($basket->{basketgroupid});
+                if ($basketgroup) {
+                    $basket->{basketgroup} = $basketgroup;
+                }
             }
             push @{$loop_basket}, $basket; 
         }
@@ -148,7 +158,8 @@ $template->param(
     loop_suppliers => $loop_suppliers,
     supplier       => ( $booksellerid || $supplier ),
     count          => $supplier_count,
-    dateformat     => C4::Context->preference('dateformat'),
+    has_budgets          => $has_budgets,
 );
+$template->{VARS}->{'allbaskets'} = $allbaskets;
 
 output_html_with_http_headers $query, $cookie, $template->output;

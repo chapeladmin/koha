@@ -119,6 +119,7 @@ my $font_types = [
     {type => 'CO',      name => 'Courier-Oblique',              selected => 0},
     {type => 'CBO',     name => 'Courier-Bold-Oblique',         selected => 0},
     {type => 'H',       name => 'Helvetica',                    selected => 0},
+    {type => 'HO',      name => 'Helvetica-Oblique',            selected => 0},
     {type => 'HB',      name => 'Helvetica-Bold',               selected => 0},
     {type => 'HBO',     name => 'Helvetica-Bold-Oblique',       selected => 0},
 ];
@@ -155,7 +156,8 @@ sub get_all_templates {
     my %params = @_;
     my @templates = ();
     my $query = "SELECT " . ($params{'field_list'} ? $params{'field_list'} : '*') . " FROM creator_templates";
-    $query .= ($params{'filter'} ? " WHERE $params{'filter'};" : ';');
+    $query .= ($params{'filter'} ? " WHERE $params{'filter'} " : '');
+    $query .= ($params{'orderby'} ? " ORDER BY $params{'orderby'} " : '');
     my $sth = C4::Context->dbh->prepare($query);
     $sth->execute();
     if ($sth->err) {
@@ -181,7 +183,8 @@ sub get_all_layouts {
     my %params = @_;
     my @layouts = ();
     my $query = "SELECT " . ($params{'field_list'} ? $params{'field_list'} : '*') . " FROM creator_layouts";
-    $query .= ($params{'filter'} ? " WHERE $params{'filter'};" : ';');
+    $query .= ($params{'filter'} ? " WHERE $params{'filter'} " : '');
+    $query .= ($params{'orderby'} ? " ORDER BY $params{'orderby'} " : '');
     my $sth = C4::Context->dbh->prepare($query);
     $sth->execute();
     if ($sth->err) {
@@ -477,37 +480,35 @@ sub get_table_names {
 =head2 C4::Creators::Lib::html_table()
 
 This function returns an arrayref of an array of hashes contianing the supplied data formatted suitably to
-be passed off as a T::P template parameter and used to build an html table.
+be passed off as a template parameter and used to build an html table.
 
    my $table = html_table(header_fields, array_of_row_data);
    $template->param(
-       TABLE => $table,
+       table_loop => $table,
    );
 
     html example:
 
-       <table>
-            <!-- TMPL_LOOP NAME="TABLE" -->
-            <!-- TMPL_IF NAME="header_fields" -->
-            <tr>
-            <!-- TMPL_LOOP NAME="header_fields" -->
-                <th><!-- TMPL_VAR NAME="field_label" --></th>
-            <!-- /TMPL_LOOP -->
-            </tr>
-            <!-- TMPL_ELSE -->
-            <tr>
-            <!-- TMPL_LOOP NAME="text_fields" -->
-            <!-- TMPL_IF NAME="select_field" -->
-                <td align="center"><input type="checkbox" name="action" value="<!-- TMPL_VAR NAME="field_value" -->" /></td>
-            <!-- TMPL_ELSIF NAME="field_value" -->
-                <td><!-- TMPL_VAR NAME="field_value" --></td>
-            <!-- TMPL_ELSE -->
-                <td>&nbsp;</td>
-            <!-- /TMPL_IF -->
-            <!-- /TMPL_LOOP -->
-            </tr>
-            <!-- /TMPL_IF -->
-            <!-- /TMPL_LOOP -->
+        <table>
+            [% FOREACH table_loo IN table_loop %]
+                [% IF ( table_loo.header_fields ) %]
+                    <tr>
+                        [% FOREACH header_field IN table_loo.header_fields %]
+                            <th>[% header_field.field_label %]</th>
+                        [% END %]
+                    </tr>
+                [% ELSE %]
+                    <tr>
+                        [% FOREACH text_field IN table_loo.text_fields %]
+                            [% IF ( text_field.select_field ) %]
+                                <td><input type="checkbox" name="action" value="[% text_field.field_value %]"></td>
+                            [% ELSE %]
+                                <td>[% text_field.field_value %]</td>
+                            [% END %]
+                        [% END %]
+                    </tr>
+                [% END %]
+            [% END %]
         </table>
 
 =cut

@@ -36,7 +36,7 @@ INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('CCODE',
 INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('CCODE','REF','Strumenti di reference');
 INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('CCODE','NFIC','Non Fiction');
 
--- withdrawn status of an item, linked to items.wthdrawn
+-- withdrawn status of an item, linked to items.withdrawn
 INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('WITHDRAWN','0','Non ritirata');
 INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('WITHDRAWN','1','Ritirata dalla circolazione');
 
@@ -78,5 +78,25 @@ INSERT INTO authorised_values (category, authorised_value, lib) VALUES
 ('LANG', 'ger', 'tedesco'),
 ('LANG', 'fre', 'francese'),
 ('LANG', 'lat', 'latino');
+
+-- Raggruppamenti di esempio per i reports
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('REPORT_GROUP', 'CIRC', 'Circolazione');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('REPORT_GROUP', 'CAT', 'Catalogazione');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('REPORT_GROUP', 'PAT', 'Utenti');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('REPORT_GROUP', 'ACQ', 'Acquisizione');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('REPORT_GROUP', 'ACC', 'Accounts');
+
+-- SIP2 media types
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '000', 'Other');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '001', 'Libro');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '002', 'Rivista');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '003', 'Periodico rilegato');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '004', 'Audiocassette');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '005', 'Videocassetta');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '006', 'CD/CDROM');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '007', 'Dischetto');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '008', 'Libro con disco');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '009', 'Libro con CD');
+INSERT INTO authorised_values (category, authorised_value, lib) VALUES ('SIP_MEDIA_TYPE', '010', 'Libro con audiocassette');
 
 SET FOREIGN_KEY_CHECKS=1;

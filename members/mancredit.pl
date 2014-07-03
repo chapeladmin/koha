@@ -36,6 +36,7 @@ use C4::Items;
 use C4::Members::Attributes qw(GetBorrowerAttributes);
 
 my $input=new CGI;
+my $flagsrequired = { borrowers => 1, updatecharges => 1 };
 
 my $borrowernumber=$input->param('borrowernumber');
 
@@ -44,7 +45,7 @@ my $data=GetMember('borrowernumber' => $borrowernumber);
 my $add=$input->param('add');
 
 if ($add){
-    if(checkauth($input)) {
+    if ( checkauth( $input, 0, $flagsrequired, 'intranet' ) ) {
         my $barcode = $input->param('barcode');
         my $itemnum;
         if ($barcode) {
@@ -64,7 +65,7 @@ if ($add){
 					  query => $input,
 					  type => "intranet",
 					  authnotrequired => 0,
-					  flagsrequired => {borrowers => 1, updatecharges => 1},
+                      flagsrequired => { borrowers => 1, updatecharges => 'remaining_permissions' },
 					  debug => 1,
 					  });
 					  
@@ -74,9 +75,9 @@ if ($add){
         $template->param( 'CATCODE_MULTI' => 1) if $cnt > 1;
         $template->param( 'catcode' =>    $catcodes->[0])  if $cnt == 1;
     }
-					  
+
     $template->param( adultborrower => 1 ) if ( $data->{category_type} eq 'A' );
-    my ($picture, $dberror) = GetPatronImage($data->{'cardnumber'});
+    my ($picture, $dberror) = GetPatronImage($data->{'borrowernumber'});
     $template->param( picture => 1 ) if $picture;
 
 if (C4::Context->preference('ExtendedPatronAttributes')) {
@@ -107,6 +108,7 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
 		    branchname => GetBranchName($data->{'branchcode'}),
 		    is_child        => ($data->{'category_type'} eq 'C'),
 			activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+            RoutingSerials => C4::Context->preference('RoutingSerials'),
         );
     output_html_with_http_headers $input, $cookie, $template->output;
 }

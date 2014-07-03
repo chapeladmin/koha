@@ -47,7 +47,7 @@ my ($template, $loggedinuser, $cookie)
 				});
 
 $template->param( $borrower );
-my ($picture, $dberror) = GetPatronImage($borrower->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($borrower->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 # Getting the messages
@@ -69,6 +69,7 @@ $template->param(
                         branchname              => GetBranchName($borrower->{'branchcode'}),
                         categoryname            => $borrower->{'description'},
 			activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+            RoutingSerials => C4::Context->preference('RoutingSerials'),
 );
 output_html_with_http_headers $input, $cookie, $template->output;
 

@@ -40,6 +40,13 @@ plugin that shows a stats on borrowers
 =cut
 
 my $input = new CGI;
+
+# if OpacTopissue is disabled, leave immediately
+if ( ! C4::Context->preference('OpacTopissue') ) {
+    print $input->redirect("/cgi-bin/koha/errors/404.pl");
+    exit;
+}
+
 my $branches = GetBranches();
 my $itemtypes = GetItemTypes();
 
@@ -52,8 +59,14 @@ my ($template, $borrowernumber, $cookie)
 				});
 my $dbh = C4::Context->dbh;
 # Displaying results
-my $limit = $input->param('limit') || 10;
+my $do_it = $input->param('do_it') || 0; # as form been posted
+my $limit = $input->param('limit');
+$limit = 10 unless ($limit && $limit =~ /^\d+$/); # control user input for SQL query
+$limit = 100 if $limit > 100;
 my $branch = $input->param('branch') || '';
+if (!$do_it && C4::Context->userenv && C4::Context->userenv->{'branch'} ) {
+    $branch = C4::Context->userenv->{'branch'}; # select user branch by default
+}
 my $itemtype = $input->param('itemtype') || '';
 my $timeLimit = $input->param('timeLimit') || 3;
 my $advanced_search_types = C4::Context->preference('AdvancedSearchTypes');
@@ -68,8 +81,8 @@ if($advanced_search_types eq 'ccode'){
     $whereclause .= ' AND authorised_values.authorised_value='.$dbh->quote($itemtype) if $itemtype;
     $query = "SELECT datecreated, biblio.biblionumber, title,
                     author, sum( items.issues ) AS tot, biblioitems.itemtype,
-                    biblioitems.publishercode,biblioitems.publicationyear,
-                    authorised_values.lib as description
+                    biblioitems.publishercode, biblioitems.place, biblioitems.publicationyear, biblio.copyrightdate,
+                    authorised_values.lib as description, biblioitems.pages, biblioitems.size
                     FROM biblio
                     LEFT JOIN items USING (biblionumber)
                     LEFT JOIN biblioitems USING (biblionumber)
@@ -80,7 +93,7 @@ if($advanced_search_types eq 'ccode'){
                     GROUP BY biblio.biblionumber
                     HAVING tot >0
                     ORDER BY tot DESC
-                    LIMIT $limit
+                    LIMIT ?
                     ";
     $template->param(ccodesearch => 1);
 }else{
@@ -94,8 +107,8 @@ if($advanced_search_types eq 'ccode'){
     }
     $query = "SELECT datecreated, biblio.biblionumber, title,
                     author, sum( items.issues ) AS tot, biblioitems.itemtype,
-                    biblioitems.publishercode,biblioitems.publicationyear,
-                    itemtypes.description
+                    biblioitems.publishercode, biblioitems.place, biblioitems.publicationyear, biblio.copyrightdate,
+                    itemtypes.description, biblioitems.pages, biblioitems.size
                     FROM biblio
                     LEFT JOIN items USING (biblionumber)
                     LEFT JOIN biblioitems USING (biblionumber)
@@ -105,13 +118,13 @@ if($advanced_search_types eq 'ccode'){
                     GROUP BY biblio.biblionumber
                     HAVING tot >0
                     ORDER BY tot DESC
-                    LIMIT $limit
+                    LIMIT ?
                     ";
      $template->param(itemtypesearch => 1);
 }
 
 my $sth = $dbh->prepare($query);
-$sth->execute();
+$sth->execute($limit);
 my @results;
 while (my $line= $sth->fetchrow_hashref) {
     push @results, $line;
@@ -125,11 +138,11 @@ $template->param(do_it => 1,
                 branch => $branches->{$branch}->{branchname},
                 itemtype => $itemtypes->{$itemtype}->{description},
                 timeLimit => $timeLimit,
-                timeLimitFinite => $timeLimit,
+                timeLimitFinite => $timeLimitFinite,
                 results_loop => \@results,
                 );
 
-$template->param( branchloop => GetBranchesLoop(C4::Context->userenv?C4::Context->userenv->{'branch'}:''));
+$template->param( branchloop => GetBranchesLoop($branch));
 
 # the index parameter is different for item-level itemtypes
 my $itype_or_itemtype = (C4::Context->preference("item-level_itypes"))?'itype':'itemtype';
@@ -158,7 +171,6 @@ if (!$advanced_search_types or $advanced_search_types eq 'itemtypes') {
 
 $template->param(
                  itemtypeloop =>\@itemtypesloop,
-                 dateformat    => C4::Context->preference("dateformat"),
                 );
 output_html_with_http_headers $input, $cookie, $template->output;
 

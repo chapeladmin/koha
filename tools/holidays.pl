@@ -57,10 +57,11 @@ $keydate =~ s/-/\//g;
 
 my $branch= $input->param('branch') || C4::Context->userenv->{'branch'};
 # Set all the branches.
-my $onlymine=(C4::Context->preference('IndependantBranches') &&
-              C4::Context->userenv &&
-              C4::Context->userenv->{flags} % 2 !=1  &&
-              C4::Context->userenv->{branch}?1:0);
+my $onlymine =
+  (      C4::Context->preference('IndependentBranches')
+      && C4::Context->userenv
+      && !C4::Context->IsSuperLibrarian()
+      && C4::Context->userenv->{branch} ? 1 : 0 );
 if ( $onlymine ) { 
     $branch = C4::Context->userenv->{'branch'};
 }
@@ -99,15 +100,20 @@ my @day_month_holidays;
 foreach my $monthDay (keys %$day_month_holidays) {
     # Determine date format on month and day.
     my $day_monthdate;
+    my $day_monthdate_sort;
     if (C4::Context->preference("dateformat") eq "metric") {
+      $day_monthdate_sort = "$day_month_holidays->{$monthDay}{month}-$day_month_holidays->{$monthDay}{day}";
       $day_monthdate = "$day_month_holidays->{$monthDay}{day}/$day_month_holidays->{$monthDay}{month}";
     } elsif (C4::Context->preference("dateformat") eq "us") {
       $day_monthdate = "$day_month_holidays->{$monthDay}{month}/$day_month_holidays->{$monthDay}{day}";
+      $day_monthdate_sort = $day_monthdate;
     } else {
       $day_monthdate = "$day_month_holidays->{$monthDay}{month}-$day_month_holidays->{$monthDay}{day}";
+      $day_monthdate_sort = $day_monthdate;
     }
     my %day_month;
     %day_month = (KEY => $monthDay,
+                  DATE_SORT => $day_monthdate_sort,
                   DATE => $day_monthdate,
                   TITLE => $day_month_holidays->{$monthDay}{title},
                   DESCRIPTION => $day_month_holidays->{$monthDay}{description});
@@ -120,6 +126,7 @@ foreach my $yearMonthDay (keys %$exception_holidays) {
     my $exceptiondate = C4::Dates->new($exception_holidays->{$yearMonthDay}{date}, "iso");
     my %exception_holiday;
     %exception_holiday = (KEY => $yearMonthDay,
+                          DATE_SORT => $exception_holidays->{$yearMonthDay}{date},
                           DATE => $exceptiondate->output("syspref"),
                           TITLE => $exception_holidays->{$yearMonthDay}{title},
                           DESCRIPTION => $exception_holidays->{$yearMonthDay}{description});
@@ -132,6 +139,7 @@ foreach my $yearMonthDay (keys %$single_holidays) {
     my $holidaydate = C4::Dates->new($single_holidays->{$yearMonthDay}{date}, "iso");
     my %holiday;
     %holiday = (KEY => $yearMonthDay,
+                DATE_SORT => $single_holidays->{$yearMonthDay}{date},
                 DATE => $holidaydate->output("syspref"),
                 TITLE => $single_holidays->{$yearMonthDay}{title},
                 DESCRIPTION => $single_holidays->{$yearMonthDay}{description});
@@ -148,7 +156,6 @@ $template->param(
     keydate                  => $keydate,
     branchcodes              => $branchcodes,
     branch                   => $branch,
-    DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
     branchname               => $branchname,
     branch                   => $branch,
 );

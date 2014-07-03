@@ -8,6 +8,7 @@ use strict;
 use warnings;
 
 use C4::Auth;
+use Koha::AuthUtils;
 use C4::Output;
 use C4::Context;
 use C4::Members;
@@ -35,7 +36,7 @@ my ($template, $loggedinuser, $cookie, $staffflags)
 my $flagsrequired;
 $flagsrequired->{borrowers}=1;
 
-#my ($loggedinuser, $cookie, $sessionID) = checkauth($input, 0, $flagsrequired);
+#my ($loggedinuser, $cookie, $sessionID) = checkauth($input, 0, $flagsrequired, 'intranet');
 
 my $member=$input->param('member');
 my $cardnumber = $input->param('cardnumber');
@@ -55,7 +56,7 @@ my $minpw = C4::Context->preference('minPasswordLength');
 push(@errors,'SHORTPASSWORD') if( $newpassword && $minpw && (length($newpassword) < $minpw ) );
 
 if ( $newpassword  && !scalar(@errors) ) {
-    my $digest=md5_base64($input->param('newpassword'));
+    my $digest=Koha::AuthUtils::hash_password($input->param('newpassword'));
     my $uid = $input->param('newuserid');
     my $dbh=C4::Context->dbh;
     if (changepassword($uid,$member,$digest)) {
@@ -88,7 +89,7 @@ if ( $newpassword  && !scalar(@errors) ) {
     }
 	
 $template->param( adultborrower => 1 ) if ( $bor->{'category_type'} eq 'A' );
-my ($picture, $dberror) = GetPatronImage($bor->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($bor->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 if (C4::Context->preference('ExtendedPatronAttributes')) {
@@ -121,7 +122,8 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
 	    destination => $destination,
 		is_child        => ($bor->{'category_type'} eq 'C'),
 		activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
-        minPasswordLength => $minpw
+        minPasswordLength => $minpw,
+        RoutingSerials => C4::Context->preference('RoutingSerials'),
 	);
 
 if( scalar(@errors )){

@@ -3,6 +3,13 @@
 [% INCLUDE 'doc-head-close.inc' %]
 <script type= "text/javascript">
 //<![CDATA[
+$(document).ready(function() {
+    $('#payindivfine, #woindivfine, #payfine').preventDoubleFormSubmit();
+});
+//]]>
+</script>
+<script type= "text/javascript">
+//<![CDATA[
 function moneyFormat(textObj) {
     var newValue = textObj.value;
     var decAmount = "";
@@ -84,14 +91,14 @@ function moneyFormat(textObj) {
     </li>
 </ul>
 <div class="tabs-container">
-[% IF ( error ) %]
+[% IF ( error_over ) %]
     <div id="error_message" class="dialog alert">
-    [% error %]
+    You must pay a value less than or equal to [% total_due | format('%.2f') %].
     </div>
 [% END %]
 
 [% IF ( pay_individual ) %]
-    <form name="payindivfine" onsubmit="return validatePayment(this);" method="post" action="/cgi-bin/koha/members/paycollect.pl">
+    <form name="payindivfine" id="payindivfine" onsubmit="return validatePayment(this);" method="post" action="/cgi-bin/koha/members/paycollect.pl">
     <input type="hidden" name="borrowernumber" id="borrowernumber" value="[% borrower.borrowernumber %]" />
     <input type="hidden" name="pay_individual" id="pay_individual" value="[% pay_individual %]" />
     <input type="hidden" name="itemnumber" id="itemnumber" value="[% itemnumber %]" />
@@ -107,6 +114,7 @@ function moneyFormat(textObj) {
 
 <fieldset class="rows">
     <legend>Pay an individual fine</legend>
+    <input type="hidden" name="payment_note" id="payment_note" value="[% payment_note %]" />
     <table>
     <thead><tr>
             <th>Description</th>
@@ -145,7 +153,7 @@ function moneyFormat(textObj) {
         <a class="cancel" href="/cgi-bin/koha/members/pay.pl?borrowernumber=[% borrower.borrowernumber %]">Cancel</a></div>
     </form>
 [% ELSIF ( writeoff_individual ) %]
-    <form name="woindivfine" action="/cgi-bin/koha/members/pay.pl" method="post" >
+    <form name="woindivfine" id="woindivfine" action="/cgi-bin/koha/members/pay.pl" method="post" >
     <fieldset class="rows">
     <legend>Write off an individual fine</legend>
     <input type="hidden" name="borrowernumber" id="borrowernumber" value="[% borrower.borrowernumber %]" />
@@ -160,6 +168,7 @@ function moneyFormat(textObj) {
     <input type="hidden" name="accountno" id="accountno" value="[% accountno %]" />
     <input type="hidden" name="accountlines_id" id="accountlines_id" value="[% accountlines_id %]" />
     <input type="hidden" name="title" id="title" value="[% title %]" />
+    <input type="hidden" name="payment_note" id="payment_note" value="[% payment_note %]" />
     <table>
     <thead><tr>
             <th>Description</th>
@@ -185,7 +194,7 @@ function moneyFormat(textObj) {
     </form>
 [% ELSE %]
 
-    <form name="payfine" onsubmit="return validatePayment(this);" method="post" action="/cgi-bin/koha/members/paycollect.pl">
+    <form name="payfine" id="payfine" onsubmit="return validatePayment(this);" method="post" action="/cgi-bin/koha/members/paycollect.pl">
     <input type="hidden" name="borrowernumber" id="borrowernumber" value="[% borrower.borrowernumber %]" />
     <input type="hidden" name="selected_accts" id="selected_accts" value="[% selected_accts %]" />
     <input type="hidden" name="total" id="total" value="[% total %]" />
@@ -201,6 +210,10 @@ function moneyFormat(textObj) {
         <label for="paid">Collect from patron: </label>
         <!-- default to paying all -->
         <input name="paid" id="paid" value="[% total | format('%.2f') %]" onchange="moneyFormat(document.payfine.paid)"/>
+    </li>
+    <li>
+        <label for="selected_accts_notes">Note: </label>
+        <textarea name="selected_accts_notes" id="selected_accts_notes">[% selected_accts_notes %]</textarea>
     </li>
     </ol>
     </fieldset>

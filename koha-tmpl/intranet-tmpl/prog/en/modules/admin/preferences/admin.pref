@@ -42,13 +42,6 @@ Administration:
             - staff and patrons to create and view saved lists of books.
     Login options:
         -
-            - pref: insecure
-              default: 0
-              choices:
-                  yes: Allow
-                  no: "Don't allow"
-            - staff to access the staff client without logging in. Enabling this is dangerous, and should not be done in production environments.
-        -
             - Automatically log out users after
             - pref: timeout
               class: integer
@@ -71,7 +64,7 @@ Administration:
                   tmp: as temporary files.
                   memcached: in a memcached server.
         -
-            - pref: IndependantBranches
+            - pref: IndependentBranches
               default: 0
               choices:
                   yes: Prevent
@@ -134,6 +127,14 @@ Administration:
                   Common Name: the Common Name
                   emailAddress: the emailAddress
             - field for SSL client certificate authentication
+    Mozilla Persona:
+        -
+            - pref: Persona
+              default: 0
+              choices:
+                  yes: Allow
+                  no: "Don't Allow"
+            - Mozilla persona for login
     Search Engine:
         -
             - pref: SearchEngine

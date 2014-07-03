@@ -2,6 +2,22 @@
 <title>Koha &rsaquo; Administration &rsaquo; [% IF ( add_form ) %] System preferences &rsaquo; [% IF ( modify ) %]Modify system preference '[% searchfield %]'[% ELSE %]Add a system preference[% END %][% END %][% IF ( add_validate ) %] System preferences &rsaquo; Data added[% END %]
 [% IF ( delete_confirm ) %] System preferences &rsaquo; [% searchfield %] &rsaquo; Confirm deletion of parameter '[% searchfield %]'[% END %][% IF ( delete_confirmed ) %] System preferences &rsaquo; Parameter deleted[% END %][% IF ( else ) %]System preferences[% END %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
+[% IF ( else ) %]
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">
+    //<![CDATA[
+     $(document).ready(function() {
+        [% IF ( loop ) %]$("#sysprefst").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "sDom": 't',
+            "aoColumnDefs": [
+                { "aTargets": [ -1, -2, -3, -4 ], "bSortable": false, "bSearchable": false }
+            ],
+            "bPaginate": false
+        }));[% END %]
+     });
+</script>
+[% END %]
 <script type="text/javascript">
 //<![CDATA[
 [% IF ( add_form ) %]
@@ -20,12 +36,6 @@
             return true;
         }
         //
-        function toUC(f) {
-            var x=f.value.toUpperCase();
-            f.value=x;
-            return true;
-        }
-        //
         function isNum(v,maybenull) {
         var n = new Number(v.value);
         if (isNaN(n)) {
@@ -35,13 +45,6 @@
             return false;
         }
         return true;
-        }
-        //
-        function isDate(f) {
-            var t = Date.parse(f.value);
-            if (isNaN(t)) {
-                return false;
-            }
         }
         //
         function Check(f) {
@@ -70,6 +73,7 @@
                 return false;
             } ).nextAll( 'textarea, input[type=submit]' ).hide();
         } );
+
         //]]>
 </script>
 </head>
@@ -240,39 +244,25 @@
     [% END %]
    
     [% IF ( else ) %]
-    
-    <div id="toolbar">
-    <script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-    <script type="text/javascript">
-    //<![CDATA[
-    // prepare DOM for YUI Toolbar
-     $(document).ready(function() {
-        yuiToolbar();
-        [% IF ( loop ) %]$("#sysprefst").tablesorter({
-            sortList: [[0,0]],
-            headers: { 1: {sorter:false},2: { sorter: false },3: { sorter: false },4: { sorter: false }}
-        });[% END %]
-     });
-    // YUI Toolbar Functions
-    function yuiToolbar() {
-        new YAHOO.widget.Button("newstopword");
-    }   //]]>
-    </script>
-    <ul class="toolbar">
-        <li><a id="newstopword" href="[% script_name %]?op=add_form">New preference</a></li>
-    </ul></div>
-    
-    <h1>System preferences admin</h1>
-    <h2>[% tab %] preferences</h2>
-    [% searchfield %]
-    <table width="80%" id="sysprefst">
-    <thead><tr>
+
+    <div id="toolbar" class="btn-toolbar">
+        <a class="btn btn-small" id="newstopword" href="[% script_name %]?op=add_form"><i class="icon-plus"></i> New preference</a>
+    </div>
+
+    [% IF ( tab != 'local_use' ) %]
+        <p>Please click on one of the tabs at the left side of this form.</p>
+        <table>
+    [% ELSE %]
+        <h1>Local use preferences</h1>
+        <table width="80%" id="sysprefst">
+        <thead><tr>
         <th>Preference</th>
         <th>Explanation</th>
         <th>Value</th>
         <th>Edit</th>
         <th>Delete</th>
-    </tr></thead>
+        </tr></thead>
+    [% END %]
     <tbody>[% FOREACH loo IN loop %]
     [% UNLESS ( loop.odd ) %]<tr class="highlight">[% ELSE %]<tr>[% END %]
 

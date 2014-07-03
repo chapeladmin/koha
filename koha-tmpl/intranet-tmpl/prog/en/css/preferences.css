@@ -70,3 +70,22 @@ h3.collapsed {
 #yui-main {
 	margin-bottom:2em;
 }
+#toolbar.floating {
+    box-shadow: 0 3px 2px 0 rgba(0, 0, 0, 0.5);
+    border-radius: 0;
+}
+
+.loading {
+    display: inline-block;
+    height : 16px;
+    width: 16px;
+    background: transparent url("../../img/spinner-small.gif") top left no-repeat;
+    padding : 0 4px;
+    vertical-align: middle;
+}
+
+span.overridden {
+    font-style: italic;
+    font-weight: bold;
+    color: red;
+}

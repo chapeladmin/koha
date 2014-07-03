@@ -18,6 +18,7 @@ use Data::Dumper;
 use HTTP::Cookies;
 use C4::Context;
 use C4::Debug;
+use C4::Members qw ( GetMember );
 use URI::Escape;
 
 my ($help, $steps, $baseurl, $max_tries, $user, $password,$short_print);
@@ -41,10 +42,10 @@ my $short_psec="|-\n|ON\n";
 
 if ($help || !$baseurl || !$user || !$password) {
     print <<EOF
-This script runs a benchmark of the staff interface. It benchmark 6 different pages:
+This script runs a benchmark of the staff interface. It benchmarks 6 different pages:
 \t1- the staff main page
 \t2- the catalog detail page, with a random biblionumber
-\t3- the catalog search page, using a term retrieved from one of the 10 first title/author in the database
+\t3- the catalog search page, using a term retrieved from one of the 10 first titles/authors in the database
 \t4- the patron detail page, with a random borrowernumber
 \t5- the patron search page, searching for "Jean"
 \t6- the circulation itself, doing check-out and check-in of random items to random patrons
@@ -76,14 +77,21 @@ my $cookie_jar = HTTP::Cookies->new();
 my $cookie;
 $ua->cookie_jar($cookie_jar);
 my $resp = $ua->post( "$baseurl"."/svc/authentication" , {userid =>$user, password => $password} );
-if( $resp->is_success ) {
+if( $resp->is_success and $resp->content =~ m|<status>ok</status>| ) {
     $cookie_jar->extract_cookies( $resp );
     $cookie = $cookie_jar->as_string;
     unless ($short_print) {
         print "Authentication successful\n";
         print "Auth:\n $resp->content" if $debug;
     }
+} elsif ( $resp->is_success ) {
+    die "Authentication failure: bad login/password";
+} else {
+    die "Authentication failure: \n\t" . $resp->status_line;
 }
+
+die "You cannot use the database administrator account to launch this script"
+    unless defined C4::Members::GetMember(userid => $user);
 
 # remove some unnecessary garbage from the cookie
 $cookie =~ s/ path_spec; discard; version=0//;
@@ -117,8 +125,8 @@ $sth->execute;
 my ($title,$author);
 my @searchwords;
 while (($title,$author)=$sth->fetchrow) {
-    push @searchwords,split / /, $author;
-    push @searchwords,split / /, $title;
+    push @searchwords,split / /, $author//'';
+    push @searchwords,split / /, $title//'';
 }
 
 $sth = $dbh->prepare("select max(itemnumber) from items");
@@ -131,7 +139,7 @@ unless ($short_print) {
     print "--------------\n";
     print "Koha STAFF benchmarking utility\n";
     print "--------------\n";
-    print "Benchmarking with $max_tries occurences of each operation and $concurrency concurrent sessions \n";
+    print "Benchmarking with $max_tries occurrences of each operation and $concurrency concurrent sessions \n";
 }
 #
 # the global benchmark we do at the end...

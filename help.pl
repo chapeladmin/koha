@@ -43,8 +43,31 @@ my $query = new CGI;
 our $refer = $query->param('url');
 $refer = $query->referer()  if !$refer || $refer eq 'undefined';
 my $from = _help_template_file_of_url($refer);
+my $htdocs = C4::Context->config('intrahtdocs');
+
+#
+# checking that the help file exist, otherwise, display nohelp.tt page
+#
+my ( $theme, $lang ) = C4::Templates::themelanguage( $htdocs, $from, "intranet", $query );
+unless ( -e "$htdocs/$theme/$lang/modules/$from" ) {
+    $from = "help/nohelp.tt";
+    ( $theme, $lang ) = C4::Templates::themelanguage( $htdocs, $from, "intranet", $query );
+}
 
 my $template = C4::Templates::gettemplate($from, 'intranet', $query);
-$template->param( referer => $refer );
+$template->param(
+    referer => $refer,
+    intranetstylesheet => C4::Context->preference("intranetstylesheet"),
+    intranetcolorstylesheet => C4::Context->preference("intranetcolorstylesheet"),
+);
+
+my $help_version = C4::Context->preference("Version");
+if ( $help_version =~ m|^(\d+)\.(\d{2}).*$| ) {
+    my $version = $1;
+    my $major = $2;
+    if ( $major % 2 ) { $major-- };
+    $help_version = "$version.$major";
+}
+$template->param( helpVersion => $help_version );
 
 output_html_with_http_headers $query, "", $template->output;

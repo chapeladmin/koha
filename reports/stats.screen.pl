@@ -39,9 +39,7 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
         template_name   => "reports/stats_screen.tmpl",
         query           => $input,
         type            => "intranet",
-        authnotrequired => 1,
         flagsrequired   => { reports => '*' },
-        debug           => 1,
     }
 );
 
@@ -261,7 +259,6 @@ else {
         totalwritten => $totalwritten,
         totalrefund  => $totalrefunds,
         totalcash    => $totalcash,
-        DHTMLcalendar_dateformat => C4::Dates->DHTMLcalendar(),
     );
     output_html_with_http_headers $input, $cookie, $template->output;
 }

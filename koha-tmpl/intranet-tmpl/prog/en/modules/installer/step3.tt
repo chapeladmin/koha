@@ -2,7 +2,7 @@
 [% IF ( finish ) %]<meta http-equiv="refresh" content="10; url=/cgi-bin/koha/mainpage.pl">[% END %]
 [% INCLUDE 'installer-doc-head-close.inc' %]
 <div>
-<h1 id="logo"><img alt="Koha" src="/intranet-tmpl/prog/img/koha.org-logo.gif" /> Web installer &rsaquo; Step 3</h1>
+<h1 id="logo"><img alt="Koha" src="[% interface %]/[% theme %]/img/koha.org-logo.gif" /> Web installer &rsaquo; Step 3</h1>
 
 [% IF ( selectframeworks ) %]
     <script language="JavaScript">
@@ -164,7 +164,7 @@
     [% END %]
     <p>When you've made your selections, please click 'Import' below to begin the process. It may take a while to complete,
     please be patient.</p>
-    <p><input type="submit" value="import" />
+    <p><input type="submit" value="Import &gt;&gt;" />
     </p>
     </form>
     </p>
