@@ -29,7 +29,7 @@ basketgroup.pl
 =head1 DESCRIPTION
 
  This script lets the user group (closed) baskets into basket groups for easier order management. Note that the grouped baskets have to be from the same bookseller and
- have to be closed.
+ have to be closed to be printed or exported.
 
 =head1 CGI PARAMETERS
 
@@ -53,6 +53,7 @@ use C4::Output;
 use CGI;
 
 use C4::Bookseller qw/GetBookSellerFromId/;
+use C4::Budgets qw/ConvertCurrency/;
 use C4::Acquisition qw/CloseBasketgroup ReOpenBasketgroup GetOrders GetBasketsByBasketgroup GetBasketsByBookseller ModBasketgroup NewBasketgroup DelBasketgroup GetBasketgroups ModBasket GetBasketgroup GetBasket GetBasketGroupAsCSV/;
 use C4::Bookseller qw/GetBookSellerFromId/;
 use C4::Branch qw/GetBranches/;
@@ -69,69 +70,6 @@ our ($template, $loggedinuser, $cookie)
 			     debug => 1,
                 });
 
-sub parseinputbaskets {
-    my $booksellerid = shift;
-    my $baskets = &GetBasketsByBookseller($booksellerid);
-    for(my $i=0; $i < scalar @$baskets; ++$i) {
-        if( @$baskets[$i] && ! @$baskets[$i]->{'closedate'} ) {
-            splice(@$baskets, $i, 1);
-            --$i;
-        }
-    }
-    foreach my $basket (@$baskets){
-#perl DBI uses value "undef" for the mysql "NULL" value, so i need to check everywhere where $basket->{'basketgroupid'} is used for undef ☹
-        $basket->{'basketgroupid'} = $input->param($basket->{'basketno'}.'-group') || undef;
-    }
-    return $baskets;
-}
-
-
-
-sub parseinputbasketgroups {
-    my $booksellerid = shift;
-    my $baskets = shift;
-    my $basketgroups = &GetBasketgroups($booksellerid);
-    my $newbasketgroups;
-    foreach my $basket (@$baskets){
-        my $basketgroup;
-        my $i = 0;
-        my $exists;
-        if(! $basket->{'basketgroupid'} || $basket->{'basketgroupid'} == 0){
-            $exists = "true";
-        } else {
-            foreach my $basketgroup (@$basketgroups){
-                if($basket->{'basketgroupid'} == $basketgroup->{'id'}){
-                    $exists = "true";
-                    push(@{$basketgroup->{'basketlist'}}, $basket->{'basketno'});
-                    last;
-                }
-            }
-        }
-        if (! $exists){
-#if the basketgroup doesn't exist yet
-            $basketgroup = $newbasketgroups->{$basket->{'basketgroupid'}} || undef;
-            $basketgroup->{'booksellerid'} = $booksellerid;
-        } else {
-            while($i < scalar @$basketgroups && @$basketgroups[$i]->{'id'} != $basket->{'basketgroupid'}){
-                ++$i;
-            }
-            $basketgroup = @$basketgroups[$i];
-        }
-        $basketgroup->{'id'}=$basket->{'basketgroupid'};
-        $basketgroup->{'name'}=$input->param('basketgroup-'.$basketgroup->{'id'}.'-name') || "";
-        $basketgroup->{'closed'}= $input->param('basketgroup-'.$basketgroup->{'id'}.'-closed');
-        push(@{$basketgroup->{'basketlist'}}, $basket->{'basketno'});
-        if (! $exists){
-            $newbasketgroups->{$basket->{'basketgroupid'}} = $basketgroup;
-        } else {
-            if($basketgroup->{'id'}){
-                @$basketgroups[$i] = $basketgroup;
-            }
-        }
-    }
-    return($basketgroups, $newbasketgroups);
-}
-
 sub BasketTotal {
     my $basketno = shift;
     my $bookseller = shift;
@@ -144,7 +82,7 @@ sub BasketTotal {
             $total = $total * ( $gst / 100 +1);
         }
     }
-    $total .= $bookseller->{invoiceprice};
+    $total .= " " . ($bookseller->{invoiceprice} // 0);
     return $total;
 }
 
@@ -156,16 +94,19 @@ sub displaybasketgroups {
     if (scalar @$basketgroups != 0) {
         foreach my $basketgroup (@$basketgroups){
             my $i = 0;
+            my $basketsqty = 0;
             while($i < scalar(@$baskets)){
                 my $basket = @$baskets[$i];
                 if($basket->{'basketgroupid'} && $basket->{'basketgroupid'} == $basketgroup->{'id'}){
                     $basket->{total} = BasketTotal($basket->{basketno}, $bookseller);
                     push(@{$basketgroup->{'baskets'}}, $basket);
                     splice(@$baskets, $i, 1);
+                    ++$basketsqty;
                     --$i;
                 }
                 ++$i;
             }
+            $basketgroup -> {'basketsqty'} = $basketsqty;
         }
         $template->param(basketgroups => $basketgroups);
     }
@@ -185,7 +126,8 @@ sub printbasketgrouppdf{
     my ($basketgroupid) = @_;
     
     my $pdfformat = C4::Context->preference("OrderPdfFormat");
-    if ($pdfformat eq 'pdfformat::layout3pages' || $pdfformat eq 'pdfformat::layout2pages'){
+    if ($pdfformat eq 'pdfformat::layout3pages' || $pdfformat eq 'pdfformat::layout2pages' || $pdfformat eq 'pdfformat::layout3pagesfr'
+        || $pdfformat eq 'pdfformat::layout2pagesde'){
 	eval {
         eval "require $pdfformat";
 	    import $pdfformat;
@@ -210,63 +152,79 @@ sub printbasketgrouppdf{
         my @ba_orders;
         my @ords = &GetOrders($basket->{basketno});
         for my $ord (@ords) {
-            # ba_order is filled with : 
+
+            next unless ( $ord->{biblionumber} or $ord->{quantity}> 0 );
+            eval {
+                require C4::Biblio;
+                import C4::Biblio;
+            };
+            if ($@){
+                croak $@;
+            }
+            eval {
+                require C4::Koha;
+                import C4::Koha;
+            };
+            if ($@){
+                croak $@;
+            }
+
+            $ord->{rrp} = ConvertCurrency( $ord->{'currency'}, $ord->{rrp} );
+            if ( $bookseller->{'listincgst'} ) {
+                $ord->{rrpgsti} = sprintf( "%.2f", $ord->{rrp} );
+                $ord->{gstgsti} = sprintf( "%.2f", $ord->{gstrate} * 100 );
+                $ord->{rrpgste} = sprintf( "%.2f", $ord->{rrp} / ( 1 + ( $ord->{gstgsti} / 100 ) ) );
+                $ord->{gstgste} = sprintf( "%.2f", $ord->{gstgsti} / ( 1 + ( $ord->{gstgsti} / 100 ) ) );
+                $ord->{ecostgsti} = sprintf( "%.2f", $ord->{ecost} );
+                $ord->{ecostgste} = sprintf( "%.2f", $ord->{ecost} / ( 1 + ( $ord->{gstgsti} / 100 ) ) );
+                $ord->{gstvalue} = sprintf( "%.2f", ( $ord->{ecostgsti} - $ord->{ecostgste} ) * $ord->{quantity});
+                $ord->{totalgste} = sprintf( "%.2f", $ord->{quantity} * $ord->{ecostgste} );
+                $ord->{totalgsti} = sprintf( "%.2f", $ord->{quantity} * $ord->{ecostgsti} );
+            } else {
+                $ord->{rrpgsti} = sprintf( "%.2f", $ord->{rrp} * ( 1 + ( $ord->{gstrate} ) ) );
+                $ord->{rrpgste} = sprintf( "%.2f", $ord->{rrp} );
+                $ord->{gstgsti} = sprintf( "%.2f", $ord->{gstrate} * 100 );
+                $ord->{gstgste} = sprintf( "%.2f", $ord->{gstrate} * 100 );
+                $ord->{ecostgsti} = sprintf( "%.2f", $ord->{ecost} * ( 1 + ( $ord->{gstrate} ) ) );
+                $ord->{ecostgste} = sprintf( "%.2f", $ord->{ecost} );
+                $ord->{gstvalue} = sprintf( "%.2f", ( $ord->{ecostgsti} - $ord->{ecostgste} ) * $ord->{quantity});
+                $ord->{totalgste} = sprintf( "%.2f", $ord->{quantity} * $ord->{ecostgste} );
+                $ord->{totalgsti} = sprintf( "%.2f", $ord->{quantity} * $ord->{ecostgsti} );
+            }
+            my $bib = GetBiblioData($ord->{biblionumber});
+            my $itemtypes = GetItemTypes();
+
+            #FIXME DELETE ME
             # 0      1        2        3         4            5         6       7      8        9
             #isbn, itemtype, author, title, publishercode, quantity, listprice ecost discount gstrate
-            my @ba_order;
-            if ( $ord->{biblionumber} && $ord->{quantity}> 0 ) {
-                eval {
-		    require C4::Biblio;
-		    import C4::Biblio;
-		};
-		if ($@){
-		    croak $@;
-		}
-                eval {
-		    require C4::Koha;
-		    import C4::Koha;
-		};
-		if ($@){
-		    croak $@;
-		}
-                my $bib = GetBiblioData($ord->{biblionumber});
-                my $itemtypes = GetItemTypes();
-                if($ord->{isbn}){
-                    push(@ba_order, $ord->{isbn});
-                } else {
-                    push(@ba_order, undef);
-                }
-                if ($ord->{itemtype} and $bib->{itemtype}){
-                    push(@ba_order, $itemtypes->{$bib->{itemtype}}->{description});
-                } else {
-                    push(@ba_order, undef);
-                }
-#             } else {
-#                 push(@ba_order, undef, undef);
-                for my $key (qw/author title publishercode quantity listprice ecost/) {
-                    push(@ba_order, $ord->{$key});                                                  #Order lines
-                }
-                push(@ba_order, $bookseller->{discount});
-                push(@ba_order, $bookseller->{gstrate}*100 // C4::Context->preference("gist") // 0);
-                push(@ba_orders, \@ba_order);
-                # Editor Number
-                my $en;
-                my $marcrecord=eval{MARC::Record::new_from_xml( $ord->{marcxml},'UTF-8' )};
-                if ($marcrecord){
-                    if ( C4::Context->preference("marcflavour") eq 'UNIMARC' ) {
-                        $en = $marcrecord->subfield( '345', "b" );
-                    } elsif ( C4::Context->preference("marcflavour") eq 'MARC21' ) {
-                        $en = $marcrecord->subfield( '037', "a" );
-                    }
-                }
-                if($en){
-                    push(@ba_order, $en);
-                } else {
-                    push(@ba_order, undef);
+
+            # Editor Number
+            my $en;
+            my $edition;
+            my $marcrecord=eval{MARC::Record::new_from_xml( $ord->{marcxml},'UTF-8' )};
+            if ($marcrecord){
+                if ( C4::Context->preference("marcflavour") eq 'UNIMARC' ) {
+                    $en = $marcrecord->subfield( '345', "b" );
+                    $edition = $marcrecord->subfield( '205', 'a' );
+                } elsif ( C4::Context->preference("marcflavour") eq 'MARC21' ) {
+                    $en = $marcrecord->subfield( '037', "a" );
+                    $edition = $marcrecord->subfield( '250', 'a' );
                 }
             }
+
+            my $ba_order = {
+                isbn => ($ord->{isbn} ? $ord->{isbn} : undef),
+                itemtype => ( $ord->{itemtype} and $bib->{itemtype} ? $itemtypes->{$bib->{itemtype}}->{description} : undef ),
+                en => ( $en ? $en : undef ),
+                edition => ( $edition ? $edition : undef ),
+            };
+            for my $key ( qw/ gstrate author title itemtype publishercode copyrightdate publicationyear discount quantity rrpgsti rrpgste gstgsti gstgste ecostgsti ecostgste gstvalue totalgste totalgsti order_vendornote / ) {
+                $ba_order->{$key} = $ord->{$key};
+            }
+
+            push(@ba_orders, $ba_order);
         }
-        $orders{$basket->{basketno}}=\@ba_orders;
+        $orders{$basket->{basketno}} = \@ba_orders;
     }
     print $input->header(
         -type       => 'application/pdf',
@@ -278,127 +236,97 @@ sub printbasketgrouppdf{
 }
 
 my $op = $input->param('op') || 'display';
+# possible values of $op :
+# - add : adds a new basketgroup, or edit an open basketgroup, or display a closed basketgroup
+# - mod_basket : modify an individual basket of the basketgroup
+# - closeandprint : close and print an closed basketgroup in pdf. called by clicking on "Close and print" button in closed basketgroups list
+# - print : print a closed basketgroup. called by clicking on "Print" button in closed basketgroups list
+# - export : export in CSV a closed basketgroup. called by clicking on "Export" button in closed basketgroups list
+# - delete : delete an open basketgroup. called by clicking on "Delete" button in open basketgroups list
+# - reopen : reopen a closed basketgroup. called by clicking on "Reopen" button in closed basketgroup list
+# - attachbasket : save a modified basketgroup, or creates a new basketgroup when a basket is closed. called from basket page
+# - display : display the list of all basketgroups for a vendor
 my $booksellerid = $input->param('booksellerid');
 $template->param(booksellerid => $booksellerid);
 
 if ( $op eq "add" ) {
-    if(! $booksellerid){
-        $template->param( ungroupedlist => 1);
-        my @booksellers = GetBookSeller('');
-       for (my $i=0; $i < scalar @booksellers; $i++) {
-            my $baskets = &GetBasketsByBookseller($booksellers[$i]->{id});
-            for (my $j=0; $j < scalar @$baskets; $j++) {
-                if(! @$baskets[$i]->{closedate} || @$baskets[$i]->{basketgroupid}) {
-                    splice(@$baskets, $j, 1);
-                    $j--;
-                }
-            }
-            if (scalar @$baskets == 0){
-                splice(@booksellers, $i, 1);
-                $i--;
-            }
+#
+# if no param('basketgroupid') is not defined, adds a new basketgroup
+# else, edit (if it is open) or display (if it is close) the basketgroup basketgroupid
+# the template will know if basketgroup must be displayed or edited, depending on the value of closed key
+#
+    my $bookseller = &GetBookSellerFromId($booksellerid);
+    my $basketgroupid = $input->param('basketgroupid');
+    my $billingplace;
+    my $deliveryplace;
+    my $freedeliveryplace;
+    if ( $basketgroupid ) {
+        # Get the selected baskets in the basketgroup to display them
+        my $selecteds = GetBasketsByBasketgroup($basketgroupid);
+        foreach my $basket(@{$selecteds}){
+            $basket->{total} = BasketTotal($basket->{basketno}, $bookseller);
         }
+        $template->param(basketgroupid => $basketgroupid,
+                         selectedbaskets => $selecteds);
+
+        # Get general informations about the basket group to prefill the form
+        my $basketgroup = GetBasketgroup($basketgroupid);
+        $template->param(
+            name            => $basketgroup->{name},
+            deliverycomment => $basketgroup->{deliverycomment},
+            freedeliveryplace => $basketgroup->{freedeliveryplace},
+        );
+        $billingplace  = $basketgroup->{billingplace};
+        $deliveryplace = $basketgroup->{deliveryplace};
+        $freedeliveryplace = $basketgroup->{freedeliveryplace};
+        $template->param( closedbg => ($basketgroup ->{'closed'}) ? 1 : 0);
     } else {
-        my $basketgroupid = $input->param('basketgroupid');
-        my $billingplace;
-        my $deliveryplace;
-        my $freedeliveryplace;
-        if ( $basketgroupid ) {
-            # Get the selected baskets in the basketgroup to display them
-            my $selecteds = GetBasketsByBasketgroup($basketgroupid);
-            foreach (@{$selecteds}){
-                $_->{total} = BasketTotal($_->{basketno}, $_);
-            }
-            $template->param(basketgroupid => $basketgroupid,
-                             selectedbaskets => $selecteds);
-
-            # Get general informations about the basket group to prefill the form
-            my $basketgroup = GetBasketgroup($basketgroupid);
-            $template->param(
-                name            => $basketgroup->{name},
-                deliverycomment => $basketgroup->{deliverycomment},
-                freedeliveryplace => $basketgroup->{freedeliveryplace},
-            );
-            $billingplace  = $basketgroup->{billingplace};
-            $deliveryplace = $basketgroup->{deliveryplace};
-            $freedeliveryplace = $basketgroup->{freedeliveryplace};
-        }
-
-        # determine default billing and delivery places depending on librarian homebranch and existing basketgroup data
-        my $borrower = GetMember( ( 'borrowernumber' => $loggedinuser ) );
-        $billingplace  = $billingplace  || $borrower->{'branchcode'};
-        $deliveryplace = $deliveryplace || $borrower->{'branchcode'};
-
-        my $branches = C4::Branch::GetBranchesLoop( $billingplace );
-        $template->param( billingplaceloop => $branches );
-        $branches = C4::Branch::GetBranchesLoop( $deliveryplace );
-        $template->param( deliveryplaceloop => $branches );
-
-        $template->param( booksellerid => $booksellerid );
+        $template->param( closedbg => 0);
     }
+    # determine default billing and delivery places depending on librarian homebranch and existing basketgroup data
+    my $borrower = GetMember( ( 'borrowernumber' => $loggedinuser ) );
+    $billingplace  = $billingplace  || $borrower->{'branchcode'};
+    $deliveryplace = $deliveryplace || $borrower->{'branchcode'};
+
+    my $branches = C4::Branch::GetBranchesLoop( $billingplace );
+    $template->param( billingplaceloop => $branches );
+    $branches = C4::Branch::GetBranchesLoop( $deliveryplace );
+    $template->param( deliveryplaceloop => $branches );
+    $template->param( booksellerid => $booksellerid );
+
+    # the template will display a unique basketgroup
     $template->param(grouping => 1);
     my $basketgroups = &GetBasketgroups($booksellerid);
-    my $bookseller = &GetBookSellerFromId($booksellerid);
     my $baskets = &GetBasketsByBookseller($booksellerid);
-
     displaybasketgroups($basketgroups, $bookseller, $baskets);
 } elsif ($op eq 'mod_basket') {
-#we want to modify an individual basket's group
+#
+# edit an individual basket contained in this basketgroup
+#
   my $basketno=$input->param('basketno');
   my $basketgroupid=$input->param('basketgroupid');
   ModBasket( { basketno => $basketno,
                          basketgroupid => $basketgroupid } );
   print $input->redirect("basket.pl?basketno=" . $basketno);
-} elsif ($op eq 'validate') {
-    if(! $booksellerid){
-        $template->param( booksellererror => 1);
-    } else {
-        $template->param( booksellerid => $booksellerid );
-    }
-    my $baskets = parseinputbaskets($booksellerid);
-    my ($basketgroups, $newbasketgroups) = parseinputbasketgroups($booksellerid, $baskets);
-    foreach my $nbgid (keys %$newbasketgroups){
-#javascript just picks an ID that's higher than anything else, the ID might not be correct..chenge it and change all the basket's basketgroupid as well
-        my $bgid = NewBasketgroup($newbasketgroups->{$nbgid});
-        ${$newbasketgroups->{$nbgid}}->{'id'} = $bgid;
-        ${$newbasketgroups->{$nbgid}}->{'oldid'} = $nbgid;
-    }
-    foreach my $basket (@$baskets){
-#if the basket was added to a new basketgroup, first change the groupid to the groupid of the basket in mysql, because it contains the id from javascript otherwise.
-        if ( $basket->{'basketgroupid'} && $newbasketgroups->{$basket->{'basketgroupid'}} ){
-            $basket->{'basketgroupid'} = ${$newbasketgroups->{$basket->{'basketgroupid'}}}->{'id'};
-        }
-        ModBasket($basket);
-    }
-    foreach my $basketgroup (@$basketgroups){
-        if(! $basketgroup->{'id'}){
-            foreach my $basket (@{$basketgroup->{'baskets'}}){
-                if($input->param('basket'.$basket->{'basketno'}.'changed')){
-                    ModBasket($basket);
-                }
-            }
-        } elsif ($input->param('basketgroup-'.$basketgroup->{'id'}.'-changed')){
-            ModBasketgroup($basketgroup);
-        }
-    }
-    $basketgroups = &GetBasketgroups($booksellerid);
-    my $bookseller = &GetBookSellerFromId($booksellerid);
-    $baskets = &GetBasketsByBookseller($booksellerid);
-
-    displaybasketgroups($basketgroups, $bookseller, $baskets);
 } elsif ( $op eq 'closeandprint') {
+#
+# close an open basketgroup and generates a pdf
+#
     my $basketgroupid = $input->param('basketgroupid');
-    
     CloseBasketgroup($basketgroupid);
-    
     printbasketgrouppdf($basketgroupid);
     exit;
 }elsif ($op eq 'print'){
+#
+# print a closed basketgroup
+#
     my $basketgroupid = $input->param('basketgroupid');
-    
     printbasketgrouppdf($basketgroupid);
     exit;
 }elsif ( $op eq "export" ) {
+#
+# export a closed basketgroup in csv
+#
     my $basketgroupid = $input->param('basketgroupid');
     print $input->header(
         -type       => 'text/csv',
@@ -407,20 +335,25 @@ if ( $op eq "add" ) {
     print GetBasketGroupAsCSV( $basketgroupid, $input );
     exit;
 }elsif( $op eq "delete"){
+#
+# delete an closed basketgroup
+#
     my $basketgroupid = $input->param('basketgroupid');
     DelBasketgroup($basketgroupid);
-    print $input->redirect('/cgi-bin/koha/acqui/basketgroup.pl?booksellerid=' . $booksellerid);
-    
+    print $input->redirect('/cgi-bin/koha/acqui/basketgroup.pl?booksellerid=' . $booksellerid.'&amp;listclosed=1');
 }elsif ( $op eq 'reopen'){
+#
+# reopen a closed basketgroup
+#
     my $basketgroupid   = $input->param('basketgroupid');
     my $booksellerid    = $input->param('booksellerid');
-    
     ReOpenBasketgroup($basketgroupid);
-        
-    print $input->redirect('/cgi-bin/koha/acqui/basketgroup.pl?booksellerid=' . $booksellerid . '#closed');
-    
+    my $redirectpath = ((defined $input->param('mode'))&& ($input->param('mode') eq 'singlebg')) ?'/cgi-bin/koha/acqui/basketgroup.pl?op=add&amp;basketgroupid='.$basketgroupid.'&amp;booksellerid='.$booksellerid : '/cgi-bin/koha/acqui/basketgroup.pl?booksellerid=' .$booksellerid.'&amp;listclosed=1';
+    print $input->redirect($redirectpath);
 } elsif ( $op eq 'attachbasket') {
-    
+#
+# save a modified basketgroup, or creates a new basketgroup when a basket is closed. called from basket page
+#
     # Getting parameters
     my $basketgroup       = {};
     my @baskets           = $input->param('basket');
@@ -431,9 +364,9 @@ if ( $op eq "add" ) {
     my $deliveryplace     = $input->param('deliveryplace');
     my $freedeliveryplace = $input->param('freedeliveryplace');
     my $deliverycomment   = $input->param('deliverycomment');
-    my $close             = $input->param('close') ? 1 : 0;
-    # If we got a basketgroupname, we create a basketgroup
+    my $closedbg          = $input->param('closedbg') ? 1 : 0;
     if ($basketgroupid) {
+    # If we have a basketgroupid we edit the basketgroup
         $basketgroup = {
               name              => $basketgroupname,
               id                => $basketgroupid,
@@ -442,36 +375,38 @@ if ( $op eq "add" ) {
               deliveryplace     => $deliveryplace,
               freedeliveryplace => $freedeliveryplace,
               deliverycomment   => $deliverycomment,
-              closed            => $close,
+              closed            => $closedbg,
         };
         ModBasketgroup($basketgroup);
-        if($close){
-            
+        if($closedbg){
+# FIXME
         }
     }else{
+    # we create a new basketgroup (whith a closed basket)
         $basketgroup = {
             name              => $basketgroupname,
             booksellerid      => $booksellerid,
             basketlist        => \@baskets,
+            billingplace      => $billingplace,
             deliveryplace     => $deliveryplace,
             freedeliveryplace => $freedeliveryplace,
             deliverycomment   => $deliverycomment,
-            closed            => $close,
+            closed            => $closedbg,
         };
         $basketgroupid = NewBasketgroup($basketgroup);
     }
-   
-    my $url = '/cgi-bin/koha/acqui/basketgroup.pl?booksellerid=' . $booksellerid;
-    $url .= "&closed=1" if ($input->param("closed")); 
-    print $input->redirect($url);
+    my $redirectpath = ((defined $input->param('mode')) && ($input->param('mode') eq 'singlebg')) ?'/cgi-bin/koha/acqui/basketgroup.pl?op=add&amp;basketgroupid='.$basketgroupid.'&amp;booksellerid='.$booksellerid : '/cgi-bin/koha/acqui/basketgroup.pl?booksellerid=' . $booksellerid;
+    $redirectpath .=  "&amp;listclosed=1" if $closedbg ;
+    print $input->redirect($redirectpath );
     
 }else{
+# no param : display the list of all basketgroups for a given vendor
     my $basketgroups = &GetBasketgroups($booksellerid);
     my $bookseller = &GetBookSellerFromId($booksellerid);
     my $baskets = &GetBasketsByBookseller($booksellerid);
 
     displaybasketgroups($basketgroups, $bookseller, $baskets);
 }
-$template->param(closed => $input->param("closed"));
+$template->param(listclosed => ((defined $input->param('listclosed')) && ($input->param('listclosed') eq '1'))? 1:0 );
 #prolly won't use all these, maybe just use print, the rest can be done inside validate
 output_html_with_http_headers $input, $cookie, $template->output;

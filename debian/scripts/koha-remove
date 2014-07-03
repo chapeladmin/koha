@@ -19,6 +19,14 @@
 
 set -e
 
+# include helper functions
+if [ -f "/usr/share/koha/bin/koha-functions.sh" ]; then
+    . "/usr/share/koha/bin/koha-functions.sh"
+else
+    echo "Error: /usr/share/koha/bin/koha-functions.sh not present." 1>&2
+    exit 1
+fi
+
 args=$(getopt -l keep-mysql -o k -n $0 -- "$@")
 eval set -- $args
 while [ ! -z "$1" ]
@@ -35,7 +43,7 @@ NAMES="$@"
 
 SITECONFDIR="/etc/koha/sites"
 # There has to be a better way of excluding '.' from find. But this works.
-INSTANCES=`cd $SITECONFDIR && find . -type d -printf " %f" |sed s/\ .\ //`
+INSTANCES=$(get_instances)
 
 if [ -z $NAMES ] ; then
     echo "Please specify a Koha instance name. Your choices are:"
@@ -68,12 +76,17 @@ eof
     
     # If the daemon is not running already, we don't want to fail this loop. So bin the result code if this fails.
     koha-stop-zebra $name || /bin/true
-    [ -f "/etc/apache2/sites-available/$name" ]  && \
-        rm "/etc/apache2/sites-available/$name"
+
+    instancefile=$(get_apache_config_for $name)
+
+    [ -f "$instancefile" ]  && \
+        rm "$instancefile"
     [ -f "/etc/koha/sites/$name/koha-conf.xml" ] && \
         rm "/etc/koha/sites/$name/koha-conf.xml"
     [ -f "/etc/koha/sites/$name/zebra-biblios.cfg" ] && \
         rm "/etc/koha/sites/$name/zebra-biblios.cfg"
+    [ -f "/etc/koha/sites/$name/zebra-biblios-dom.cfg" ] && \
+        rm "/etc/koha/sites/$name/zebra-biblios-dom.cfg"
     [ -f "/etc/koha/sites/$name/zebra-authorities.cfg" ] && \
         rm "/etc/koha/sites/$name/zebra-authorities.cfg"
     [ -f "/etc/koha/sites/$name/zebra-authorities-dom.cfg" ] && \
@@ -91,7 +104,7 @@ eof
         rm -r "/var/run/koha/$name"
     getent passwd "$name-koha" > /dev/null && deluser --quiet "$name-koha"
     # in case the site has already been disabled, we don't want to break the loop now.
-    a2dissite "$name" || /bin/true
+    a2dissite "$name" > /dev/null 2>&1 || a2dissite "${name}.conf" > /dev/null 2>&1 || /bin/true
 done
 
 service apache2 restart

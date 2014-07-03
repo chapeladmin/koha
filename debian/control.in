@@ -3,11 +3,15 @@ Maintainer: Robin Sheat <robin@catalyst.net.nz>
 Section: web
 Priority: optional
 Standards-Version: 3.8.4
+# WARNING: The "control" file is automatically generated from the "control.in" file.
+# Do not manually edit "control" or your changes will be clobbered when you
+# run update-control
 # NOTA BENE: Build dependencies end up as runtime dependencies as well.
 # See debian/rules, the override_dh_gencontrol rules. 
 # There are some exceptions.
 Build-Depends:__AUTODEPENDS__, 
- debhelper (>= 7.0.50), gettext, python, python-debian, xsltproc, docbook-xsl
+ debhelper (>= 7.0.50), gettext, python, python-debian, xsltproc, docbook-xsl,
+ libxml2-utils, bash-completion
 
 Package: koha-common
 Architecture: all
@@ -15,6 +19,7 @@ Depends: ${misc:Depends}, ${koha:Depends},
  apache2,
  apache2-mpm-itk,
  at,
+ cron-daemon,
  daemon,
  debconf,
  idzebra-2.0,
@@ -24,11 +29,13 @@ Depends: ${misc:Depends}, ${koha:Depends},
  perl-doc,
  pwgen,
  sudo,
- tinymce2, 
+ tinymce, 
+ ttf-dejavu,
  unzip,
  xmlstarlet,
  yaz
-Suggests: mysql-server
+Suggests: mysql-server,
+ memcached
 Homepage: http://koha-community.org/
 Description: integrated (physical) library management system
  Koha is an Integrated Library Managment system for real-world libraries
@@ -60,6 +67,7 @@ Depends: ${misc:Depends},
  apache2,
  apache2-mpm-itk,
  at,
+ cron-daemon,
  daemon,
  debconf,
  idzebra-2.0,
@@ -70,7 +78,8 @@ Depends: ${misc:Depends},
  perl-doc,
  pwgen,
  sudo,
- tinymce2,
+ tinymce,
+ ttf-dejavu,
  unzip,
  xmlstarlet,
  yaz

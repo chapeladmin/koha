@@ -17,21 +17,22 @@ package Koha::Template::Plugin::KohaDates;
 # with Koha; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use strict;
-use warnings;
+use Modern::Perl;
 
 use Template::Plugin::Filter;
 use base qw( Template::Plugin::Filter );
-use warnings;
-use strict;
 
-use C4::Dates;
+use Koha::DateUtils;
+our $DYNAMIC = 1;
 
 sub filter {
-    my ($self,$text) = @_;
-    return "" if not $text;
-    my $date = C4::Dates->new( $text, 'iso' );
-    return $date->output("syspref");
+    my ( $self, $text, $args, $config ) = @_;
+    return "" unless $text;
+    $config->{with_hours} //= 0;
+    my $dt = dt_from_string( $text, 'iso' );
+    return $config->{as_due_date} ?
+        output_pref({ dt => $dt, as_due_date => 1 }) :
+        output_pref({ dt => $dt, dateonly => !$config->{with_hours} });
 }
 
 1;

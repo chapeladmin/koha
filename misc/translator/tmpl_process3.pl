@@ -13,6 +13,7 @@ using gettext-compatible translation files
 
 use strict;
 #use warnings; FIXME - Bug 2505
+use File::Basename;
 use Getopt::Long;
 use Locale::PO;
 use File::Temp qw( :POSIX );
@@ -21,7 +22,7 @@ use VerboseWarnings qw( :warn :die );
 
 ###############################################################################
 
-use vars qw( @in_files $in_dir $str_file $out_dir $quiet );
+use vars qw( $in_dir @filenames $str_file $out_dir $quiet );
 use vars qw( @excludes $exclude_regex );
 use vars qw( $recursive_p );
 use vars qw( $pedantic_p );
@@ -131,25 +132,28 @@ sub text_replace (**) {
     }
 }
 
-sub listfiles ($$$) {
-    my($dir, $type, $action) = @_;
+sub listfiles {
+    my($dir, $type, $action, $filenames) = @_;
     my @it = ();
     if (opendir(DIR, $dir)) {
-    my @dirent = readdir DIR;   # because DIR is shared when recursing
-    closedir DIR;
-    for my $dirent (@dirent) {
-        my $path = "$dir/$dirent";
-        if ($dirent =~ /^\./ || $dirent eq 'CVS' || $dirent eq 'RCS'
-        || (defined $exclude_regex && $dirent =~ /^(?:$exclude_regex)$/)) {
-        ;
-        } elsif (-f $path) {
-        push @it, $path if (!defined $type || $dirent =~ /\.(?:$type)$/) || $action eq 'install';
-        } elsif (-d $path && $recursive_p) {
-        push @it, listfiles($path, $type, $action);
+        my @dirent = readdir DIR;   # because DIR is shared when recursing
+        closedir DIR;
+        for my $dirent (@dirent) {
+            my $path = "$dir/$dirent";
+            if ($dirent =~ /^\./ || $dirent eq 'CVS' || $dirent eq 'RCS'
+            || (defined $exclude_regex && $dirent =~ /^(?:$exclude_regex)$/)) {
+            ;
+            } elsif (-f $path) {
+                my $basename = basename $path;
+                push @it, $path
+                    if ( not @$filenames or ( grep { $path =~ /$_/ } @$filenames ) )
+                       and (!defined $type || $dirent =~ /\.(?:$type)$/) || $action eq 'install';
+            } elsif (-d $path && $recursive_p) {
+                push @it, listfiles($path, $type, $action, $filenames);
+            }
         }
-    }
     } else {
-    warn_normal "$dir: $!", undef;
+        warn_normal "$dir: $!", undef;
     }
     return @it;
 }
@@ -181,12 +185,13 @@ Usage: $0 create [OPTION]
   or:  $0 --help
 Create or update PO files from templates, or install translated templates.
 
-  -i, --input=SOURCE          Get or update strings from SOURCE file.
-                              SOURCE is a directory if -r is also specified.
+  -i, --input=SOURCE          Get or update strings from SOURCE directory.
   -o, --outputdir=DIRECTORY   Install translation(s) to specified DIRECTORY
       --pedantic-warnings     Issue warnings even for detected problems
                               which are likely to be harmless
   -r, --recursive             SOURCE in the -i option is a directory
+  -f, --filename=FILE         FILE is a specific filaneme.
+                              If given, only these files will be processed.
   -s, --str-file=FILE         Specify FILE as the translation (po) file
                               for input (install) or output (create, update)
   -x, --exclude=REGEXP        Exclude files matching the given REGEXP
@@ -212,7 +217,8 @@ sub usage_error (;$) {
 ###############################################################################
 
 GetOptions(
-    'input|i=s'             => \@in_files,
+    'input|i=s'             => \$in_dir,
+    'filename|f=s'          => \@filenames,
     'outputdir|o=s'         => \$out_dir,
     'recursive|r'           => \$recursive_p,
     'str-file|s=s'          => \$str_file,
@@ -233,36 +239,29 @@ $SIG{__WARN__} = sub {
 
 my $action = shift or usage_error('You must specify an ACTION.');
 usage_error('You must at least specify input and string list filenames.')
-    if !@in_files || !defined $str_file;
+    if !$in_dir || !defined $str_file;
 
 # Type match defaults to *.tt plus *.inc if not specified
-$type = "tt|inc|xsl" if !defined($type);
+$type = "tt|inc|xsl|xml|def" if !defined($type);
 
-# Check the inputs for being files or directories
-for my $input (@in_files) {
-    usage_error("$input: Input must be a file or directory.\n"
-        . "(Symbolic links are not supported at the moment)")
-    unless -d $input || -f $input;;
-}
+# Check the inputs for being directories
+usage_error("$in_dir: Input must be a directory.\n"
+    . "(Symbolic links are not supported at the moment)")
+    unless -d $in_dir;
 
 # Generates the global exclude regular expression
 $exclude_regex =  '(?:'.join('|', @excludes).')' if @excludes;
 
+my @in_files;
 # Generate the list of input files if a directory is specified
-if (-d $in_files[0]) {
-    die "If you specify a directory as input, you must specify only it.\n"
-        if @in_files > 1;
+# input is a directory, generates list of files to process
+$in_dir =~ s/\/$//; # strips the trailing / if any
 
-    # input is a directory, generates list of files to process
-    $in_dir = $in_files[0];
-    $in_dir =~ s/\/$//; # strips the trailing / if any
-    @in_files = listfiles($in_dir, $type, $action);
-} else {
-    for my $input (@in_files) {
+for my $fn ( @filenames ) {
     die "You cannot specify input files and directories at the same time.\n"
-        unless -f $input;
-    }
+        if -d $fn;
 }
+@in_files = listfiles($in_dir, $type, $action, \@filenames);
 
 # restores the string list from file
 $href = Locale::PO->load_file_ashash($str_file);
@@ -354,8 +353,8 @@ if ($action eq 'create')  {
     error_normal "Text extraction failed: $xgettext: $!\n", undef;
     error_additional "Will not run msgmerge\n", undef;
     }
-#   unlink $tmpfile1 || warn_normal "$tmpfile1: unlink failed: $!\n", undef;
-#   unlink $tmpfile2 || warn_normal "$tmpfile2: unlink failed: $!\n", undef;
+    unlink $tmpfile1 || warn_normal "$tmpfile1: unlink failed: $!\n", undef;
+    unlink $tmpfile2 || warn_normal "$tmpfile2: unlink failed: $!\n", undef;
 
 } elsif ($action eq 'update') {
     my($tmph1, $tmpfile1) = tmpnam();
@@ -372,16 +371,23 @@ if ($action eq 'create')  {
         (defined $charset_in? ('-I', $charset_in): ()),
         (defined $charset_out? ('-O', $charset_out): ()));
     if ($st == 0) {
-    # Merge the temporary "pot file" with the specified po file ($str_file)
-    # FIXME: msgmerge(1) is a Unix dependency
-    # FIXME: need to check the return value
-    $st = system("msgmerge -U ".($quiet?'-q':'')." -s $str_file $tmpfile2");
+        # Merge the temporary "pot file" with the specified po file ($str_file)
+        # FIXME: msgmerge(1) is a Unix dependency
+        # FIXME: need to check the return value
+        if ( @filenames ) {
+            my ($tmph3, $tmpfile3) = tmpnam();
+            $st = system("msgcat $str_file $tmpfile2 > $tmpfile3");
+            $st = system("msgmerge -U ".($quiet?'-q':'')." -s $str_file $tmpfile3")
+                unless $st;
+        } else {
+            $st = system("msgmerge -U ".($quiet?'-q':'')." -s $str_file $tmpfile2");
+        }
     } else {
-    error_normal "Text extraction failed: $xgettext: $!\n", undef;
-    error_additional "Will not run msgmerge\n", undef;
+        error_normal "Text extraction failed: $xgettext: $!\n", undef;
+        error_additional "Will not run msgmerge\n", undef;
     }
-#   unlink $tmpfile1 || warn_normal "$tmpfile1: unlink failed: $!\n", undef;
-#   unlink $tmpfile2 || warn_normal "$tmpfile2: unlink failed: $!\n", undef;
+    unlink $tmpfile1 || warn_normal "$tmpfile1: unlink failed: $!\n", undef;
+    unlink $tmpfile2 || warn_normal "$tmpfile2: unlink failed: $!\n", undef;
 
 } elsif ($action eq 'install') {
     if(!defined($out_dir)) {
@@ -405,23 +411,21 @@ if ($action eq 'create')  {
     for my $input (@in_files) {
         die "Assertion failed"
             unless substr($input, 0, length($in_dir) + 1) eq "$in_dir/";
-#       print "$input / $type\n";
+
+        my $target = $out_dir . substr($input, length($in_dir));
+        my $targetdir = $` if $target =~ /[^\/]+$/s;
+
         if (!defined $type || $input =~ /\.(?:$type)$/) {
             my $h = TmplTokenizer->new( $input );
             $h->set_allow_cformat( 1 );
             VerboseWarnings::set_input_file_name $input;
-        
-            my $target = $out_dir . substr($input, length($in_dir));
-            my $targetdir = $` if $target =~ /[^\/]+$/s;
             mkdir_recursive($targetdir) unless -d $targetdir;
             print STDERR "Creating $target...\n" unless $quiet;
-            open( OUTPUT, ">$target" ) || die "$target: $!\n";            
+            open( OUTPUT, ">$target" ) || die "$target: $!\n";
             text_replace( $h, *OUTPUT );
             close OUTPUT;
         } else {
         # just copying the file
-            my $target = $out_dir . substr($input, length($in_dir));
-            my $targetdir = $` if $target =~ /[^\/]+$/s;
             mkdir_recursive($targetdir) unless -d $targetdir;
             system("cp -f $input $target");
             print STDERR "Copying $input...\n" unless $quiet;

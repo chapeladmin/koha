@@ -9,10 +9,29 @@ use File::Spec;
 
 my $source = File::Spec->rel2abs('.');
 my $destination = $ARGV[0];
+my $marc_type = $ARGV[1] || 'marc21';
+my $indexing_mode = $ARGV[2] || 'grs1';
+
+$ENV{__BIB_INDEX_MODE__} = $indexing_mode;
+$ENV{__AUTH_INDEX_MODE__} = $indexing_mode;
+
+$ENV{__ZEBRA_MARC_FORMAT__} = $marc_type;
+if ($indexing_mode eq 'dom') {
+    $ENV{__ZEBRA_BIB_CFG__} = 'zebra-biblios-dom.cfg';
+    $ENV{__BIB_RETRIEVAL_CFG__} = 'retrieval-info-bib-dom.xml';
+    $ENV{__ZEBRA_AUTH_CFG__} = 'zebra-authorities-dom.cfg';
+    $ENV{__AUTH_RETRIEVAL_CFG__} = 'retrieval-info-auth-dom.xml';
+} else {
+    $ENV{__ZEBRA_BIB_CFG__} = 'zebra-biblios.cfg';
+    $ENV{__BIB_RETRIEVAL_CFG__} = 'retrieval-info-bib-grs1.xml';
+    $ENV{__ZEBRA_AUTH_CFG__} = 'zebra-authorities.cfg';
+    $ENV{__AUTH_RETRIEVAL_CFG__} = 'retrieval-info-auth-grs1.xml';
+}
 
 make_path("$destination/var/lock/zebradb");
 make_path("$destination/var/lock/zebradb/biblios");
 make_path("$destination/var/lock/zebradb/authorities");
+make_path("$destination/var/lock/zebradb/rebuild");
 make_path("$destination/var/lib/zebradb");
 make_path("$destination/var/lib/zebradb/biblios");
 make_path("$destination/var/lib/zebradb/biblios/key");
@@ -29,7 +48,9 @@ make_path("$destination/var/run/zebradb");
 $ENV{'INSTALL_BASE'} = $destination;
 $ENV{'__INSTALL_BASE__'} = $destination;
 
-my @files = ( "$source/etc/koha-conf.xml" );
+my @files = ( "$source/etc/koha-conf.xml",
+              "$source/etc/searchengine/queryparser.yaml",
+            );
 
 find(sub { push @files, $File::Find::name if ( -f $File::Find::name ); }, "$source/etc/zebradb");
 

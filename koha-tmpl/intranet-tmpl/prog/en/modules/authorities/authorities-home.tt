@@ -21,6 +21,7 @@ function confirm_deletion() {   // not really implemented, but required by phant
 }
 //]]>
 </script>
+[% INCLUDE 'authorities_js.inc' %]
 </head>
 <body id="auth_authorities_home" class="auth">
 [% INCLUDE 'header.inc' %]
@@ -34,6 +35,8 @@ function confirm_deletion() {   // not really implemented, but required by phant
     <div class="yui-g">
     
     [% INCLUDE 'authorities-toolbar.inc' %]
+
+    <div id="merge_in_progress"></div>
 
     </div>
     </div>

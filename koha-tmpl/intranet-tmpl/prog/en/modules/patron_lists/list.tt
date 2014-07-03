@@ -1,0 +1,185 @@
+[% USE KohaDates %]
+[% INCLUDE 'doc-head-open.inc' %]
+<title>Koha &rsaquo; Tools &rsaquo; Patron lists &rsaquo; [% list.name %] &rsaquo; Add patrons</title>
+[% INCLUDE 'doc-head-close.inc' %]
+
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+
+<script type="text/javascript">
+//<![CDATA[
+$(document).ready(function() {
+    $('#patrons_to_add_fieldset').hide();
+
+        $('#patron-list-table').dataTable($.extend(true, {}, dataTablesDefaults, {
+            "aoColumns": [
+                null,null,null,null,null,null,null,{ "sType": "title-string" },null
+            ],
+            "aoColumnDefs": [
+                { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false },
+            ]
+        } ));
+
+    $( "#find_patron" ).autocomplete({
+        source: "/cgi-bin/koha/circ/ysearch.pl",
+        minLength: 3,
+        select: function( event, ui ) {
+            AddPatron( ui.item.firstname + " " + ui.item.surname, ui.item.cardnumber );
+            return false;
+        }
+    })
+    .data( "ui-autocomplete" )._renderItem = function( ul, item ) {
+        return $( "<li></li>" )
+        .data( "ui-autocomplete-item", item )
+        .append( "<a>" + item.surname + ", " + item.firstname + " (" + item.cardnumber + ") <small>" + item.address + " " + item.city + " " + item.zipcode + " " + item.country + "</small></a>" )
+        .appendTo( ul );
+    };
+
+    $("body").on("click",".removePatron",function(e){
+        e.preventDefault();
+        var divid = $(this).parent().attr("id");
+        var cardnumber = divid.replace("borrower_","");
+        RemovePatron(cardnumber);
+    });
+
+    var checkBoxes = $("input[type='checkbox']","#patron-list-table");
+
+    $("#CheckAll").click(function(e){
+        e.preventDefault();
+        checkBoxes.each(function(){
+            $(this).prop("checked",1);
+        });
+    });
+    $("#CheckNone").click(function(e){
+        e.preventDefault();
+        checkBoxes.each(function(){
+            $(this).prop("checked",0);
+        });
+    });
+
+    $("#remove_patrons").submit(function(){
+        var checkedItems = $("input:checked");
+        if ($(checkedItems).size() == 0) {
+            alert(_("You must select one or more patrons to remove"));
+            return false;
+        }
+        $(checkedItems).parents('tr').addClass("warn");
+        if( confirm(_("Are you sure you want to remove the selected patrons?")) ) {
+            return true;
+        } else {
+            $(checkedItems).parents('tr').removeClass("warn");
+            return false;
+        }
+    });
+});
+
+function AddPatron( name, cardnumber ) {
+    div = "<div id='borrower_" + cardnumber + "'>" + name + " ( <a href='#' class='removePatron'> " + _("Remove") + " </a> ) <input type='hidden' name='patrons_to_add' value='" + cardnumber + "' /></div>";
+    $('#patrons_to_add').append( div );
+
+    $('#find_patron').val('').focus();
+
+    $('#patrons_to_add_fieldset').show( 800 );
+}
+
+function RemovePatron( cardnumber ) {
+    $( '#borrower_' + cardnumber ).remove();
+
+    if ( ! $('#patrons_to_add').html() ) {
+        $('#patrons_to_add_fieldset').hide( 800 );
+    }
+}
+//]]>
+</script>
+
+</head>
+
+<body>
+[% INCLUDE 'header.inc' %]
+[% INCLUDE 'cat-search.inc' %]
+<div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/tools/tools-home.pl">Tools</a> &rsaquo; <a href="lists.pl">Patron lists</a> &rsaquo; <a href="/cgi-bin/koha/patron_lists/list.pl?patron_list_id=[% list.id %]">[% list.name %]</a> &rsaquo; Add patrons</div>
+
+<div class="yui-t7">
+    <div class="yui-main">
+        <h1>[% list.name %]</h1>
+
+        <form action="list.pl" id="add_patrons" method="post">
+            <fieldset>
+                <legend>Add patrons</legend>
+
+                    <label for="find_patron">Patron search: </label>
+                    <input autocomplete="off" id="find_patron" type="text" style="width:150px" class="noEnterSubmit" />
+                    <div id="find_patron_container"></div>
+
+                <fieldset id="patrons_to_add_fieldset">
+                    <legend>Patrons to be added</legend>
+                    <div id="patrons_to_add"></div>
+
+                    <fieldset class="action">
+                        <input type="hidden" name="patron_list_id" value="[% list.patron_list_id %]" />
+                        <input type="submit" value="Add patrons" />
+                        <a href="lists.pl" class="cancel">Cancel</a>
+                    </fieldset>
+                </fieldset>
+
+            </fieldset>
+        </form>
+
+        <form action="list.pl" id="remove_patrons" method="post">
+
+            <div id="searchheader">
+                <span class="checkall"><a id="CheckAll" href="#">Select all</a></span> |
+                <span class="clearall"><a id="CheckNone" href="#">Clear all</a></span> |
+                <div class="btn-group">
+                    <button class="btn btn-mini list-remove" type="submit"><i class="icon-remove-sign"></i> Remove selected</button>
+                </div>
+            </div>
+
+            <table id="patron-list-table">
+                <thead>
+                    <tr>
+                        <th>&nbsp;</th>
+                        <th>Card</th>
+                        <th>Firstname</th>
+                        <th>Surname</th>
+                        <th>Address</th>
+                        <th>Category</th>
+                        <th>Library</th>
+                        <th>Expires on</th>
+                        <th>Circ notes</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    [% FOREACH p IN list.patron_list_patrons %]
+                        <tr>
+                            <td><input type="checkbox" name="patrons_to_remove" value="[% p.patron_list_patron_id %]" /></td>
+                            <td>
+                                <a href="/cgi-bin/koha/members/moremember.pl?borrowernumber=[% p.borrowernumber.borrowernumber %]">
+                                    [% p.borrowernumber.cardnumber %]
+                                </a>
+                            </td>
+                            <td>[% p.borrowernumber.firstname %]</td>
+                            <td>[% p.borrowernumber.surname %]</td>
+                            <td>
+                                [% p.borrowernumber.address %]
+                                [% p.borrowernumber.address2 %]
+                                [% p.borrowernumber.city %]
+                                [% p.borrowernumber.state %]
+                                [% p.borrowernumber.country %]
+                            </td>
+                            <td>[% p.borrowernumber.categorycode.description %] ([% p.borrowernumber.categorycode.categorycode %])</td>
+                            <td>[% p.borrowernumber.branchcode.branchname %]</td>
+                            <td><span title="[% p.borrowernumber.dateexpiry %]">[% p.borrowernumber.dateexpiry | $KohaDates %]</span></td>
+                            <td>[% p.borrowernumber.borrowernotes %]</td>
+                        </tr>
+                    [% END %]
+                </tbody>
+            </table>
+
+            <input type="hidden" name="patron_list_id" value="[% list.patron_list_id %]" />
+            <input type="submit" value="Remove selected patrons" />
+        </form>
+    </div>
+</div>
+[% INCLUDE 'intranet-bottom.inc' %]

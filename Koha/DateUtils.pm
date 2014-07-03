@@ -13,8 +13,8 @@ package Koha::DateUtils;
 # A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along with
-# Koha; if not, write to the Free Software Foundation, Inc., 59 Temple Place,
-# Suite 330, Boston, MA  02111-1307 USA
+# Koha; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 use strict;
 use warnings;
@@ -27,7 +27,7 @@ use base 'Exporter';
 use version; our $VERSION = qv('1.0.0');
 
 our @EXPORT = (
-    qw( dt_from_string output_pref format_sqldatetime output_pref_due format_sqlduedatetime)
+    qw( dt_from_string output_pref format_sqldatetime )
 );
 
 =head1 DateUtils
@@ -93,72 +93,72 @@ s/(\d{4})(\d{2})(\d{2})\s+(\d{2})(\d{2})(\d{2})/$1-$2-$3T$4:$5:$6/;
 
 =head2 output_pref
 
-$date_string = output_pref($dt, [$format] );
+$date_string = output_pref({ dt => $dt [, dateformat => $date_format, timeformat => $time_format, dateonly => 0|1, as_due_date => 0|1 ] });
+$date_string = output_pref( $dt );
 
 Returns a string containing the time & date formatted as per the C4::Context setting,
 or C<undef> if C<undef> was provided.
 
-A second parameter allows overriding of the syspref value. This is for testing only
-In usage use the DateTime objects own methods for non standard formatting
-
-A third parameter allows to specify if the output format contains the hours and minutes.
-If it is not defined, the default value is 0;
+This routine can either be passed a DateTime object or or a hashref.  If it is
+passed a hashref, the expected keys are a mandatory 'dt' for the DateTime,
+an optional 'dateformat' to override the dateformat system preference, an
+optional 'timeformat' to override the TimeFormat system preference value,
+and an optional 'dateonly' to specify that only the formatted date string
+should be returned without the time.
 
 =cut
 
 sub output_pref {
-    my $dt         = shift;
-    my $force_pref = shift;         # if testing we want to override Context
-    my $dateonly   = shift || 0;    # if you don't want the hours and minutes
+    my $params = shift;
+    my ( $dt, $force_pref, $force_time, $dateonly, $as_due_date );
+    if ( ref $params eq 'HASH' ) {
+        $dt         = $params->{dt};
+        $force_pref = $params->{dateformat};         # if testing we want to override Context
+        $force_time = $params->{timeformat};
+        $dateonly   = $params->{dateonly} || 0;    # if you don't want the hours and minutes
+        $as_due_date = $params->{as_due_date} || 0; # don't display the hours and minutes if eq to 23:59 or 11:59 (depending the TimeFormat value)
+    } else {
+        $dt = $params;
+    }
 
     return unless defined $dt;
 
+    $dt->set_time_zone( C4::Context->tz );
+
     my $pref =
       defined $force_pref ? $force_pref : C4::Context->preference('dateformat');
-    given ($pref) {
-        when (/^iso/) {
-            return $dateonly
-                ? $dt->strftime('%Y-%m-%d')
-                : $dt->strftime('%Y-%m-%d %H:%M');
-        }
-        when (/^metric/) {
-            return $dateonly
-                ? $dt->strftime('%d/%m/%Y')
-                : $dt->strftime('%d/%m/%Y %H:%M');
-        }
-        when (/^us/) {
-            return $dateonly
-                ? $dt->strftime('%m/%d/%Y')
-                : $dt->strftime('%m/%d/%Y %H:%M');
-        }
-        default {
-            return $dateonly
-                ? $dt->strftime('%Y-%m-%d')
-                : $dt->strftime('%Y-%m-%d %H:%M');
-        }
 
+    my $time_format = $force_time || C4::Context->preference('TimeFormat');
+    my $time = ( $time_format eq '12hr' ) ? '%I:%M %p' : '%H:%M';
+    my $date;
+    if ( $pref =~ m/^iso/ ) {
+        $date = $dateonly
+          ? $dt->strftime("%Y-%m-%d")
+          : $dt->strftime("%Y-%m-%d $time");
     }
-    return;
-}
+    elsif ( $pref =~ m/^metric/ ) {
+        $date = $dateonly
+          ? $dt->strftime("%d/%m/%Y")
+          : $dt->strftime("%d/%m/%Y $time");
+    }
+    elsif ( $pref =~ m/^us/ ) {
+        $date = $dateonly
+          ? $dt->strftime("%m/%d/%Y")
+          : $dt->strftime("%m/%d/%Y $time");
+    }
+    else {
+        $date = $dateonly
+          ? $dt->strftime("%Y-%m-%d")
+          : $dt->strftime("%Y-%m-%d $time");
+    }
 
-=head2 output_pref_due
+    if ( $as_due_date ) {
+        $time_format eq '12hr'
+            ? $date =~ s| 11:59 PM$||
+            : $date =~ s| 23:59$||;
+    }
 
-$date_string = output_pref_due($dt, [$format] );
-
-Returns a string containing the time & date formatted as per the C4::Context setting
-
-A second parameter allows overriding of the syspref value. This is for testing only
-In usage use the DateTime objects own methods for non standard formatting
-
-This is effectivelyt a wrapper around output_pref for due dates
-the time portion is stripped if it is '23:59'
-
-=cut
-
-sub output_pref_due {
-    my $disp_str = output_pref(@_);
-    $disp_str =~ s/ 23:59//;
-    return $disp_str;
+    return $date;
 }
 
 =head2 format_sqldatetime
@@ -173,31 +173,19 @@ with output_pref as it is a frequent activity in scripts
 sub format_sqldatetime {
     my $str        = shift;
     my $force_pref = shift;    # if testing we want to override Context
+    my $force_time = shift;
+    my $dateonly   = shift;
+
     if ( defined $str && $str =~ m/^\d{4}-\d{2}-\d{2}/ ) {
         my $dt = dt_from_string( $str, 'sql' );
         return q{} unless $dt;
         $dt->truncate( to => 'minute' );
-        return output_pref( $dt, $force_pref );
-    }
-    return q{};
-}
-
-=head2 format_sqlduedatetime
-
-$string = format_sqldatetime( $string_as_returned_from_db );
-
-a convenience routine for calling dt_from_string and formatting the result
-with output_pref_due as it is a frequent activity in scripts
-
-=cut
-
-sub format_sqlduedatetime {
-    my $str        = shift;
-    my $force_pref = shift;    # if testing we want to override Context
-    if ( defined $str && $str =~ m/^\d{4}-\d{2}-\d{2}/ ) {
-        my $dt = dt_from_string( $str, 'sql' );
-        $dt->truncate( to => 'minute' );
-        return output_pref_due( $dt, $force_pref );
+        return output_pref({
+            dt => $dt,
+            dateformat => $force_pref,
+            timeformat => $force_time,
+            dateonly => $dateonly
+        });
     }
     return q{};
 }

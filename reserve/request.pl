@@ -47,7 +47,7 @@ use Koha::DateUtils;
 my $dbh = C4::Context->dbh;
 my $sth;
 my $input = new CGI;
-my ( $template, $borrowernumber, $cookie ) = get_template_and_user(
+my ( $template, $borrowernumber, $cookie, $flags ) = get_template_and_user(
     {
         template_name   => "reserve/request.tmpl",
         query           => $input,
@@ -65,33 +65,19 @@ my $showallitems = $input->param('showallitems');
 my $branches = GetBranches();
 my $itemtypes = GetItemTypes();
 
-my $default = C4::Context->userenv->{branch};
-my @values;
-my %label_of;
-
-foreach my $branchcode ( sort { $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname} } keys %$branches ) {
-    push @values, $branchcode;
-    $label_of{$branchcode} = $branches->{$branchcode}->{branchname};
+my $userbranch = '';
+if (C4::Context->userenv && C4::Context->userenv->{'branch'}) {
+    $userbranch = C4::Context->userenv->{'branch'};
 }
-my $CGIbranch = CGI::scrolling_list(
-                                    -name     => 'pickup',
-                                    -id          => 'pickup',
-                                    -values   => \@values,
-                                    -default  => $default,
-                                    -labels   => \%label_of,
-                                    -size     => 1,
-                                    -multiple => 0,
-                                   );
+
 
 # Select borrowers infos
 my $findborrower = $input->param('findborrower');
 $findborrower = '' unless defined $findborrower;
 $findborrower =~ s|,| |g;
 my $borrowernumber_hold = $input->param('borrowernumber') || '';
-my $borrowerslist;
 my $messageborrower;
-my $warnings;
-my $messages;
+my $maxreserves;
 
 my $date = C4::Dates->today('iso');
 my $action = $input->param('action');
@@ -99,22 +85,18 @@ $action ||= q{};
 
 if ( $action eq 'move' ) {
   my $where = $input->param('where');
-  my $borrowernumber = $input->param('borrowernumber');
-  my $biblionumber = $input->param('biblionumber');
-  AlterPriority( $where, $borrowernumber, $biblionumber );
+  my $reserve_id = $input->param('reserve_id');
+  AlterPriority( $where, $reserve_id );
 } elsif ( $action eq 'cancel' ) {
-  my $borrowernumber = $input->param('borrowernumber');
-  my $biblionumber = $input->param('biblionumber');
-  CancelReserve( $biblionumber, '', $borrowernumber );
+  my $reserve_id = $input->param('reserve_id');
+  CancelReserve({ reserve_id => $reserve_id });
 } elsif ( $action eq 'setLowestPriority' ) {
-  my $borrowernumber = $input->param('borrowernumber');
-  my $biblionumber   = $input->param('biblionumber');
-  ToggleLowestPriority( $borrowernumber, $biblionumber );
+  my $reserve_id = $input->param('reserve_id');
+  ToggleLowestPriority( $reserve_id );
 } elsif ( $action eq 'toggleSuspend' ) {
-  my $borrowernumber = $input->param('borrowernumber');
-  my $biblionumber   = $input->param('biblionumber');
+  my $reserve_id = $input->param('reserve_id');
   my $suspend_until  = $input->param('suspend_until');
-  ToggleSuspend( $borrowernumber, $biblionumber, $suspend_until );
+  ToggleSuspend( $reserve_id, $suspend_until );
 }
 
 if ($findborrower) {
@@ -125,7 +107,7 @@ if ($findborrower) {
             $borrowernumber_hold = $borrowers->[0]->{'borrowernumber'};
         }
         else {
-            $borrowerslist = $borrowers;
+            $template->param( borrower_list => sort_borrowerlist($borrowers));
         }
     } else {
         $messageborrower = "'$findborrower'";
@@ -139,7 +121,6 @@ if ($borrowernumber_hold && !$action) {
     my $diffbranch;
     my @getreservloop;
     my $count_reserv = 0;
-    my $maxreserves;
 
 #   we check the reserves of the borrower, and if he can reserv a document
 # FIXME At this time we have a simple count of reservs, but, later, we could improve the infos "title" ...
@@ -148,7 +129,6 @@ if ($borrowernumber_hold && !$action) {
       GetReserveCount( $borrowerinfo->{'borrowernumber'} );
 
     if ( C4::Context->preference('maxreserves') && ($number_reserves >= C4::Context->preference('maxreserves')) ) {
-		$warnings = 1;
         $maxreserves = 1;
     }
 
@@ -157,12 +137,11 @@ if ($borrowernumber_hold && !$action) {
     my $expiry = 0; # flag set if patron account has expired
     if ($expiry_date and $expiry_date ne '0000-00-00' and
             Date_to_Days(split /-/,$date) > Date_to_Days(split /-/,$expiry_date)) {
-		$messages = $expiry = 1;
+        $expiry = 1;
     }
 
     # check if the borrower make the reserv in a different branch
     if ( $borrowerinfo->{'branchcode'} ne C4::Context->userenv->{'branch'} ) {
-		$messages = 1;
         $diffbranch = 1;
     }
 
@@ -181,47 +160,12 @@ if ($borrowernumber_hold && !$action) {
                 borrowercategory    => $borrowerinfo->{'category'},
                 borrowerreservs     => $count_reserv,
                 cardnumber          => $borrowerinfo->{'cardnumber'},
-                maxreserves         => $maxreserves,
                 expiry              => $expiry,
                 diffbranch          => $diffbranch,
-				messages            => $messages,
-				warnings            => $warnings
     );
 }
 
 $template->param( messageborrower => $messageborrower );
-
-my $CGIselectborrower;
-if ($borrowerslist) {
-    my @values;
-    my %labels;
-
-    foreach my $borrower (
-        sort {
-                uc($a->{surname}
-              . $a->{firstname}) cmp uc($b->{surname}
-              . $b->{firstname})
-        } @{$borrowerslist}
-      )
-    {
-        push @values, $borrower->{borrowernumber};
-
-        $labels{ $borrower->{borrowernumber} } = sprintf(
-            '%s, %s ... (%s - %s) ... %s',
-            $borrower->{surname} ||'',    $borrower->{firstname} || '',
-            $borrower->{cardnumber} || '', $borrower->{categorycode} || '',
-            $borrower->{address} || '',
-        );
-    }
-
-    $CGIselectborrower = CGI::scrolling_list(
-        -name     => 'borrowernumber',
-        -values   => \@values,
-        -labels   => \%labels,
-        -size     => 7,
-        -multiple => 0,
-    );
-}
 
 # FIXME launch another time GetMember perhaps until
 my $borrowerinfo = GetMember( borrowernumber => $borrowernumber_hold );
@@ -239,46 +183,45 @@ my @biblioloop = ();
 foreach my $biblionumber (@biblionumbers) {
 
     my %biblioloopiter = ();
-	my $maxreserves;
 
-    my $dat          = GetBiblioData($biblionumber);
+    my $dat = GetBiblioData($biblionumber);
 
     unless ( CanBookBeReserved($borrowerinfo->{borrowernumber}, $biblionumber) ) {
-		$warnings = 1;
         $maxreserves = 1;
     }
 
     my $alreadypossession;
     if (not C4::Context->preference('AllowHoldsOnPatronsPossessions') and CheckIfIssuedToPatron($borrowerinfo->{borrowernumber},$biblionumber)) {
-        $warnings = 1;
         $alreadypossession = 1;
     }
 
     # get existing reserves .....
-    my ( $count, $reserves ) = GetReservesFromBiblionumber($biblionumber,1);
+    my $reserves = GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
+    my $count = scalar( @$reserves );
     my $totalcount = $count;
-    my $alreadyreserved;
+    my $holds_count = 0;
+    my $alreadyreserved = 0;
 
     foreach my $res (@$reserves) {
         if ( defined $res->{found} && $res->{found} eq 'W' ) {
             $count--;
         }
 
-        if ( defined $borrowerinfo && ($borrowerinfo->{borrowernumber} eq $res->{borrowernumber}) ) {
-            $warnings = 1;
-            $alreadyreserved = 1;
-            $biblioloopiter{warn} = 1;
-            $biblioloopiter{alreadyres} = 1;
+        if ( defined $borrowerinfo && defined($borrowerinfo->{borrowernumber}) && ($borrowerinfo->{borrowernumber} eq $res->{borrowernumber}) ) {
+            $holds_count++;
         }
     }
 
-    $template->param( alreadyreserved => $alreadyreserved,
-                      messages => $messages,
-                      warnings => $warnings,
-                 maxreserves=>$maxreserves,
-                     alreadypossession => $alreadypossession,
-					  );
+    if ( $holds_count ) {
+            $alreadyreserved = 1;
+            $biblioloopiter{warn} = 1;
+            $biblioloopiter{alreadyres} = 1;
+    }
 
+    $template->param(
+        alreadyreserved => $alreadyreserved,
+        alreadypossession => $alreadypossession,
+    );
 
     # FIXME think @optionloop, is maybe obsolete, or  must be switchable by a systeme preference fixed rank or not
     # make priorities options
@@ -304,11 +247,11 @@ foreach my $biblionumber (@biblionumbers) {
     if (my $items = get_itemnumbers_of($biblionumber)->{$biblionumber}){
         @itemnumbers  = @$items;
     }
-	my @hostitems = get_hostitemnumbers_of($biblionumber);
-	if (@hostitems){
-		$template->param('hostitemsflag' => 1);
-		push(@itemnumbers, @hostitems);
-	}
+    my @hostitems = get_hostitemnumbers_of($biblionumber);
+    if (@hostitems){
+        $template->param('hostitemsflag' => 1);
+        push(@itemnumbers, @hostitems);
+    }
 
     if (!@itemnumbers) {
         $template->param('noitems' => 1);
@@ -386,7 +329,7 @@ foreach my $biblionumber (@biblionumbers) {
             }
 
             # checking reserve
-            my ($reservedate,$reservedfor,$expectedAt) = GetReservesFromItemnumber($itemnumber);
+            my ($reservedate,$reservedfor,$expectedAt,$reserve_id,$wait) = GetReservesFromItemnumber($itemnumber);
             my $ItemBorrowerReserveInfo = GetMember( borrowernumber => $reservedfor );
 
             if ( defined $reservedate ) {
@@ -396,7 +339,7 @@ foreach my $biblionumber (@biblionumbers) {
                 $item->{ReservedForSurname}     = $ItemBorrowerReserveInfo->{'surname'};
                 $item->{ReservedForFirstname}     = $ItemBorrowerReserveInfo->{'firstname'};
                 $item->{ExpectedAtLibrary}     = $branches->{$expectedAt}{branchname};
-
+                $item->{waitingdate} = $wait;
             }
 
             # Management of the notforloan document
@@ -438,11 +381,11 @@ foreach my $biblionumber (@biblionumbers) {
 
             # if independent branches is on we need to check if the person can reserve
             # for branches they arent logged in to
-            if ( C4::Context->preference("IndependantBranches") ) {
+            if ( C4::Context->preference("IndependentBranches") ) {
                 if (! C4::Context->preference("canreservefromotherbranches")){
                     # cant reserve items so need to check if item homebranch and userenv branch match if not we cant reserve
                     my $userenv = C4::Context->userenv;
-                    if ( ($userenv) && ( $userenv->{flags} % 2 != 1 ) ) {
+                    unless ( C4::Context->IsSuperLibrarian ) {
                         $item->{cantreserve} = 1 if ( $item->{homebranch} ne $userenv->{branch} );
                     }
                 }
@@ -482,13 +425,6 @@ foreach my $biblionumber (@biblionumbers) {
 
             # If none of the conditions hold true, then neither override nor available is set and the item cannot be checked
 
-            # FIXME: move this to a pm
-            my $sth2 = $dbh->prepare("SELECT * FROM reserves WHERE borrowernumber=? AND itemnumber=? AND found='W'");
-            $sth2->execute($item->{ReservedForBorrowernumber},$item->{itemnumber});
-            while (my $wait_hashref = $sth2->fetchrow_hashref) {
-                $item->{waitingdate} = format_date($wait_hashref->{waitingdate});
-            }
-
             # Show serial enumeration when needed
             if ($item->{enumchron}) {
                 $itemdata_enumchron = 1;
@@ -501,7 +437,6 @@ foreach my $biblionumber (@biblionumbers) {
             $template->param( override_required => 1 );
         } elsif ( $num_available == 0 ) {
             $template->param( none_available => 1 );
-            $template->param( warnings => 1 );
             $biblioloopiter{warn} = 1;
             $biblioloopiter{none_avail} = 1;
         }
@@ -512,7 +447,7 @@ foreach my $biblionumber (@biblionumbers) {
 
     # existingreserves building
     my @reserveloop;
-    ( $count, $reserves ) = GetReservesFromBiblionumber($biblionumber,1);
+    $reserves = GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
     foreach my $res ( sort {
             my $a_found = $a->{found} || '';
             my $b_found = $a->{found} || '';
@@ -530,7 +465,7 @@ foreach my $biblionumber (@biblionumbers) {
                 );
         }
 
-        if ( defined $res->{'found'} && $res->{'found'} eq 'W' || $res->{'found'} eq 'T' ) {
+        if ( defined $res->{'found'} && ($res->{'found'} eq 'W' || $res->{'found'} eq 'T' )) {
             my $item = $res->{'itemnumber'};
             $item = GetBiblioFromItemNumber($item,undef);
             $reserve{'wait'}= 1;
@@ -541,7 +476,12 @@ foreach my $biblionumber (@biblionumbers) {
             $reserve{'itemnumber'}  = $res->{'itemnumber'};
             $reserve{'wbrname'} = $branches->{$res->{'branchcode'}}->{'branchname'};
             if($reserve{'holdingbranch'} eq $reserve{'wbrcode'}){
-                $reserve{'atdestination'} = 1;
+                # Just because the holdingbranch matches the reserve branch doesn't mean the item
+                # has arrived at the destination, check for an open transfer for the item as well
+                my ( $transfertwhen, $transfertfrom, $transferto ) = C4::Circulation::GetTransfers( $res->{itemnumber} );
+                if ( not $transferto or $transferto ne $res->{branchcode} ) {
+                    $reserve{'atdestination'} = 1;
+                }
             }
             # set found to 1 if reserve is waiting for patron pickup
             $reserve{'found'} = 1 if $res->{'found'} eq 'W';
@@ -579,10 +519,17 @@ foreach my $biblionumber (@biblionumbers) {
         $reserve{'barcode'}         = $res->{'barcode'};
         $reserve{'priority'}    = $res->{'priority'};
         $reserve{'lowestPriority'}    = $res->{'lowestPriority'};
-        $reserve{'branchloop'} = GetBranchesLoop($res->{'branchcode'});
         $reserve{'optionloop'} = \@optionloop;
         $reserve{'suspend'} = $res->{'suspend'};
         $reserve{'suspend_until'} = $res->{'suspend_until'};
+        $reserve{'reserve_id'} = $res->{'reserve_id'};
+
+        if ( C4::Context->preference('IndependentBranches') && $flags->{'superlibrarian'} != 1 ) {
+              $reserve{'branchloop'} = [ GetBranchDetail($res->{'branchcode'}) ];
+        } else {
+              $reserve{'branchloop'} = GetBranchesLoop($res->{'branchcode'});
+        }
+
         push( @reserveloop, \%reserve );
     }
 
@@ -590,8 +537,7 @@ foreach my $biblionumber (@biblionumbers) {
     my $time = time();
 
     $template->param(
-                     CGIbranch   => $CGIbranch,
-
+                     branchloop  => GetBranchesLoop($userbranch),
                      time        => $time,
                      fixedRank   => $fixedRank,
                     );
@@ -615,7 +561,6 @@ foreach my $biblionumber (@biblionumbers) {
                      borrower_branchcode => $borrowerinfo->{'branchcode'},
         );
     }
-    $template->param(CGIselectborrower => $CGIselectborrower) if defined $CGIselectborrower;
 
     $biblioloopiter{biblionumber} = $biblionumber;
     $biblioloopiter{title} = $dat->{title};
@@ -631,6 +576,7 @@ foreach my $biblionumber (@biblionumbers) {
 
 $template->param( biblioloop => \@biblioloop );
 $template->param( biblionumbers => $biblionumbers );
+$template->param( maxreserves => $maxreserves );
 
 if ($multihold) {
     $template->param( multi_hold => 1 );
@@ -647,3 +593,13 @@ $template->param(
 
 # printout the page
 output_html_with_http_headers $input, $cookie, $template->output;
+
+sub sort_borrowerlist {
+    my $borrowerslist = shift;
+    my $ref           = [];
+    push @{$ref}, sort {
+        uc( $a->{surname} . $a->{firstname} ) cmp
+          uc( $b->{surname} . $b->{firstname} )
+    } @{$borrowerslist};
+    return $ref;
+}

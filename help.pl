@@ -55,6 +55,19 @@ unless ( -e "$htdocs/$theme/$lang/modules/$from" ) {
 }
 
 my $template = C4::Templates::gettemplate($from, 'intranet', $query);
-$template->param( referer => $refer );
+$template->param(
+    referer => $refer,
+    intranetstylesheet => C4::Context->preference("intranetstylesheet"),
+    intranetcolorstylesheet => C4::Context->preference("intranetcolorstylesheet"),
+);
+
+my $help_version = C4::Context->preference("Version");
+if ( $help_version =~ m|^(\d+)\.(\d{2}).*$| ) {
+    my $version = $1;
+    my $major = $2;
+    if ( $major % 2 ) { $major-- };
+    $help_version = "$version.$major";
+}
+$template->param( helpVersion => $help_version );
 
 output_html_with_http_headers $query, "", $template->output;

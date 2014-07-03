@@ -97,7 +97,6 @@ my $budget_id       = $input->param('budget_id') || 0;
 my $title           = $input->param('title');
 my $author          = $input->param('author');
 my $publicationyear = $input->param('publicationyear');
-my $bookseller      = GetBookSellerFromId($booksellerid);	# FIXME: else ERROR!
 my $ordernumber          = $input->param('ordernumber') || '';
 our $biblionumber    = $input->param('biblionumber');
 our $basketno        = $input->param('basketno');
@@ -105,6 +104,7 @@ my $suggestionid    = $input->param('suggestionid');
 my $close           = $input->param('close');
 my $uncertainprice  = $input->param('uncertainprice');
 my $import_batch_id = $input->param('import_batch_id'); # if this is filled, we come from a staged file, and we will return here after saving the order !
+my $subscriptionid  = $input->param('subscriptionid');
 my $data;
 my $new = 'no';
 
@@ -129,6 +129,9 @@ if(!$basketno) {
 }
 
 our $basket = GetBasket($basketno);
+$booksellerid = $basket->{booksellerid} unless $booksellerid;
+my $bookseller = GetBookSellerFromId($booksellerid);
+
 my $contract = &GetContract($basket->{contractnumber});
 
 #simple parameters reading (all in one :-)
@@ -179,6 +182,7 @@ if ( $ordernumber eq '' ) {    # create order
 # otherwise, retrieve suggestion information.
     if ($suggestionid) {
         $data = ($biblionumber) ? GetBiblioData($biblionumber) : GetSuggestion($suggestionid);
+        $budget_id ||= $data->{'budgetid'} // 0;
     }
 }
 else {    #modify order
@@ -186,10 +190,8 @@ else {    #modify order
     $biblionumber = $data->{'biblionumber'};
     $budget_id = $data->{'budget_id'};
 
-    #get basketno and supplierno. too!
-    my $data2 = GetBasket( $data->{'basketno'} );
-    $basketno     = $data2->{'basketno'};
-    $booksellerid = $data2->{'booksellerid'};
+    $basket   = GetBasket( $data->{'basketno'} );
+    $basketno = $basket->{'basketno'};
 }
 
 my $suggestion;
@@ -228,10 +230,11 @@ for my $curr ( @rates ) {
 }
 
 # build branches list
-my $onlymine=C4::Context->preference('IndependantBranches') && 
-            C4::Context->userenv && 
-            C4::Context->userenv->{flags}!=1 && 
-            C4::Context->userenv->{branch};
+my $onlymine =
+     C4::Context->preference('IndependentBranches')
+  && C4::Context->userenv
+  && !C4::Context->IsSuperLibrarian()
+  && C4::Context->userenv->{branch};
 my $branches = GetBranches($onlymine);
 my @branchloop;
 foreach my $thisbranch ( sort {$branches->{$a}->{'branchname'} cmp $branches->{$b}->{'branchname'}} keys %$branches ) {
@@ -260,6 +263,8 @@ foreach my $r (@{$budgets}) {
     push @{$budget_loop}, {
         b_id  => $r->{budget_id},
         b_txt => $r->{budget_name},
+        b_sort1_authcat => $r->{'sort1_authcat'},
+        b_sort2_authcat => $r->{'sort2_authcat'},
         b_active => $r->{budget_period_active},
         b_sel => ( $r->{budget_id} == $budget_id ) ? 1 : 0,
     };
@@ -274,37 +279,8 @@ if ($close) {
 
 }
 
-my $CGIsort1;
-if ($budget) {    # its a mod ..
-    if ( defined $budget->{'sort1_authcat'} ) {    # with custom  Asort* planning values
-        $CGIsort1 = GetAuthvalueDropbox( $budget->{'sort1_authcat'}, $data->{'sort1'} );
-    }
-} elsif(@{$budgets}){
-    $CGIsort1 = GetAuthvalueDropbox(  @$budgets[0]->{'sort1_authcat'}, '' );
-}
-
-# if CGIsort is successfully fetched, the use it
-# else - failback to plain input-field
-if ($CGIsort1) {
-    $template->param( CGIsort1 => $CGIsort1 );
-} else {
-    $template->param( sort1 => $data->{'sort1'} );
-}
-
-my $CGIsort2;
-if ($budget) {
-    if ( defined $budget->{'sort2_authcat'} ) {
-        $CGIsort2 = GetAuthvalueDropbox(  $budget->{'sort2_authcat'}, $data->{'sort2'} );
-    }
-} elsif(@{$budgets}) {
-    $CGIsort2 = GetAuthvalueDropbox(  @$budgets[0]->{sort2_authcat}, '' );
-}
-
-if ($CGIsort2) {
-    $template->param( CGIsort2 => $CGIsort2 );
-} else {
-    $template->param( sort2 => $data->{'sort2'} );
-}
+$template->param( sort1 => $data->{'sort1'} );
+$template->param( sort2 => $data->{'sort2'} );
 
 if (C4::Context->preference('AcqCreateItem') eq 'ordering' && !$ordernumber) {
     # Check if ACQ framework exists
@@ -321,6 +297,27 @@ if (C4::Context->preference('AcqCreateItem') eq 'ordering' && !$ordernumber) {
 my @itemtypes;
 @itemtypes = C4::ItemType->all unless C4::Context->preference('item-level_itypes');
 
+if ( defined $subscriptionid ) {
+    my $lastOrderReceived = GetLastOrderReceivedFromSubscriptionid $subscriptionid;
+    if ( defined $lastOrderReceived ) {
+        $budget_id              = $lastOrderReceived->{budgetid};
+        $data->{listprice}      = $lastOrderReceived->{listprice};
+        $data->{uncertainprice} = $lastOrderReceived->{uncertainprice};
+        $data->{gstrate}        = $lastOrderReceived->{gstrate};
+        $data->{discount}       = $lastOrderReceived->{discount};
+        $data->{rrp}            = $lastOrderReceived->{rrp};
+        $data->{ecost}          = $lastOrderReceived->{ecost};
+        $data->{quantity}       = $lastOrderReceived->{quantity};
+        $data->{unitprice}      = $lastOrderReceived->{unitprice};
+        $data->{order_internalnote} = $lastOrderReceived->{order_internalnote};
+        $data->{order_vendornote}   = $lastOrderReceived->{order_vendornote};
+        $data->{sort1}          = $lastOrderReceived->{sort1};
+        $data->{sort2}          = $lastOrderReceived->{sort2};
+
+        $basket = GetBasket( $input->param('basketno') );
+    }
+}
+
 # Find the items.barcode subfield for barcode validations
 my (undef, $barcode_subfield) = GetMarcFromKohaField('items.barcode', '');
 
@@ -333,8 +330,13 @@ $template->param(
 
 # get option values for gist syspref
 my @gst_values = map {
-    option => $_
+    option => $_ + 0.0
 }, split( '\|', C4::Context->preference("gist") );
+
+my $quantity = $input->param('rr_quantity_to_order') ?
+      $input->param('rr_quantity_to_order') :
+      $data->{'quantity'};
+$quantity //= 0;
 
 $template->param(
     existing         => $biblionumber,
@@ -358,11 +360,12 @@ $template->param(
     biblionumber         => $biblionumber,
     uncertainprice       => $data->{'uncertainprice'},
     authorisedbyname     => $borrower->{'firstname'} . " " . $borrower->{'surname'},
-    biblioitemnumber     => $data->{'biblioitemnumber'},
     discount_2dp         => sprintf( "%.2f",  $bookseller->{'discount'} ) ,   # for display
     discount             => $bookseller->{'discount'},
     orderdiscount_2dp    => sprintf( "%.2f", $data->{'discount'} || 0 ),
     orderdiscount        => $data->{'discount'},
+    order_internalnote   => $data->{'order_internalnote'},
+    order_vendornote     => $data->{'order_vendornote'},
     listincgst       => $bookseller->{'listincgst'},
     invoiceincgst    => $bookseller->{'invoiceincgst'},
     name             => $bookseller->{'name'},
@@ -379,8 +382,8 @@ $template->param(
     ean              => $data->{'ean'},
     seriestitle      => $data->{'seriestitle'},
     itemtypeloop     => \@itemtypes,
-    quantity         => $data->{'quantity'},
-    quantityrec      => $data->{'quantity'},
+    quantity         => $quantity,
+    quantityrec      => $quantity,
     rrp              => $data->{'rrp'},
     gst_values       => \@gst_values,
     gstrate          => $data->{gstrate} ? $data->{gstrate}+0.0 : $bookseller->{gstrate} ? $bookseller->{gstrate}+0.0 : 0,
@@ -389,10 +392,11 @@ $template->param(
     total            => sprintf( "%.2f", ($data->{ecost} || 0) * ($data->{'quantity'} || 0) ),
     ecost            => sprintf( "%.2f", $data->{ecost} || 0),
     unitprice        => sprintf( "%.2f", $data->{unitprice} || 0),
-    notes            => $data->{'notes'},
     publishercode    => $data->{'publishercode'},
     barcode_subfield => $barcode_subfield,
     import_batch_id  => $import_batch_id,
+    subscriptionid   => $subscriptionid,
+    acqcreate        => C4::Context->preference("AcqCreateItem") eq "ordering" ? 1 : "",
     (uc(C4::Context->preference("marcflavour"))) => 1
 );
 

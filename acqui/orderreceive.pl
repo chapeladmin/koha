@@ -69,7 +69,7 @@ use C4::Auth;
 use C4::Output;
 use C4::Dates qw/format_date/;
 use C4::Bookseller qw/ GetBookSellerFromId /;
-use C4::Budgets qw/ GetBudget /;
+use C4::Budgets qw/ GetBudget GetBudgetHierarchy CanUserUseBudget GetBudgetPeriods /;
 use C4::Members;
 use C4::Branch;    # GetBranches
 use C4::Items;
@@ -91,9 +91,11 @@ $datereceived = $datereceived ? C4::Dates->new($datereceived, 'iso') : C4::Dates
 
 my $bookseller = GetBookSellerFromId($booksellerid);
 my $results;
-$results = SearchOrder($ordernumber) if $ordernumber;
+$results = SearchOrders({
+    ordernumber => $ordernumber
+}) if $ordernumber;
 
-my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
+my ( $template, $loggedinuser, $cookie, $userflags ) = get_template_and_user(
     {
         template_name   => "acqui/orderreceive.tmpl",
         query           => $input,
@@ -198,7 +200,7 @@ $template->param(
     count                 => 1,
     biblionumber          => $order->{'biblionumber'},
     ordernumber           => $order->{'ordernumber'},
-    biblioitemnumber      => $order->{'biblioitemnumber'},
+    subscriptionid        => $order->{subscriptionid},
     booksellerid          => $order->{'booksellerid'},
     freight               => $freight,
     name                  => $bookseller->{'name'},
@@ -214,18 +216,62 @@ $template->param(
     quantityreceived      => $order->{'quantityreceived'},
     rrp                   => sprintf( "%.2f", $rrp ),
     ecost                 => sprintf( "%.2f", $ecost ),
-    unitprice             => sprintf( "%.2f", $unitprice),
     memberfirstname       => $member->{firstname} || "",
     membersurname         => $member->{surname} || "",
     invoiceid             => $invoice->{invoiceid},
     invoice               => $invoice->{invoicenumber},
     datereceived          => $datereceived->output(),
     datereceived_iso      => $datereceived->output('iso'),
-    notes                 => $order->{notes},
+    order_internalnote    => $order->{order_internalnote},
+    order_vendornote      => $order->{order_vendornote},
     suggestionid          => $suggestion->{suggestionid},
     surnamesuggestedby    => $suggestion->{surnamesuggestedby},
     firstnamesuggestedby  => $suggestion->{firstnamesuggestedby},
 );
+
+my $borrower = GetMember( 'borrowernumber' => $loggedinuser );
+my @budget_loop;
+my $periods = GetBudgetPeriods( );
+foreach my $period (@$periods) {
+    if ($period->{'budget_period_id'} == $budget->{'budget_period_id'}) {
+        $template->{'VARS'}->{'budget_period_description'} = $period->{'budget_period_description'};
+    }
+    next if $period->{'budget_period_locked'} || !$period->{'budget_period_description'};
+    my $budget_hierarchy = GetBudgetHierarchy( $period->{'budget_period_id'} );
+    my @funds;
+    foreach my $r ( @{$budget_hierarchy} ) {
+        next unless ( CanUserUseBudget( $borrower, $r, $userflags ) );
+        if ( !defined $r->{budget_amount} || $r->{budget_amount} == 0 ) {
+            next;
+        }
+        push @funds,
+          {
+            b_id  => $r->{budget_id},
+            b_txt => $r->{budget_name},
+            b_sel => ( $r->{budget_id} == $order->{budget_id} ) ? 1 : 0,
+          };
+    }
+
+    @funds = sort { uc( $a->{b_txt} ) cmp uc( $b->{b_txt} ) } @funds;
+
+    push @budget_loop,
+      {
+        'id'          => $period->{'budget_period_id'},
+        'description' => $period->{'budget_period_description'},
+        'funds'       => \@funds
+      };
+}
+
+$template->{'VARS'}->{'budget_loop'} = \@budget_loop;
+
+# regardless of the content of $unitprice e.g 0 or '' or any string will return in these cases 0.00
+# and the 'IF' in the .tt will show 0.00 and not 'ecost' (see BZ 7129)
+# So if $unitprice == 0 we don't create unitprice
+if ( $unitprice != 0) {
+    $template->param(
+        unitprice             => sprintf( "%.2f", $unitprice),
+    );
+}
 
 my $op = $input->param('op');
 if ($op and $op eq 'edit'){

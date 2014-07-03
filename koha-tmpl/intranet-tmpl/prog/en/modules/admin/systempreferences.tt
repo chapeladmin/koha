@@ -4,9 +4,7 @@
 [% INCLUDE 'doc-head-close.inc' %]
 [% IF ( else ) %]
 <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
     //<![CDATA[
      $(document).ready(function() {
@@ -38,12 +36,6 @@
             return true;
         }
         //
-        function toUC(f) {
-            var x=f.value.toUpperCase();
-            f.value=x;
-            return true;
-        }
-        //
         function isNum(v,maybenull) {
         var n = new Number(v.value);
         if (isNaN(n)) {
@@ -53,13 +45,6 @@
             return false;
         }
         return true;
-        }
-        //
-        function isDate(f) {
-            var t = Date.parse(f.value);
-            if (isNaN(t)) {
-                return false;
-            }
         }
         //
         function Check(f) {
@@ -264,17 +249,20 @@
         <a class="btn btn-small" id="newstopword" href="[% script_name %]?op=add_form"><i class="icon-plus"></i> New preference</a>
     </div>
 
-    <h1>System preferences admin</h1>
-    <h2>[% tab %] preferences</h2>
-    [% searchfield %]
-    <table width="80%" id="sysprefst">
-    <thead><tr>
+    [% IF ( tab != 'local_use' ) %]
+        <p>Please click on one of the tabs at the left side of this form.</p>
+        <table>
+    [% ELSE %]
+        <h1>Local use preferences</h1>
+        <table width="80%" id="sysprefst">
+        <thead><tr>
         <th>Preference</th>
         <th>Explanation</th>
         <th>Value</th>
         <th>Edit</th>
         <th>Delete</th>
-    </tr></thead>
+        </tr></thead>
+    [% END %]
     <tbody>[% FOREACH loo IN loop %]
     [% UNLESS ( loop.odd ) %]<tr class="highlight">[% ELSE %]<tr>[% END %]
 

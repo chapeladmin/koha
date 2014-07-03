@@ -7,6 +7,7 @@ use Text::Wrap;
 use Algorithm::CheckDigits;
 use Text::CSV_XS;
 use Data::Dumper;
+use Library::CallNumber::LC;
 
 use C4::Context;
 use C4::Debug;
@@ -61,6 +62,8 @@ sub _check_params {
 
 sub _guide_box {
     my ( $llx, $lly, $width, $height ) = @_;
+    return unless ( defined $llx and defined $lly and
+                    defined $width and defined $height );
     my $obj_stream = "q\n";                            # save the graphic state
     $obj_stream .= "0.5 w\n";                          # border line width
     $obj_stream .= "1.0 0.0 0.0  RG\n";                # border color red
@@ -113,18 +116,10 @@ sub _split_lccn {
     my ($lccn) = @_;
     $_ = $lccn;
     # lccn examples: 'HE8700.7 .P6T44 1983', 'BS2545.E8 H39 1996';
-    my (@parts) = m/
-        ^([a-zA-Z]+)      # HE          # BS
-        (\d+(?:\.\d)*)    # 8700.7      # 2545
-        \s*
-        (\.*\D+\d*)       # .P6         # .E8
-        \s*
-        (.*)              # T44 1983    # H39 1996   # everything else (except any bracketing spaces)
-        \s*
-        /x;
-    unless (scalar @parts)  {
+    my @parts = Library::CallNumber::LC->new($lccn)->components();
+    unless (scalar @parts && defined $parts[0])  {
         warn sprintf('regexp failed to match string: %s', $_);
-        push @parts, $_;     # if no match, just push the whole string.
+        @parts = $_;     # if no match, just use the whole string.
     }
     push @parts, split /\s+/, pop @parts;   # split the last piece into an arbitrary number of pieces at spaces
     $debug and warn "split_lccn array: ", join(" | ", @parts), "\n";
@@ -401,6 +396,7 @@ sub draw_label_text {
         else {
             $field->{'data'} = _get_barcode_data($field->{'code'},$item,$record);
         }
+        #FIXME: We should not force the title to oblique; this should be selectible in the layout configuration
         ($field->{'code'} eq 'title') ? (($font =~ /T/) ? ($font = 'TI') : ($font = ($font . 'O'))) : ($font = $font);
         my $field_data = $field->{'data'};
         if ($field_data) {
@@ -447,7 +443,8 @@ sub draw_label_text {
         LABEL_LINES:    # generate lines of label text for current field
         foreach my $line (@label_lines) {
             next LABEL_LINES if $line eq '';
-            my $string_width = C4::Creators::PDF->StrWidth($line, $font, $self->{'font_size'});
+            my $fontName = C4::Creators::PDF->Font($font);
+            my $string_width = C4::Creators::PDF->StrWidth($line, $fontName, $self->{'font_size'});
             if ($self->{'justify'} eq 'R') {
                 $text_llx = $params{'llx'} + $self->{'width'} - ($self->{'left_text_margin'} + $string_width);
             }

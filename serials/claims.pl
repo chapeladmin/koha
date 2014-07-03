@@ -28,6 +28,7 @@ use C4::Bookseller qw( GetBookSeller );
 use C4::Context;
 use C4::Letters;
 use C4::Branch;    # GetBranches GetBranchesLoop
+use C4::Csv qw( GetCsvProfiles );
 
 my $input = CGI->new;
 
@@ -57,14 +58,9 @@ for my $s (@{$supplierlist} ) {
     }
 }
 
-my $letters = GetLetters('claimissues');
-my @letters;
-foreach (keys %{$letters}){
-    push @letters ,{code=>$_,name=> $letters->{$_}};
-}
+my $letters = GetLetters({ module => 'claimissues' });
 
-my $letter=((scalar(@letters)>1) || ($letters[0]->{name}||$letters[0]->{code}));
-my  @missingissues;
+my @missingissues;
 my @supplierinfo;
 if ($supplierid) {
     @missingissues = GetLateOrMissingIssues($supplierid,$serialid,$order);
@@ -72,7 +68,6 @@ if ($supplierid) {
 }
 
 my $branchloop = GetBranchesLoop();
-unshift @$branchloop, {value=> 'all',name=>''};
 
 my $preview=0;
 if($op && $op eq 'preview'){
@@ -85,7 +80,7 @@ if($op && $op eq 'preview'){
         ### $cntupdate SHOULD be equal to scalar(@$serialnums)
     }
 }
-$template->param('letters'=>\@letters,'letter'=>$letter);
+
 $template->param(
         order =>$order,
         suploop => $supplierlist,
@@ -98,6 +93,8 @@ $template->param(
         claimletter => $claimletter,
         supplierloop => \@supplierinfo,
         branchloop   => $branchloop,
+        csv_profiles => C4::Csv::GetCsvProfiles( "sql" ),
+        letters => $letters,
         (uc(C4::Context->preference("marcflavour"))) => 1
         );
 output_html_with_http_headers $input, $cookie, $template->output;

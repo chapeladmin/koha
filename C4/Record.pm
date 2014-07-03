@@ -28,11 +28,10 @@ use MARC::File::XML; # marc2marcxml, marcxml2marc, changeEncoding
 use MARC::Crosswalk::DublinCore; # marc2dcxml
 use Biblio::EndnoteStyle;
 use Unicode::Normalize; # _entity_encode
-use XML::LibXSLT;
-use XML::LibXML;
 use C4::Biblio; #marc2bibtex
 use C4::Csv; #marc2csv
 use C4::Koha; #marc2csv
+use C4::XSLT ();
 use YAML; #marcrecords2csv
 use Text::CSV::Encoded; #marc2csv
 
@@ -306,14 +305,7 @@ sub _transformWithStylesheet {
     # grab the XML, run it through our stylesheet, push it out to the browser
     my $xmlrecord = marc2marcxml($marc);
     my $xslfile = C4::Context->config('intrahtdocs') . $stylesheet;
-    my $parser = XML::LibXML->new();
-    my $xslt = XML::LibXSLT->new();
-    my $source = $parser->parse_string($xmlrecord);
-    my $style_doc = $parser->parse_file($xslfile);
-    my $stylesheet = $xslt->parse_stylesheet($style_doc);
-    my $results = $stylesheet->transform($source);
-    my $newxmlrecord = $stylesheet->output_string($results);
-    return ($newxmlrecord);
+    return C4::XSLT::engine->transform($xmlrecord, $xslfile);
 }
 
 sub marc2endnote {
@@ -461,7 +453,7 @@ sub marcrecord2csv {
     $csv->sep_char($csvseparator);
 
     # Getting the marcfields
-    my $marcfieldslist = $profile->{marcfields};
+    my $marcfieldslist = $profile->{content};
 
     # Getting the marcfields as an array
     my @marcfieldsarray = split('\|', $marcfieldslist);
@@ -647,18 +639,30 @@ C<$id> - an id for the BibTex record (might be the biblionumber)
 sub marc2bibtex {
     my ($record, $id) = @_;
     my $tex;
+    my $marcflavour = C4::Context->preference("marcflavour");
 
     # Authors
-    my $marcauthors = GetMarcAuthors($record,C4::Context->preference("marcflavour"));
     my $author;
-    for my $authors ( map { map { @$_ } values %$_  } @$marcauthors  ) {  
-	$author .= " and " if ($author && $$authors{value});
-	$author .= $$authors{value} if ($$authors{value}); 
+    my @texauthors;
+    my @authorFields = ('100','110','111','700','710','711');
+    @authorFields = ('700','701','702','710','711','721') if ( $marcflavour eq "UNIMARC" );
+
+    foreach my $field ( @authorFields ) {
+        # author formatted surname, firstname
+        my $texauthor = '';
+        if ( $marcflavour eq "UNIMARC" ) {
+           $texauthor = join ', ',
+           ( $record->subfield($field,"a"), $record->subfield($field,"b") );
+       } else {
+           $texauthor = $record->subfield($field,"a");
+       }
+       push @texauthors, $texauthor if $texauthor;
     }
+    $author = join ' and ', @texauthors;
 
     # Defining the conversion hash according to the marcflavour
     my %bh;
-    if (C4::Context->preference("marcflavour") eq "UNIMARC") {
+    if ( $marcflavour eq "UNIMARC" ) {
 	
 	# FIXME, TODO : handle repeatable fields
 	# TODO : handle more types of documents
@@ -690,13 +694,13 @@ sub marc2bibtex {
 	    author    => $author,
 	    title     => $record->subfield("245", "a") || "",
 	    editor    => $record->subfield("260", "f") || "",
-	    publisher => $record->subfield("260", "b") || "",
-	    year      => $record->subfield("260", "c") || $record->subfield("260", "g") || "",
+        publisher => $record->subfield("264", "b") || $record->subfield("260", "b") || "",
+        year      => $record->subfield("264", "c") || $record->subfield("260", "c") || $record->subfield("260", "g") || "",
 
 	    # Optional
 	    # unimarc to marc21 specification says not to convert 200$v to marc21
 	    series  =>  $record->subfield("490", "a") || "",
-	    address =>  $record->subfield("260", "a") || "",
+        address =>  $record->subfield("264", "a") || $record->subfield("260", "a") || "",
 	    edition =>  $record->subfield("250", "a") || "",
 	    note    =>  $record->subfield("500", "a") || "",
 	    url     =>  $record->subfield("856", "u") || ""
@@ -704,7 +708,7 @@ sub marc2bibtex {
     }
 
     $tex .= "\@book{";
-    $tex .= join(",\n", $id, map { $bh{$_} ? qq(\t$_ = "$bh{$_}") : () } keys %bh);
+    $tex .= join(",\n", $id, map { $bh{$_} ? qq(\t$_ = {$bh{$_}}) : () } keys %bh);
     $tex .= "\n}\n";
 
     return $tex;

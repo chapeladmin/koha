@@ -16,7 +16,7 @@
 <p>If you want to catalog a record based on an existing record at another library</p>
 
 <ul>
-    <li>Click 'z39.50 Search'</li>
+    <li>Click 'New from Z39.50' (optionally, you can choose a framework to which import the record by clicking the caret on the right).</li>
     <li>Search for the item you would like to catalog</li>
     <li>Tip: If no results are found, try searching for fewer fields, not all Z39.50 targets can search all of the fields above.</li>
     <li>Search targets can be altered by using the Z39.50 Admin area.</li>
@@ -30,7 +30,7 @@
 
 <p>Once you've opened a blank framework or imported a record via Z39.50 you will be presented with the form to continue cataloging</p>
 
-<p><strong>See the full documentation for Cataloging in the <a href="http://manual.koha-community.org/3.10/en/cataloging.html">manual</a> (online).</strong></p>
+<p><strong>See the full documentation for Cataloging in the <a href="http://manual.koha-community.org/[% helpVersion %]/en/cataloging.html">manual</a> (online).</strong></p>
 
 [% INCLUDE 'help-bottom.inc' %]
 

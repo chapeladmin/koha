@@ -3,7 +3,7 @@
 <info>
 <productname>Koha</productname> is the first free software library automation package.
 <author>
-  <orgname>The Koha Communnity</orgname>
+  <orgname>The Koha Community</orgname>
   <uri>http://koha-community.org/</uri>
 </author>
 </info>
@@ -26,12 +26,19 @@
       <command>koha-create</command>
       <arg choice="req"><option>--create-db</option>|<option>--request-db</option>|<option>--populate-db</option>|<option>--use-db</option></arg>
       <arg><option>--marcflavor</option> marc21|normarc|unimarc</arg>
-      <arg><option>--zebralang</option> en|nb|fr</arg>
+      <arg><option>--zebralang</option> en|es|fr|nb|ru|uk</arg>
+      <arg><option>--auth-idx</option> dom|grs1</arg>
+      <arg><option>--biblio-idx</option> dom|grs1</arg>
+      <arg><option>--use-memcached</option></arg>
+      <arg><option>--memcached-servers</option> server:port</arg>
+      <arg><option>--memcached-prefix</option> namespace_prefix</arg>
       <arg><option>--defaultsql</option> /path/to/some.sql</arg>
       <arg><option>--configfile</option> /path/to/config</arg>
       <arg><option>--passwdfile</option> /path/to/passwd</arg>
       <arg><option>--database</option> database</arg>
       <arg><option>--adminuser</option> n</arg>
+      <arg><option>--help</option>|<option>-h</option></arg>
+
       <arg choice="req" rep="norepeat"><replaceable>instancename</replaceable></arg>
     </cmdsynopsis>
   </refsynopsisdiv>
@@ -109,6 +116,49 @@
       </listitem>
     </varlistentry>
 
+    <varlistentry>
+      <term><option>--auth-idx</option></term>
+      <listitem>
+        <para>Specified the desired indexing mode for authority records. Valid options are <option>dom</option> (default) and <option>grs1</option>.</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>--biblio-idx</option></term>
+      <listitem>
+        <para>Specified the desired indexing mode for bibliographic records. Valid options are <option>dom</option> (default) and <option>grs1</option>.</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>--use-memcached</option></term>
+      <listitem>
+        <para>Make the Koha instance use memcached. <option>Disabled by default</option>.</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>--memcached-servers</option></term>
+      <listitem>
+        <para>Specify a comma-separated list of host:port memcached servers for using with the created Koha instance. Defaults to <option>127.0.0.1:11211</option>, the needed configuration for a locally installed memcached server.</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>--memcached-prefix</option></term>
+      <listitem>
+        <para>Specifiy a <option>namespace prefix</option> for memcached. You usually leave this option alone to avoid namespace collisions. It defaults to <option>koha_</option>.</para>
+      </listitem>
+    </varlistentry>
+
+    <varlistentry>
+      <term><option>--help</option>,<option>-h</option></term>
+      <listitem>
+        <para>Print usage information.</para>
+      </listitem>
+    </varlistentry>
+
+
   </variablelist>
   </refsect1>
 
@@ -179,6 +229,28 @@
       </varlistentry>
 
       <varlistentry>
+        <term><option>USE_MEMCACHED</option></term>
+        <listitem>
+          <para>Valid values are <option>yes</option> and <option>no</option>. If not present koha-create will default to <option>no</option>. Also, this will be overriden by the <option>--use-memcached</option> switch.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>MEMCACHED_SERVERS</option></term>
+        <listitem>
+          <para>A comma-separated list of valid memcached servers. Usually in the form of <option>host:port</option>. If not present koha-create will default to <option>127.0.0.1:11211</option>. Also, this will be overriden by the arguments of the <option>--memcached-servers</option> switch.</para>
+        </listitem>
+      </varlistentry>
+
+      <varlistentry>
+        <term><option>MEMCACHED_PREFIX</option></term>
+        <listitem>
+          <para>A prefix for all new Koha instances to use in memcached. If not present koha-create will default to <option>koha_</option>. Also, this will be overriden by the arguments of the <option>--memcached-prefix</option> switch.</para>
+        </listitem>
+      </varlistentry>
+
+
+      <varlistentry>
         <term><option>ZEBRA_MARC_FORMAT</option></term>
         <listitem>
           <para>Specifies format of MARC records to be indexed by Zebra.  Possible values are 'marc21', 'normarc' and 'unimarc'.</para>
@@ -188,7 +260,7 @@
       <varlistentry>
         <term><option>ZEBRA_LANGUAGE</option></term>
         <listitem>
-          <para>Primary  language  for Zebra indexing. Possible values are 'en', 'fr' and 'nb'.</para>
+          <para>Primary  language  for Zebra indexing. Possible values are 'en', 'es', 'fr', 'nb', 'ru' and 'uk'.</para>
         </listitem>
       </varlistentry>
 

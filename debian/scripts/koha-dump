@@ -19,16 +19,16 @@
 
 set -e
 
+# include helper functions
+if [ -f "/usr/share/koha/bin/koha-functions.sh" ]; then
+    . "/usr/share/koha/bin/koha-functions.sh"
+else
+    echo "Error: /usr/share/koha/bin/koha-functions.sh not present." 1>&2
+    exit 1
+fi
 
 # Make sure the files we create are not accessible by anyone else.
 umask 0077
-
-
-die() {
-    echo "$@" 1>&2
-    exit 1
-}
-
 
 # Parse command line.
 [ "$#" = 1 ] || die "Usage: $0 instancename"
@@ -44,7 +44,7 @@ mysqlhost="$( xmlstarlet sel -t -v 'yazgfs/config/hostname' $kohaconfig )"
 mysqldb="$( xmlstarlet sel -t -v 'yazgfs/config/database' $kohaconfig )"
 mysqluser="$( xmlstarlet sel -t -v 'yazgfs/config/user' $kohaconfig )"
 mysqlpass="$( xmlstarlet sel -t -v 'yazgfs/config/pass' $kohaconfig )"
-backupdir="$( xmlstarlet sel -t -v 'yazgfs/config/backupdir' $kohaconfig )"
+backupdir="$( xmlstarlet sel -t -v 'yazgfs/config/backupdir' $kohaconfig || true )"
 [ -z "$backupdir" ] && backupdir="/var/spool/koha/$name"
 dbdump="$backupdir/$name-$date.sql.gz"
 echo "* DB to $dbdump"
@@ -54,14 +54,15 @@ mysqldump --databases --host="$mysqlhost" \
 chown "root:$name-koha" "$dbdump"
 chmod g+r "$dbdump"
 
+instancefile="$name.conf"
 
 # Dump configs, logs, etc.
 metadump="$backupdir/$name-$date.tar.gz"
 echo "* configs, logs to $metadump"
 tar -C / -czf "$metadump" \
     "etc/koha/sites/$name" \
-    "etc/apache2/sites-available/$name" \
-    "etc/apache2/sites-enabled/$name" \
+    "etc/apache2/sites-available/$instancefile" \
+    "etc/apache2/sites-enabled/$instancefile" \
     "var/lib/koha/$name" \
     "var/log/koha/$name"
 

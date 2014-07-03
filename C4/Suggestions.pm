@@ -132,10 +132,10 @@ sub SearchSuggestion {
     }
 
     # filter on user branch
-    if ( C4::Context->preference('IndependantBranches') ) {
+    if ( C4::Context->preference('IndependentBranches') ) {
         my $userenv = C4::Context->userenv;
         if ($userenv) {
-            if ( ( $userenv->{flags} % 2 ) != 1 && !$suggestion->{branchcode} )
+            if ( !C4::Context->IsSuperLibrarian() && !$suggestion->{branchcode} )
             {
                 push @sql_params, $$userenv{branch};
                 push @query,      q{
@@ -143,11 +143,18 @@ sub SearchSuggestion {
                 };
             }
         }
+    } else {
+        if ( defined $suggestion->{branchcode} && $suggestion->{branchcode} ) {
+            unless ( $suggestion->{branchcode} eq '__ANY__' ) {
+                push @sql_params, $suggestion->{branchcode};
+                push @query,      qq{ AND suggestions.branchcode=? };
+            }
+        }
     }
 
     # filter on nillable fields
     foreach my $field (
-        qw( STATUS branchcode itemtype suggestedby managedby acceptedby budgetid biblionumber )
+        qw( STATUS itemtype suggestedby managedby acceptedby budgetid biblionumber )
       )
     {
         if ( exists $suggestion->{$field} ) {
@@ -332,10 +339,10 @@ sub GetSuggestionByStatus {
     };
 
     # filter on branch
-    if ( C4::Context->preference("IndependantBranches") || $branchcode ) {
+    if ( C4::Context->preference("IndependentBranches") || $branchcode ) {
         my $userenv = C4::Context->userenv;
         if ($userenv) {
-            unless ( $userenv->{flags} % 2 == 1 ) {
+            unless ( C4::Context->IsSuperLibrarian() ) {
                 push @sql_params, $userenv->{branch};
                 $query .= q{ AND (U1.branchcode = ? OR U1.branchcode ='') };
             }
@@ -345,7 +352,7 @@ sub GetSuggestionByStatus {
             $query .= q{ AND (U1.branchcode = ? OR U1.branchcode ='') };
         }
     }
-    
+
     my $sth = $dbh->prepare($query);
     $sth->execute(@sql_params);
     my $results;
@@ -382,8 +389,8 @@ sub CountSuggestion {
     my $dbh = C4::Context->dbh;
     my $sth;
     my $userenv = C4::Context->userenv;
-    if ( C4::Context->preference("IndependantBranches")
-        && $userenv->{flags} % 2 != 1 )
+    if ( C4::Context->preference("IndependentBranches")
+        && !C4::Context->IsSuperLibrarian() )
     {
         my $query = q{
             SELECT count(*)
@@ -429,10 +436,10 @@ sub NewSuggestion {
 
 Modify the suggestion according to the hash passed by ref.
 The hash HAS to contain suggestionid
-Data not defined is not updated unless it is a note or sort1 
+Data not defined is not updated unless it is a note or sort1
 Send a mail to notify the user that did the suggestion.
 
-Note that there is no function to modify a suggestion. 
+Note that there is no function to modify a suggestion.
 
 =cut
 
@@ -526,9 +533,9 @@ sub DelSuggestion {
 
 =head2 DelSuggestionsOlderThan
     &DelSuggestionsOlderThan($days)
-    
+
     Delete all suggestions older than TODAY-$days , that have be accepted or rejected.
-    
+
 =cut
 
 sub DelSuggestionsOlderThan {

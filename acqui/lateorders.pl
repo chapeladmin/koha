@@ -66,7 +66,7 @@ my ($template, $loggedinuser, $cookie) = get_template_and_user({
 });
 
 my $booksellerid = $input->param('booksellerid') || undef; # we don't want "" or 0
-my $delay        = $input->param('delay');
+my $delay        = $input->param('delay') // 0;
 
 # Get the "date from" param if !defined is today
 my $estimateddeliverydatefrom = $input->param('estimateddeliverydatefrom');
@@ -86,10 +86,10 @@ my $estimateddeliverydateto_dt = $estimateddeliverydateto
 
 # Format the output of "date from" and "date to"
 if ($estimateddeliverydatefrom_dt) {
-    $estimateddeliverydatefrom = output_pref($estimateddeliverydatefrom_dt, undef, 1);
+    $estimateddeliverydatefrom = output_pref({dt => $estimateddeliverydatefrom_dt, dateonly => 1});
 }
 if ($estimateddeliverydateto_dt) {
-    $estimateddeliverydateto = output_pref($estimateddeliverydateto_dt, undef, 1);
+    $estimateddeliverydateto = output_pref({dt => $estimateddeliverydateto_dt, dateonly => 1});
 }
 
 my $branch     = $input->param('branch');
@@ -101,7 +101,7 @@ if ( $delay and not $delay =~ /^\d{1,3}$/ ) {
 }
 
 if ($op and $op eq "send_alert"){
-    my @ordernums = $input->param("claim_for");# FIXME: Fallback values?
+    my @ordernums = $input->param("ordernumber");# FIXME: Fallback values?
     my $err;
     eval {
         $err = SendAlerts( 'claimacquisition', \@ordernums, $input->param("letter_code") );    # FIXME: Fallback value?
@@ -109,6 +109,7 @@ if ($op and $op eq "send_alert"){
             AddClaim ( $_ ) for @ordernums;
         }
     };
+
     if ( $@ ) {
         $template->param(error_claim => $@);
     } elsif ( ref $err and exists $err->{error} and $err->{error} eq "no_email" ) {
@@ -118,7 +119,7 @@ if ($op and $op eq "send_alert"){
     }
 }
 
-my @parameters = ( $delay, $branch );
+my @parameters = ( $delay );
 push @parameters, $estimateddeliverydatefrom_dt
     ? $estimateddeliverydatefrom_dt->ymd()
     : undef;
@@ -158,17 +159,13 @@ foreach (@lateorders){
 	$total += $_->{subtotal};
 }
 
-my @letters;
-my $letters=GetLetters("claimacquisition");
-foreach (keys %$letters){
-	push @letters, {code=>$_,name=>$letters->{$_}};
-}
-$template->param(letters=>\@letters) if (@letters);
+my $letters = GetLetters({ module => "claimacquisition" });
 
 $template->param(ERROR_LOOP => \@errors) if (@errors);
 $template->param(
 	lateorders => \@lateorders,
 	delay => $delay,
+    letters => $letters,
     estimateddeliverydatefrom => $estimateddeliverydatefrom,
     estimateddeliverydateto   => $estimateddeliverydateto,
 	total => $total,

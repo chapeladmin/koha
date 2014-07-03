@@ -1,9 +1,19 @@
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Cataloging &rsaquo; [% title |html %] [% IF ( author ) %] by [% author %][% END %] (Record #[% biblionumber %]) &rsaquo; Items</title>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
 [% INCLUDE 'doc-head-close.inc' %]
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript" src="[% themelang %]/js/cataloging.js"></script>
+[% INCLUDE 'browser-strings.inc' %]
+<!--[if lt IE 9]>
+<script type="text/javascript" src="[% interface %]/lib/shims/json2.min.js"></script>
+<![endif]-->
+<script type="text/javascript" src="[% interface %]/js/browser.js"></script>
 <script type="text/javascript">
 //<![CDATA[
+    var browser = KOHA.browser('[% searchid %]', parseInt('[% biblionumber %]', 10));
+    browser.show();
+
 $(document).ready(function(){
 		$.ajax({
 			url : "/cutter_map.php?biblionumber=[% biblionumber %]",
@@ -19,18 +29,28 @@ $(document).ready(function(){
             window.close();
         [% END %]
     [% END %]
-		$("fieldset.rows input").keydown(function(e){ return checkEnter(e); });
+            $("fieldset.rows input, fieldset.rows select").addClass("noEnterSubmit");
 		/* Inline edit/delete links */
 		var biblionumber = $("input[name='biblionumber']").attr("value");
-		$("td").click(function(event){
+        $("tr.editable td").click(function(event){
 			var $tgt = $(event.target);
 			if($tgt.is("a")||$tgt.is(":first-child")||$tgt.is(":nth-child(2)")){ return true; } else {
 			var rowid = $(this).parent().attr("id");
 			num_rowid = rowid.replace("row","");
 			$(".linktools").remove();
-			$(this).append("<span class=\"linktools\"><a href=\"/cgi-bin/koha/cataloguing/additem.pl?op=edititem&frameworkcode=[% frameworkcode %]&biblionumber=[% biblionumber %]&itemnumber="+num_rowid+"#edititem\">Edit Item</a> <a href=\"/cgi-bin/koha/cataloguing/additem.pl?op=delitem&frameworkcode=[% frameworkcode %]&biblionumber=[% biblionumber %]&itemnumber="+num_rowid+"\" onclick=\"confirm_deletion([% biblionumber %],"+num_rowid+"); return false;\">Delete Item</a></span>");
+			$(this).append("<span class=\"linktools\"><a href=\"/cgi-bin/koha/cataloguing/additem.pl?op=edititem&frameworkcode=[% frameworkcode %]&biblionumber=[% biblionumber %]&itemnumber="+num_rowid+"#edititem\">" + _("Edit item") + "</a> <a href=\"/cgi-bin/koha/cataloguing/additem.pl?op=delitem&frameworkcode=[% frameworkcode %]&biblionumber=[% biblionumber %]&itemnumber="+num_rowid+"\" onclick=\"confirm_deletion([% biblionumber %],"+num_rowid+"); return false;\">" + _("Delete item") + "</a></span>");
 		}
 		});
+
+    var itemst = $("#itemst").dataTable($.extend(true, {}, dataTablesDefaults, {
+        "aoColumnDefs": [
+          { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false },
+        ],
+        'bPaginate': false,
+        'bInfo': false,
+        "bAutoWidth": false
+    } ) );
+
 });
 function active(numlayer)
 {
@@ -49,27 +69,15 @@ function active(numlayer)
     }
 }
 function Check(f) {
-    var total_errors=0;
-    $("input[name='mandatory'],select[name='mandatory']").each(function(i){
-        if($(this).val() == 1){
-            var mandatory_field = $("input[name='field_value'],select[name='field_value']").eq(i);
-            if(mandatory_field.val() == ''){
-                mandatory_field.addClass("missing");
-                total_errors++;
-            }
-        }
-    });
-
-    var alertString2;
-    if (total_errors==0) {
-        return true;
-    } else {
-        alertString2  = _("Form not submitted because of the following problem(s)");
+    var total_errors = CheckMandatorySubfields(f);
+    if (total_errors > 0) {
+        var alertString2 = _("Form not submitted because of the following problem(s)");
         alertString2 += "\n------------------------------------------------------------------------------------\n";
-        alertString2 += "\n- "+ total_errors+_(" mandatory fields empty (highlighted)");
+        alertString2 += "\n- " + _("%s mandatory fields empty (highlighted)").format(total_errors);
         alert(alertString2);
         return false;
     }
+    return true;
 }
 function CheckMultipleAdd(f) {
 
@@ -103,9 +111,14 @@ $(document).ready(function() {
 //]]>
 </script>
 <link type="text/css" rel="stylesheet" href="[% themelang %]/css/addbiblio.css" />
+[% IF ( bidi ) %]
+   <link rel="stylesheet" type="text/css" href="[% themelang %]/css/right-to-left.css" />
+[% END %]
 </head>
 <body id="cat_additem" class="cat">
 [% INCLUDE 'header.inc' %]
+[% INCLUDE 'cataloging-search.inc' %]
+
 <div id="breadcrumbs">
           <a href="/cgi-bin/koha/mainpage.pl">Home</a>
  &rsaquo; <a href="/cgi-bin/koha/cataloguing/addbooks.pl">Cataloging</a>
@@ -122,38 +135,62 @@ $(document).ready(function() {
 
 [% IF ( barcode_not_unique ) %]<div class="dialog alert"><strong>Error saving item</strong>: Barcode must be unique.</div>[% END %]
 [% IF ( no_next_barcode ) %]<div class="dialog alert"><strong>Error saving items</strong>: Unable to automatically determine values for barcodes. No item has been inserted.</div>[% END %]
-[% IF ( book_on_loan ) %]<div class="dialog alert"><strong>Cannot Delete</strong>: item is checked out.</div>[% END %]
-[% IF ( book_reserved ) %]<div class="dialogalert"><strong>Cannot Delete</strong>: item has a waiting hold.</div>[% END %]
-[% IF ( not_same_branch ) %]<div class="dialog alert"><strong>Cannot Delete</strong>: The items do not belong to your library.</div>[% END %]
-[% IF ( linked_analytics ) %]<div class="dialog alert"><strong>Cannot Delete</strong>: item has linked <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblionumber %]&amp;analyze=1">analytics.</a>.</div>[% END %]
+[% IF ( book_on_loan ) %]<div class="dialog alert"><strong>Cannot delete</strong>: item is checked out.</div>[% END %]
+[% IF ( book_reserved ) %]<div class="dialogalert"><strong>Cannot delete</strong>: item has a waiting hold.</div>[% END %]
+[% IF ( not_same_branch ) %]<div class="dialog alert"><strong>Cannot delete</strong>: The items do not belong to your library.</div>[% END %]
+[% IF ( linked_analytics ) %]<div class="dialog alert"><strong>Cannot delete</strong>: item has linked <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblionumber %]&amp;analyze=1">analytics.</a>.</div>[% END %]
 
 <div id="cataloguing_additem_itemlist">
     [% IF ( item_loop ) %]
         <div>
-        <table>
+        <table id="itemst">
+          <thead>
             <tr>
-                <th colspan="2">&nbsp;</th>
+                <th>&nbsp;</th>
                 [% FOREACH item_header_loo IN item_header_loop %]
                     <th>
                         [% item_header_loo.header_value %]
                     </th>
                 [% END %]
             </tr>
+          </thead>
+          <tbody>
                 [% FOREACH item_loo IN item_loop %]
-                [% IF ( item_loo.itemnumber == itemnumber) %]
-                <tr id="row[% item_loo.itemnumber %]" class="active">
-                [% ELSE %]
-                <tr id="row[% item_loo.itemnumber %]">
-                [% END %]
-                    [% IF ( item_loo.nomod ) %] <td colspan="2">&nbsp;</td>[% ELSE %][% IF ( item_loo.hostitemflag ) %]<td><a href="additem.pl?op=edititem&amp;biblionumber=[% item_loo.hostbiblionumber %]&amp;itemnumber=[% item_loo.itemnumber %]#edititem">Edit in host</a></td>
-<td><a class="delete" href="/cgi-bin/koha/cataloguing/additem.pl?op=delinkitem&amp;biblionumber=[% biblionumber %]&amp;hostitemnumber=[% item_loo.itemnumber %]">Delink</a></td>
-[% ELSE %]<td><a href="additem.pl?op=edititem&amp;biblionumber=[% biblionumber %]&amp;itemnumber=[% item_loo.itemnumber %]#edititem">Edit</a></td>
-                    <td>[% IF ( item_loo.countanalytics ) %]<a href="/cgi-bin/koha/catalogue/search.pl?idx=hi&amp;q=% item_loo.itemnumber %]">View analytics</a>[% ELSE %]<a class="delete" href="/cgi-bin/koha/cataloguing/additem.pl?op=delitem&amp;biblionumber=[% biblionumber %]&amp;itemnumber=[% item_loo.itemnumber %]" onclick="confirm_deletion([% biblionumber %],[% item_loo.itemnumber %]); return false;">Delete</a>[% END %]</td>[% END %][% END %]
+                    [% IF ( item_loo.itemnumber == itemnumber) %]
+                        [% IF item_loo.nomod %]
+                           <tr id="row[% item_loo.itemnumber %]" class="active">
+                        [% ELSE %]
+                            <tr id="row[% item_loo.itemnumber %]" class="active editable">
+                        [% END %]
+                    [% ELSE %]
+                        [% IF item_loo.nomod %]
+                           <tr id="row[% item_loo.itemnumber %]">
+                        [% ELSE %]
+                            <tr id="row[% item_loo.itemnumber %]" class="editable">
+                        [% END %]
+                    [% END %]
+                    [% IF ( item_loo.nomod ) %]
+                      <td>&nbsp;</td>
+                    [% ELSE %]
+                      <td>
+                        [% IF ( item_loo.hostitemflag ) %]
+                          <a href="additem.pl?op=edititem&amp;biblionumber=[% item_loo.hostbiblionumber %]&amp;itemnumber=[% item_loo.itemnumber %]#edititem">Edit in host</a> &nbsp; <a class="delete" href="/cgi-bin/koha/cataloguing/additem.pl?op=delinkitem&amp;biblionumber=[% biblionumber %]&amp;hostitemnumber=[% item_loo.itemnumber %]">Delink</a>
+                        [% ELSE %]
+                          <a href="additem.pl?op=edititem&amp;biblionumber=[% biblionumber %]&amp;itemnumber=[% item_loo.itemnumber %]#edititem">Edit</a>
+                          [% IF ( item_loo.countanalytics ) %]
+                            <a href="/cgi-bin/koha/catalogue/search.pl?idx=hi&amp;q=% item_loo.itemnumber %]">View analytics</a>
+                          [% ELSE %]
+                            <a class="delete" href="/cgi-bin/koha/cataloguing/additem.pl?op=delitem&amp;biblionumber=[% biblionumber %]&amp;itemnumber=[% item_loo.itemnumber %]" onclick="confirm_deletion([% biblionumber %],[% item_loo.itemnumber %]); return false;">Delete</a>
+                          [% END %]
+                        [% END %]
+                      </td>
+                    [% END %]
                 [% FOREACH item_valu IN item_loo.item_value %]
                     <td>[% item_valu.field |html %]</td>
                 [% END %]
                 </tr>
                 [% END %]
+          </tbody>
         </table>
         </div>
     [% END %]
@@ -190,7 +227,7 @@ $(document).ready(function() {
                 <input type="hidden" name="mandatory" value="[% ite.mandatory %]" />
                 [% IF ( ite.repeatable ) %]
                     <a href="#" class="buttonPlus" onclick="CloneItemSubfield(this.parentNode); return false;">
-                        <img src="/intranet-tmpl/prog/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
+                        <img src="[% interface %]/[% theme %]/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
                     </a>
                 [% END %]
                 [% IF ( ite.mandatory ) %] <span class="required">Required</span>[% END %]
@@ -204,15 +241,15 @@ $(document).ready(function() {
 
 <fieldset class="action">    [% IF ( opisadd ) %]
     <input type="submit" name="phony_submit" value="phony_submit" id="phony_submit" style="display:none;" onclick="return false;" />
-    <!-- Note : We use here a false submit button because we have several submit buttons and we don't want the user to believe he validated the adding of multiple copies
+    <!-- Note : We use here a false submit button because we have several submit buttons and we don't want the user to believe he validated the adding of multiple items
 		when pressing the enter key, while in fact it is the first submit button that is validated, in our case the "add (single) item" button.
 		It is a bit tricky, but necessary in the sake of UI correctness.
     -->
 
     <input type="submit" name="add_submit" value="Add item" onclick="return Check(this.form)" />
     <input type="submit" name="add_duplicate_submit" value="Add &amp; duplicate" onclick="return Check(this.form)" />
-    <input type="submit" name="add_multiple_copies" value="Add multiple copies" onclick="javascript:this.nextSibling.style.visibility='visible';document.f.number_of_copies.focus(); return false;" /><span id="add_multiple_copies_span" style="visibility:hidden">
-	<label for="number_of_copies">Number of copies to add : </label>
+    <input type="submit" name="add_multiple_copies" value="Add multiple items" onclick="javascript:this.nextSibling.style.visibility='visible';document.f.number_of_copies.focus(); return false;" /><span id="add_multiple_copies_span" style="visibility:hidden">
+    <label for="number_of_copies">Number of items to add : </label>
 	<input type="text" id="number_of_copies" name="number_of_copies" value="" size="2" />
 	<input type="submit" id="add_multiple_copies_submit" name="add_multiple_copies_submit" value="Add" onclick="javascript:return Check(this.form) &amp;&amp; CheckMultipleAdd(this.form.number_of_copies.value);" />
     </span>

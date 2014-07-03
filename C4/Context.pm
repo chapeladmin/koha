@@ -19,7 +19,6 @@ package C4::Context;
 use strict;
 use warnings;
 use vars qw($VERSION $AUTOLOAD $context @context_stack $servers $memcached $ismemcached);
-
 BEGIN {
 	if ($ENV{'HTTP_USER_AGENT'})	{
 		require CGI::Carp;
@@ -105,6 +104,8 @@ use C4::Boolean;
 use C4::Debug;
 use POSIX ();
 use DateTime::TimeZone;
+use Module::Load::Conditional qw(can_load);
+use Carp;
 
 =head1 NAME
 
@@ -292,20 +293,20 @@ sub memcached {
     }
 }
 
-# db_scheme2dbi
-# Translates the full text name of a database into de appropiate dbi name
-# 
+=head2 db_scheme2dbi
+
+    my $dbd_driver_name = C4::Context::db_schema2dbi($scheme);
+
+This routines translates a database type to part of the name
+of the appropriate DBD driver to use when establishing a new
+database connection.  It recognizes 'mysql' and 'Pg'; if any
+other scheme is supplied it defaults to 'mysql'.
+
+=cut
+
 sub db_scheme2dbi {
-    my $name = shift;
-    # for instance, we support only mysql, so don't care checking
-    return "mysql";
-    for ($name) {
-# FIXME - Should have other databases. 
-        if (/mysql/) { return("mysql"); }
-        if (/Postgres|Pg|PostgresSQL/) { return("Pg"); }
-        if (/oracle/) { return("Oracle"); }
-    }
-    return;         # Just in case
+    my $scheme = shift // '';
+    return $scheme eq 'Pg' ? $scheme : 'mysql';
 }
 
 sub import {
@@ -400,6 +401,7 @@ sub new {
     $self->{tz} = undef; # local timezone object
 
     bless $self, $class;
+    $self->{db_driver} = db_scheme2dbi($self->config('db_scheme'));  # cache database driver
     return $self;
 }
 
@@ -539,23 +541,30 @@ my $use_syspref_cache = 1;
 
 sub preference {
     my $self = shift;
-    my $var  = lc(shift);                          # The system preference to return
+    my $var  = shift;    # The system preference to return
 
-    if ($use_syspref_cache && exists $sysprefs{$var}) {
-        return $sysprefs{$var};
+    if ($use_syspref_cache && exists $sysprefs{lc $var}) {
+        return $sysprefs{lc $var};
     }
 
     my $dbh  = C4::Context->dbh or return 0;
 
-    # Look up systempreferences.variable==$var
-    my $sql = <<'END_SQL';
-        SELECT    value
-        FROM    systempreferences
-        WHERE    variable=?
-        LIMIT    1
-END_SQL
-    $sysprefs{$var} = $dbh->selectrow_array( $sql, {}, $var );
-    return $sysprefs{$var};
+    my $value;
+    if ( defined $ENV{"OVERRIDE_SYSPREF_$var"} ) {
+        $value = $ENV{"OVERRIDE_SYSPREF_$var"};
+    } else {
+        # Look up systempreferences.variable==$var
+        my $sql = q{
+            SELECT  value
+            FROM    systempreferences
+            WHERE   variable = ?
+            LIMIT   1
+        };
+        $value = $dbh->selectrow_array( $sql, {}, lc $var );
+    }
+
+    $sysprefs{lc $var} = $value;
+    return $value;
 }
 
 sub boolean_preference {
@@ -679,14 +688,13 @@ C<$auth> whether this connection has rw access (1) or just r access (0 or NULL)
 =cut
 
 sub Zconn {
-    my $self=shift;
-    my $server=shift;
-    my $async=shift;
-    my $auth=shift;
-    my $piggyback=shift;
-    my $syntax=shift;
-    if ( defined($context->{"Zconn"}->{$server}) && (0 == $context->{"Zconn"}->{$server}->errcode()) ) {
-        return $context->{"Zconn"}->{$server};
+    my ($self, $server, $async, $auth, $piggyback, $syntax) = @_;
+    #TODO: We actually just ignore the auth and syntax parameter
+    #It also looks like we are not passing auth, piggyback, syntax anywhere
+
+    my $cache_key = join ('::', (map { $_ // '' } ($server, $async, $auth, $piggyback, $syntax)));
+    if ( defined($context->{"Zconn"}->{$cache_key}) && (0 == $context->{"Zconn"}->{$cache_key}->errcode()) ) {
+        return $context->{"Zconn"}->{$cache_key};
     # No connection object or it died. Create one.
     }else {
         # release resources if we're closing a connection and making a new one
@@ -695,12 +703,10 @@ sub Zconn {
         # and make a new one, particularly for a batch job.  However, at
         # first glance it does not look like there's a way to easily check
         # the basic health of a ZOOM::Connection
-        $context->{"Zconn"}->{$server}->destroy() if defined($context->{"Zconn"}->{$server});
+        $context->{"Zconn"}->{$cache_key}->destroy() if defined($context->{"Zconn"}->{$cache_key});
 
-        $context->{"Zconn"}->{$server} = &_new_Zconn($server,$async,$auth,$piggyback,$syntax);
-        $context->{ Zconn }->{ $server }->option(
-            preferredRecordSyntax => C4::Context->preference("marcflavour") );
-        return $context->{"Zconn"}->{$server};
+        $context->{"Zconn"}->{$cache_key} = &_new_Zconn( $server, $async, $piggyback );
+        return $context->{"Zconn"}->{$cache_key};
     }
 }
 
@@ -719,31 +725,48 @@ C<$auth> whether this connection has rw access (1) or just r access (0 or NULL)
 =cut
 
 sub _new_Zconn {
-    my ($server,$async,$auth,$piggyback,$syntax) = @_;
+    my ( $server, $async, $piggyback ) = @_;
 
     my $tried=0; # first attempt
     my $Zconn; # connection object
-    $server = "biblioserver" unless $server;
-    $syntax = "usmarc" unless $syntax;
+    my $elementSetName;
+    my $index_mode;
+    my $syntax;
+
+    $server //= "biblioserver";
+
+    if ( $server eq 'biblioserver' ) {
+        $index_mode = $context->{'config'}->{'zebra_bib_index_mode'} // 'grs1';
+    } elsif ( $server eq 'authorityserver' ) {
+        $index_mode = $context->{'config'}->{'zebra_auth_index_mode'} // 'dom';
+    }
+
+    if ( $index_mode eq 'grs1' ) {
+        $elementSetName = 'F';
+        $syntax = ( $context->preference("marcflavour") eq 'UNIMARC' )
+                ? 'unimarc'
+                : 'usmarc';
+
+    } else { # $index_mode eq 'dom'
+        $syntax = 'xml';
+        $elementSetName = 'marcxml';
+    }
 
     my $host = $context->{'listen'}->{$server}->{'content'};
-    my $servername = $context->{"config"}->{$server};
     my $user = $context->{"serverinfo"}->{$server}->{"user"};
     my $password = $context->{"serverinfo"}->{$server}->{"password"};
- $auth = 1 if($user && $password);   
-    retry:
     eval {
         # set options
         my $o = new ZOOM::Options();
-        $o->option(user=>$user) if $auth;
-        $o->option(password=>$password) if $auth;
+        $o->option(user => $user) if $user && $password;
+        $o->option(password => $password) if $user && $password;
         $o->option(async => 1) if $async;
         $o->option(count => $piggyback) if $piggyback;
         $o->option(cqlfile=> $context->{"server"}->{$server}->{"cql2rpn"});
         $o->option(cclfile=> $context->{"serverinfo"}->{$server}->{"ccl2rpn"});
         $o->option(preferredRecordSyntax => $syntax);
-        $o->option(elementSetName => "F"); # F for 'full' as opposed to B for 'brief'
-        $o->option(databaseName => ($servername?$servername:"biblios"));
+        $o->option(elementSetName => $elementSetName) if $elementSetName;
+        $o->option(databaseName => $context->{"config"}->{$server}||"biblios");
 
         # create a new connection object
         $Zconn= create ZOOM::Connection($o);
@@ -755,25 +778,7 @@ sub _new_Zconn {
         if ($Zconn->errcode() !=0) {
             warn "something wrong with the connection: ". $Zconn->errmsg();
         }
-
     };
-#     if ($@) {
-#         # Koha manages the Zebra server -- this doesn't work currently for me because of permissions issues
-#         # Also, I'm skeptical about whether it's the best approach
-#         warn "problem with Zebra";
-#         if ( C4::Context->preference("ManageZebra") ) {
-#             if ($@->code==10000 && $tried==0) { ##No connection try restarting Zebra
-#                 $tried=1;
-#                 warn "trying to restart Zebra";
-#                 my $res=system("zebrasrv -f $ENV{'KOHA_CONF'} >/koha/log/zebra-error.log");
-#                 goto "retry";
-#             } else {
-#                 warn "Error ", $@->code(), ": ", $@->message(), "\n";
-#                 $Zconn="error";
-#                 return $Zconn;
-#             }
-#         }
-#     }
     return $Zconn;
 }
 
@@ -785,13 +790,8 @@ sub _new_dbh
 {
 
     ## $context
-    ## correct name for db_schme        
-    my $db_driver;
-    if ($context->config("db_scheme")){
-        $db_driver=db_scheme2dbi($context->config("db_scheme"));
-    }else{
-        $db_driver="mysql";
-    }
+    ## correct name for db_scheme
+    my $db_driver = $context->{db_driver};
 
     my $db_name   = $context->config("database");
     my $db_host   = $context->config("hostname");
@@ -814,6 +814,10 @@ sub _new_dbh
 
     if ($@) {
         $dbh->{RaiseError} = 0;
+    }
+
+    if ( $db_driver eq 'mysql' ) {
+        $dbh->{mysql_auto_reconnect} = 1;
     }
 
 	my $tz = $ENV{TZ};
@@ -850,10 +854,15 @@ possibly C<&set_dbh>.
 sub dbh
 {
     my $self = shift;
+    my $params = shift;
     my $sth;
 
-    if (defined($context->{"dbh"}) && $context->{"dbh"}->ping()) {
-	return $context->{"dbh"};
+    unless ( $params->{new} ) {
+        if ( defined($context->{db_driver}) && $context->{db_driver} eq 'mysql' && $context->{"dbh"} ) {
+            return $context->{"dbh"};
+        } elsif ( defined($context->{"dbh"}) && $context->{"dbh"}->ping() ) {
+            return $context->{"dbh"};
+        }
     }
 
     # No database handle or it died . Create one.
@@ -939,6 +948,51 @@ sub restore_dbh
 
     # FIXME - If it is determined that restore_context should
     # return something, then this function should, too.
+}
+
+=head2 queryparser
+
+  $queryparser = C4::Context->queryparser
+
+Returns a handle to an initialized Koha::QueryParser::Driver::PQF object.
+
+=cut
+
+sub queryparser {
+    my $self = shift;
+    unless (defined $context->{"queryparser"}) {
+        $context->{"queryparser"} = &_new_queryparser();
+    }
+
+    return
+      defined( $context->{"queryparser"} )
+      ? $context->{"queryparser"}->new
+      : undef;
+}
+
+=head2 _new_queryparser
+
+Internal helper function to create a new QueryParser object. QueryParser
+is loaded dynamically so as to keep the lack of the QueryParser library from
+getting in anyone's way.
+
+=cut
+
+sub _new_queryparser {
+    my $qpmodules = {
+        'OpenILS::QueryParser'           => undef,
+        'Koha::QueryParser::Driver::PQF' => undef
+    };
+    if ( can_load( 'modules' => $qpmodules ) ) {
+        my $QParser     = Koha::QueryParser::Driver::PQF->new();
+        my $config_file = $context->config('queryparser_config');
+        $config_file ||= '/etc/koha/searchengine/queryparser.yaml';
+        if ( $QParser->load_config($config_file) ) {
+            # TODO: allow indexes to be configured in the database
+            return $QParser;
+        }
+    }
+    return;
 }
 
 =head2 marcfromkohafield
@@ -1037,18 +1091,8 @@ C<C4::Context-E<gt>userenv> twice, you will get the same hash without real DB ac
 #'
 sub userenv {
     my $var = $context->{"activeuser"};
-    return $context->{"userenv"}->{$var} if (defined $var and defined $context->{"userenv"}->{$var});
-    # insecure=1 management
-    if ($context->{"dbh"} && $context->preference('insecure') eq 'yes') {
-        my %insecure;
-        $insecure{flags} = '16382';
-        $insecure{branchname} ='Insecure';
-        $insecure{number} ='0';
-        $insecure{cardnumber} ='0';
-        $insecure{id} = 'insecure';
-        $insecure{branch} = 'INS';
-        $insecure{emailaddress} = 'test@mode.insecure.com';
-        return \%insecure;
+    if (defined $var and defined $context->{"userenv"}->{$var}) {
+        return $context->{"userenv"}->{$var};
     } else {
         return;
     }
@@ -1192,6 +1236,50 @@ sub tz {
 }
 
 
+=head2 IsSuperLibrarian
+
+    C4::Context->IsSuperlibrarian();
+
+=cut
+
+sub IsSuperLibrarian {
+    my $userenv = C4::Context->userenv;
+
+    unless ( $userenv and exists $userenv->{flags} ) {
+        # If we reach this without a user environment,
+        # assume that we're running from a command-line script,
+        # and act as a superlibrarian.
+        carp("C4::Context->userenv not defined!");
+        return 1;
+    }
+
+    return ($userenv->{flags}//0) % 2;
+}
+
+=head2 interface
+
+Sets the current interface for later retrieval in any Perl module
+
+    C4::Context->interface('opac');
+    C4::Context->interface('intranet');
+    my $interface = C4::Context->interface;
+
+=cut
+
+sub interface {
+    my ($class, $interface) = @_;
+
+    if (defined $interface) {
+        $interface = lc $interface;
+        if ($interface eq 'opac' || $interface eq 'intranet') {
+            $context->{interface} = $interface;
+        } else {
+            warn "invalid interface : '$interface'";
+        }
+    }
+
+    return $context->{interface} // 'opac';
+}
 
 1;
 __END__

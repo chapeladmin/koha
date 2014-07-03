@@ -1,26 +1,28 @@
 #!/usr/bin/perl
 
-# Copyright 2000-2002 Katipo Communications
-# Parts copyright 2010 BibLibre
-#
 # This file is part of Koha.
 #
-# Koha is free software; you can redistribute it and/or modify it under the
-# terms of the GNU General Public License as published by the Free Software
-# Foundation; either version 2 of the License, or (at your option) any later
-# version.
+#       Copyright (C) 2000-2002 Katipo Communications
+# Parts Copyright (C) 2010      BibLibre
+# Parts Copyright (C) 2013      Mark Tompsett
 #
-# Koha is distributed in the hope that it will be useful, but WITHOUT ANY
-# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-# A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+# Koha is free software; you can redistribute it and/or modify it
+# under the terms of the GNU General Public License as published by
+# the Free Software Foundation; either version 3 of the License, or
+# (at your option) any later version.
 #
-# You should have received a copy of the GNU General Public License along
-# with Koha; if not, write to the Free Software Foundation, Inc.,
-# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
+# Koha is distributed in the hope that it will be useful, but
+# WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with Koha; if not, see <http://www.gnu.org/licenses>.
+
 
 =head1 NAME
 
-MARCdetail.pl : script to show a biblio in MARC format
+opac-MARCdetail.pl : script to show a biblio in MARC format
 
 =head1 SYNOPSIS
 
@@ -41,8 +43,7 @@ the items attached to the biblio
 
 =cut
 
-use strict;
-use warnings;
+use Modern::Perl;
 
 use C4::Auth;
 use C4::Context;
@@ -50,16 +51,35 @@ use C4::Output;
 use CGI;
 use MARC::Record;
 use C4::Biblio;
+use C4::Items;
 use C4::Acquisition;
 use C4::Koha;
+use List::MoreUtils qw/any/;
 
 my $query = new CGI;
 
 my $dbh = C4::Context->dbh;
 
 my $biblionumber = $query->param('biblionumber');
+if ( ! $biblionumber ) {
+    print $query->redirect("/cgi-bin/koha/errors/404.pl");
+    exit;
+}
+
+my @all_items = GetItemsInfo($biblionumber);
+my @items2hide;
+if (scalar @all_items >= 1) {
+    push @items2hide, GetHiddenItemnumbers(@all_items);
+
+    if (scalar @items2hide == scalar @all_items ) {
+        print $query->redirect("/cgi-bin/koha/errors/404.pl");
+        exit;
+    }
+}
+
 my $itemtype     = &GetFrameworkCode($biblionumber);
 my $tagslib      = &GetMarcStructure( 0, $itemtype );
+my ($tag_itemnumber,$subtag_itemnumber) = &GetMarcFromKohaField('items.itemnumber',$itemtype);
 my $biblio = GetBiblioData($biblionumber);
 $biblionumber = $biblio->{biblionumber};
 my $record = GetMarcBiblio($biblionumber, 1);
@@ -153,12 +173,20 @@ for ( my $tabloop = 0 ; $tabloop <= 9 ; $tabloop++ ) {
             # loop through each subfield
             for my $i ( 0 .. $#subf ) {
                 $subf[$i][0] = "@" unless defined($subf[$i][0]);
-                my $sf_def = $tagslib->{ $fields[$x_i]->tag() }->{ $subf[$i][0] };
-                next if ( ($sf_def->{tab}||0) != $tabloop );
-                next if ( ($sf_def->{hidden}||0) > 0 );
+                my $sf_def = $tagslib->{ $fields[$x_i]->tag() };
+                $sf_def = $sf_def->{ $subf[$i][0] } if defined($sf_def);
+                my ($tab,$hidden,$lib);
+                $tab = $sf_def->{tab} if defined($sf_def);
+                $tab = $tab // int($fields[$x_i]->tag()/100);
+                $hidden = $sf_def->{hidden} if defined($sf_def);
+                $hidden = $hidden // 0;
+                next if ( $tab != $tabloop );
+                next if ( $hidden > 0 );
                 my %subfield_data;
-                $subfield_data{marc_lib} = ($sf_def->{lib} eq $previous) ?  '--' : $sf_def->{lib};
-                $previous = $sf_def->{lib};
+                $lib = $sf_def->{lib} if defined($sf_def);
+                $lib = $lib // '--';
+                $subfield_data{marc_lib} = ($lib eq $previous) ?  '--' : $lib;
+                $previous = $lib;
                 $subfield_data{link} = $sf_def->{link};
                 $subf[$i][1] =~ s/\n/<br\/>/g;
                 if ( $sf_def->{isurl} ) {
@@ -192,12 +220,13 @@ for ( my $tabloop = 0 ; $tabloop <= 9 ; $tabloop++ ) {
                     $tag_data{tag} = $tagslib->{ $fields[$x_i]->tag() }->{lib};
                 }
                 else {
-                    $tag_data{tag} =
-                        $fields[$x_i]->tag() 
-                      . ' '
+                    my $sf_def = $tagslib->{ $fields[$x_i]->tag() };
+                    my $lib;
+                    $lib = $sf_def->{lib} if defined($sf_def);
+                    $lib = $lib // '';
+                    $tag_data{tag} = $fields[$x_i]->tag() . ' '
                       . C4::Koha::display_marc_indicators($fields[$x_i])
-                      . ' - '
-                      . $tagslib->{ $fields[$x_i]->tag() }->{lib};
+                      . " - $lib";
                 }
             }
             my @tmp = @subfields_data;
@@ -221,6 +250,9 @@ my %witness
 my @big_array;
 foreach my $field (@fields) {
     next if ( $field->tag() < 10 );
+    next if ( ( $field->tag() eq $tag_itemnumber ) &&
+              ( any { $field->subfield($subtag_itemnumber) eq $_ }
+                   @items2hide) );
     my @subf = $field->subfields;
     my %this_row;
 
@@ -296,15 +328,20 @@ my $marcissns = GetMarcISSN( $record, $marcflavour );
 my $issn = $marcissns->[0] || '';
 
 if (my $search_for_title = C4::Context->preference('OPACSearchForTitleIn')){
-    $dat->{author} ? $search_for_title =~ s/{AUTHOR}/$dat->{author}/g : $search_for_title =~ s/{AUTHOR}//g;
     $dat->{title} =~ s/\/+$//; # remove trailing slash
     $dat->{title} =~ s/\s+$//; # remove trailing space
-    $dat->{title} ? $search_for_title =~ s/{TITLE}/$dat->{title}/g : $search_for_title =~ s/{TITLE}//g;
-    $isbn ? $search_for_title =~ s/{ISBN}/$isbn/g : $search_for_title =~ s/{ISBN}//g;
-    $issn ? $search_for_title =~ s/{ISSN}/$issn/g : $search_for_title =~ s/{ISSN}//g;
-    $marccontrolnumber ? $search_for_title =~ s/{CONTROLNUMBER}/$marccontrolnumber/g : $search_for_title =~ s/{CONTROLNUMBER}//g;
-    $search_for_title =~ s/{BIBLIONUMBER}/$biblionumber/g;
- $template->param('OPACSearchForTitleIn' => $search_for_title);
+    $search_for_title = parametrized_url(
+        $search_for_title,
+        {
+            TITLE         => $dat->{title},
+            AUTHOR        => $dat->{author},
+            ISBN          => $isbn,
+            ISSN          => $issn,
+            CONTROLNUMBER => $marccontrolnumber,
+            BIBLIONUMBER  => $biblionumber,
+        }
+    );
+    $template->param('OPACSearchForTitleIn' => $search_for_title);
 }
 
 $template->param(

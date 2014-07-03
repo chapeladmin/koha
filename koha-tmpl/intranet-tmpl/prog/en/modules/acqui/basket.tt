@@ -3,10 +3,7 @@
 <title>Koha &rsaquo; Acquisitions &rsaquo; [% UNLESS ( basketno ) %]New [% END %][% IF ( delete_confirm ) %]Delete [% END %]Basket [% basketname|html %] ([% basketno %]) for [% name|html %]</title>
 <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
-
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
 //<![CDATA[
     function updateColumnsVisibility(visible) {
@@ -28,6 +25,11 @@
 
         $("#show_all_details").attr('checked', false);
         updateColumnsVisibility(false);
+        [% UNLESS ( closedate ) %]
+            $('#addtoBasket').on('show', function () {
+               $(this).find(".modal-body").html($(".acqui_basket_add")[0].outerHTML);
+            });
+        [% END %]
     });
 //]]>
 </script>
@@ -41,24 +43,29 @@
                     window.location = "[% script_name %]?op=close&basketno=[% basketno %]";
                 }
             }
-            function confirm_deletion() {
-                var is_confirmed = confirm(_("Are you sure you want to delete this basket?"));
-                if (is_confirmed) {
-                    window.location = "[% script_name %]?op=delete_confirm&basketno=[% basketno %]&booksellerid=[% booksellerid %]";
-                }
+
+            function delete_basket(basketno,booksellerid,delbiblio) {
+                window.location = "[% script_name %]?op=delete_confirm&delbiblio="+delbiblio+"&basketno="+basketno+"&booksellerid="+booksellerid;
             }
+
             function confirm_delete_item(ordernumber, biblionumber) {
                 var is_confirmed = confirm(_("Are you sure you want to delete this order ?"));
                 if (is_confirmed) {
                     window.location = "addorder.pl?ordernumber="+ordernumber+"&basketno=[% basketno %]&quantity=0&biblionumber="+biblionumber;
                 }
             }
-            
+
             function confirm_delete_biblio(ordernumber, biblionumber) {
                 var is_confirmed = confirm(_("Are you sure you want to delete this catalog record and order ?"));
                 if (is_confirmed) {
                     window.location = "addorder.pl?ordernumber="+ordernumber+"&basketno=[% basketno %]&quantity=0&biblionumber="+biblionumber+"&delbiblio=1";
                     }
+            }
+
+            function transfer_order_popup(ordernumber) {
+                var url = "/cgi-bin/koha/acqui/transferorder.pl?"
+                    + "ordernumber=" + ordernumber
+                window.open(url, 'TransferOrder','width=600,height=400,toolbar=false,scrollbars=yes');
             }
 
 //]]>
@@ -78,7 +85,8 @@
 [% UNLESS ( grouped ) %]
 <script type="text/javascript">
 //<![CDATA[
-            function confirm_reopen(skip) {
+            function confirm_reopen() {
+                var skip = [% IF ( skip_confirm_reopen ) %] 1 [% ELSE %] 0 [% END %];
                 var is_confirmed = skip || confirm(_("Are you sure you want to reopen this basket?"));
                 if (is_confirmed) {
                     window.location = "[% script_name %]?op=reopen&basketno=[% basketno %]";
@@ -104,10 +112,47 @@
         var cancelledorderst = $("#cancelledorderst").dataTable($.extend(true, {}, dataTablesDefaults, {
             "sPaginationType": "four_button"
         } ) );
-    } );
+        $("#reopenbutton").on("click",function(e){
+            e.preventDefault();
+            confirm_reopen();
+        });
+    });
+
+    function basketUserSearchPopup(f) {
+        window.open(
+            "/cgi-bin/koha/acqui/aqbasketuser_search.pl",
+            'BasketUserSearchPopup',
+            'width=740,height=450,toolbar=no,'
+         );
+    }
+
+    function add_basket_user(borrowernumber, borrowername) {
+        var ids = $("#basketusers_ids").val();
+        if(ids.length > 0) {
+            ids = ids.split(':');
+        } else {
+            ids = new Array;
+        }
+        if (ids.indexOf(borrowernumber) < 0) {
+            ids.push(borrowernumber);
+            $("#basketusers_ids").val(ids.join(':'));
+            var li = '<li id="user_'+borrowernumber+'">'+borrowername
+                + ' [<a style="cursor:pointer" onclick="del_basket_user('+borrowernumber+');">'
+                + _("Delete user") + '</a>]</li>';
+            $("#basketusers_names").append(li);
+            return 0;
+        }
+        return -1;
+    }
+
+    function del_basket_user(borrowernumber) {
+      $("#user_"+borrowernumber).remove();
+      var ids = $("#basketusers_ids").val().split(':');
+      ids.splice(ids.indexOf(borrowernumber.toString()), 1);
+      $("#basketusers_ids").val(ids.join(':'));
+    }
 //]]>
 </script>
-
 <style type="text/css">
 .sortmsg {font-size: 80%;}
 </style>
@@ -123,66 +168,64 @@
 
 <div id="bd">
     <div id="yui-main">
+    [% IF (cannot_manage_basket) %]
+        <div class="yui-b">
+            <p class="error">You are not authorised to manage this basket.</p>
+        </div>
+    [% ELSE %]
     <div class="yui-b">
         [% UNLESS ( confirm_close ) %]
         [% UNLESS ( selectbasketg ) %]
             [% UNLESS ( closedate ) %]
-                <div id="toolbar">
-                    <script type="text/javascript">
-                        //<![CDATA[
-                        // prepare DOM for YUI Toolbar
-                        $(document).ready(function() {
-                            yuiToolbar();
-                        });
-                        // YUI Toolbar Functions
-                        function yuiToolbar() {
-                            [% IF ( unclosable ) %]
-                                new YAHOO.widget.Button("closebutton", {disabled:true});
-                            [% ELSIF ( uncertainprices ) %]
-                                new YAHOO.widget.Button("uncertpricesbutton");
-                            [% ELSE %]
-                                new YAHOO.widget.Button("closebutton");
-                            [% END %]
-                            new YAHOO.widget.Button("basketheadbutton");
-                            new YAHOO.widget.Button("exportbutton");
-                            new YAHOO.widget.Button("delbasketbutton");
-                        }
-                        //]]>
-                    </script>
-
-                    <ul id="toolbar-list" class="toolbar">
-                    <li><a href="basketheader.pl?booksellerid=[% booksellerid %]&amp;basketno=[% basketno %]&amp;op=add_form" class="button" id="basketheadbutton">Edit basket</a></li>
-                    <li><a href="javascript:confirm_deletion();" class="button" id="delbasketbutton">Delete this basket</a></li>
-                    [% IF ( unclosable ) %]
+                <div id="toolbar" class="btn-toolbar">
+                    <div class="btn-group"><a href="#addtoBasket" role="button" class="btn btn-small" data-toggle="modal"><i class="icon-plus"></i> Add to basket</a></div>
+                    <div class="btn-group"><a href="basketheader.pl?booksellerid=[% booksellerid %]&amp;basketno=[% basketno %]&amp;op=add_form" class="btn btn-small" id="basketheadbutton"><i class="icon-pencil"></i> Edit basket</a></div>
+                    <div class="btn-group"><a href="#deleteBasketModal" role="button" class="btn btn-small" data-toggle="modal" id="delbasketbutton"><i class="icon-remove"></i> Delete this basket</a></div>
+                   [% IF ( unclosable ) %]
                     [% ELSIF ( uncertainprices ) %]
-                        <li><a href="/cgi-bin/koha/acqui/uncertainprice.pl?booksellerid=[% booksellerid %]&amp;owner=1" class="button" id="uncertpricesbutton">Uncertain prices</a></li>
+                        <div class="btn-group"><a href="/cgi-bin/koha/acqui/uncertainprice.pl?booksellerid=[% booksellerid %]&amp;owner=1" class="btn btn-small" id="uncertpricesbutton">Uncertain prices</a></div>
                     [% ELSE %]
-                        <li><a href="[% script_name %]?op=close&amp;basketno=[% basketno %]&amp;booksellerid=[% booksellerid %]" class="button" id="closebutton">Close this basket</a></li>
+                        <div class="btn-group">
+                            <a href="[% script_name %]?op=close&amp;basketno=[% basketno %]&amp;booksellerid=[% booksellerid %]" class="btn btn-small" id="closebutton"><i class="icon-remove-sign"></i> Close this basket</a>
+                        </div>
                     [% END %]
-                        <li><a href="[% script_name %]?op=export&amp;basketno=[% basketno %]&amp;booksellerid=[% booksellerid %]" class="button" id="exportbutton">Export this basket as CSV</a></li>
-                    </ul>
-
+                        <div class="btn-group"><a href="[% script_name %]?op=export&amp;basketno=[% basketno %]&amp;booksellerid=[% booksellerid %]" class="btn btn-small" id="exportbutton"><i class="icon-download"></i> Export this basket as CSV</a></div>
                 </div>
+<!-- Modal for confirm deletion box-->
+                <div class="modal hide" id="deleteBasketModal" tabindex="-1" role="dialog" aria-labelledby="delbasketModalLabel" aria-hidden="true">
+                    <div class="modal-header">
+                        <button type="button" class="closebtn" data-dismiss="modal" aria-hidden="true">×</button>
+                        <h3>Confirm deletion</h3>
+                    </div>
+                    [% UNLESS book_foot_loop.size > 0 %]
+                        <div class="modal-body">
+                           <p>Are you sure you want to delete this basket?</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" data-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-default" onclick="delete_basket([% basketno %],[% booksellerid %],0); return false;" >Delete basket</button>
+                        </div>
+                    [% ELSE %]
+                        <div class="modal-body">
+                           <p>Are you sure you want to delete this basket?</p>
+                           <p>Warning:</p>
+                           <p>All orders of this basket will be cancelled and used funds will be refunded.</p>
+                           <p>If items have been created when ordering or receiving, they will be deleted.</p>
+                           <p>You can choose to delete bibliographic records if possible (bibliographic records that have other items or that are used in a subscription or another order will not be deleted).</p>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-primary" data-dismiss="modal">Cancel</button>
+                            <button type="submit" class="btn btn-default" onclick="delete_basket([% basketno %],[% booksellerid %],0); return false;">Delete basket and orders</button>
+                            <button type="submit" class="btn btn-default" onclick="delete_basket([% basketno %],[% booksellerid %],1); return false;">Delete basket, orders and bibs</button>
+                        </div>
+                    [% END %]
+                </div>
+<!-- End of Modal-->
             [% ELSE %]
                 [% UNLESS ( grouped ) %]
-                <div id="toolbar">
-                    <script type="text/javascript">
-                        //<![CDATA[
-                        // prepare DOM for YUI Toolbar
-                        $(document).ready(function() {
-                            yuiToolbar();
-                        });
-                        // YUI Toolbar Functions
-                        function yuiToolbar() {
-                            new YAHOO.widget.Button("reopenbutton");
-                            new YAHOO.widget.Button("exportbutton");
-                        }
-                        //]]>
-                    </script>
-                        <ul id="toolbar-list" class="toolbar">
-                            <li><a href="javascript:confirm_reopen([% skip_confirm_reopen %]);" class="button" id="reopenbutton">Reopen this basket</a></li>
-                            <li><a href="[% script_name %]?op=export&amp;basketno=[% basketno %]&amp;booksellerid=[% booksellerid %]" class="button" id="exportbutton">Export this basket as CSV</a></li>
-                        </ul>
+                <div id="toolbar" class="btn-toolbar">
+                    <div class="btn-group"><a href="#" class="btn btn-small" id="reopenbutton"><i class="icon-refresh"></i> Reopen this basket</a></div>
+                    <div class="btn-group"><a href="[% script_name %]?op=export&amp;basketno=[% basketno %]&amp;booksellerid=[% booksellerid %]" class="btn btn-small" id="exportbutton"><i class="icon-download"></i> Export this basket as CSV</a></div>
                 </div>
                 [% END %]
             [% END %]
@@ -193,7 +236,27 @@
     [% ELSE %]
         [% IF ( delete_confirmed ) %]
             <h3>Basket deleted</h3>
+            [% IF (cannotdelbiblios) %]
+                <div class="dialog alert">
+                    <p><strong>Warning:</strong></p>
+                    <p><strong>The following records could not be deleted:</strong></p>
+                    <ul>
+                    [% FOREACH cannotdelbiblio IN cannotdelbiblios %]
+                        <li><a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% cannotdelbiblio.biblionumber %]">[% cannotdelbiblio.title |html %]</a> by [% cannotdelbiblio.author %]:
+                            <ul>
+                            [% IF (cannotdelbiblio.itemcount) %]<li>[% cannotdelbiblio.itemcount %] item(s) attached.</li>[% END %]
+                            [% IF (cannotdelbiblio.subscriptions) %]<li>[% cannotdelbiblio.subscriptions %] subscription(s) attached.</li>[% END %]
+                            [% IF (cannotdelbiblio.countbiblio) %]<li>[% cannotdelbiblio.countbiblio %] order(s) attached.</li>[% END %]
+                            [% IF (cannotdelbiblio.othererror) %]<li>Unknown error.</li>[% END %]
+                            </ul>
+                        </li>
+                    [% END %]
+                    </ul>
+                </div>
+                <a href="booksellers.pl">Click here to go back to booksellers page</a>
+            [% ELSE %]
             <META HTTP-EQUIV=Refresh CONTENT="0; url=booksellers.pl">
+            [% END %]
         [% ELSE %]
         <h1>[% UNLESS ( basketno ) %]New [% END %][% IF ( delete_confirm ) %]Delete [% END %]Basket [% basketname|html %] ([% basketno %]) for <a href="supplier.pl?booksellerid=[% booksellerid %]">[% name|html %]</a></h1>
         [% IF ( delete_confirm ) %]
@@ -222,7 +285,52 @@
                 [% END %]
                 [% IF ( deliveryplace ) %]<li><span class="label">Delivery place:</span> [% deliveryplace %]</li>[% END %]
                 [% IF ( billingplace ) %]<li><span class="label">Billing place:</span> [% billingplace %]</li>[% END %]
-                [% IF ( authorisedbyname ) %]<li><span class="label">Managed by:</span>  [% authorisedbyname %]</li>[% END %]
+                [% IF ( authorisedbyname ) %]<li><span class="label">Created by:</span>  [% authorisedbyname %]</li>[% END %]
+                <li id="managedby">
+                    <form action="" method="post">
+                        <span class="label">Managed by:</span>
+                        <div style="float:left">
+                            <ul id="basketusers_names" style="padding-left:0">
+                              [% FOREACH user IN basketusers %]
+                                <li id="user_[% user.borrowernumber %]">
+                                    [% user.firstname %] [% user.surname %]
+                                    [<a onclick="del_basket_user([% user.borrowernumber %]);" style="cursor:pointer">Delete user</a>]
+                                </li>
+                              [% END %]
+                            </ul>
+                            <input type="hidden" id="basketno" name="basketno" value="[% basketno %]" />
+                            <input type="hidden" id="basketusers_ids" name="basketusers_ids" value="[% basketusers_ids %]" />
+                            <input type="hidden" id="op" name="op" value="mod_users" />
+                            <input type="button" id="add_user" onclick="basketUserSearchPopup();" value="Add user" />
+                            <input type="submit" value="Save changes" />
+                        </div>
+                    </form>
+                </li>
+                <li id="branch">
+                    <span class="label">Branch:</span>
+                    [% IF basketbranchname %]
+                        [% basketbranchname %]
+                    [% ELSE %]
+                        No branch
+                    [% END %]
+                    [% IF branches_loop.size %]
+                        <form action="" method="post">
+                            <select id="branch" name="branch">
+                                <option value="">(no branch)</option>
+                                [% FOREACH branch IN branches_loop %]
+                                    [% IF (branch.selected) %]
+                                        <option selected="selected" value="[% branch.branchcode %]"> [% branch.branchname %]</option>
+                                    [% ELSE %]
+                                        <option value="[% branch.branchcode %]"> [% branch.branchname %]</option>
+                                    [% END %]
+                                [% END %]
+                            </select>
+                            <input type="hidden" id="basketno" name="basketno" value="[% basketno %]" />
+                            <input type="hidden" id="op" name="op" value="mod_branch" />
+                            <input type="submit" value="Change" />
+                        </form>
+                    [% END %]
+                </li>
                 [% IF ( creationdate ) %]<li><span class="label">Opened on:</span>  [% creationdate | $KohaDates %]</li>[% END %]
                 [% IF ( closedate ) %]<li><span class="label">Closed on:</span> [% closedate | $KohaDates %]</li>[% END %]
                 [% IF ( estimateddeliverydate ) %]<li><span class="label">Estimated delivery date:</span> [% estimateddeliverydate | $KohaDates  %]</li>[% END %]
@@ -231,16 +339,30 @@
                 </div>
                 [% IF ( closedate ) %]
                 <div class="yui-u">
+                    [% IF ( CAN_user_acquisition_group_manage ) %]
                     <form action="/cgi-bin/koha/acqui/basketgroup.pl" method="post">
-                        <p>
-                          <label for="basketgroupid"><strong>Basket group:</strong></label>
+                    [% END %]
+                        <ol>
+                        <li>
+                          <span class="label">Basket group:</span>
+                          [% IF basketgroup.id and not basketgroup.name %]
+                            [% SET basketgroup.name = "Basket group no. " _ basketgroup.id %]
+                          [% END %]
                           [% IF basketgroup.closed %]
-                            [% basketgroup.name %] (closed)
+                              [% IF ( CAN_user_acquisition_group_manage ) %]
+                                  <a href="basketgroup.pl?op=add&booksellerid=[% booksellerid %]&basketgroupid=[% basketgroup.id %]" title="basketgroup">[% basketgroup.name %] (closed)</a>
+                              [% ELSE %]
+                                  [% basketgroup.name %] (closed)
+                              [% END %]
+                          [% ELSIF ( ! CAN_user_acquisition_group_manage ) %]
+                            [%- IF basketgroup.id -%]
+                                [% basketgroup.name %]
+                            [%- ELSE -%]
+                                No group
+                            [%- END -%]
                           [% ELSE %]
-                            </p>
-                            <p>
                             <select id="basketgroupid" name="basketgroupid">
-                              <option value="new">Add new group</option>
+                              <option value="">No group</option>
                               [% FOREACH bg IN basketgroups %]
                                 [% IF ( bg.default ) %]
                                     <option value="[% bg.id %]" selected="selected">[% bg.name %]</option>
@@ -252,21 +374,20 @@
                                   [% END %]
                                 [% END %]
                               [% END %]
+                              <option value="new">Add new group</option>
                             </select>
-                          [% END %]
-                        </p>
-
-                        [% UNLESS basketgroup.closed %]
-                          <p>
                             <input type="hidden" id="basketno" value="[% basketno %]" name="basketno" />
                             <input type="hidden" value="mod_basket" name="op" />
                             <input type="hidden" name="booksellerid" value="[% booksellerid %]" />
                             <input type="submit" value="Change basket group" />
-                          </p>
-                        [% END %]
+                          [% END %]
+                        </li>
+                    [% IF ( basketgroup.deliveryplacename ) %]<li><span class="label">Basket group delivery placename:</span> [% basketgroup.deliveryplacename %]</li>[% END %]
+                    [% IF ( basketgroup.billingplacename ) %]<li><span class="label">Basket group billing place:</span> [% basketgroup.billingplacename %]</li>[% END %]
+                        </ol>
+                    [% IF ( CAN_user_acquisition_group_manage ) %]
                     </form>
-                    [% IF ( basketgroupdeliveryplace ) %]<p>Basket group delivery place: [% basketgroupdeliveryplace %]</p>[% END %]
-                    [% IF ( basketgroupbillingplace ) %]<p>Basket group billing place: [% basketgroupbillingplace %]</p>[% END %]
+                    [% END %]
                 </div>
                 [% END %]
             </div>
@@ -284,6 +405,7 @@
             <table id="orders">
                 <thead>
                     <tr>
+                        <th>No.</th>
                         <th>Order</th>
                         <th class="gste">RRP tax exc.</th>
                         <th class="gste">ecost tax exc.</th>
@@ -306,14 +428,18 @@
                 <tfoot>
                 [% FOREACH foot_loo IN book_foot_loop %]
                     <tr>
+                        <th></th>
                         <th>Total (GST [% foot_loo.gstgsti %])</th>
-                        <th class="gste"/><th class="gste"/><th class="gsti"/><th class="gsti"/>
+                        <th class="gste">&nbsp;</th>
+                        <th class="gste">&nbsp;</th>
+                        <th class="gsti">&nbsp;</th>
+                        <th class="gsti">&nbsp;</th>
                         <th>[% foot_loo.quantity %]</th>
                         <th class="gste">[% foot_loo.totalgste %]</th>
                         <th class="gsti">[% foot_loo.totalgsti %]</th>
-                        <th/>
+                        <th>&nbsp;</th>
                         <th>[% foot_loo.gstvalue %]</th>
-                        <th/>
+                        <th>&nbsp;</th>
                         [% IF ( active ) %]
                             [% UNLESS ( closedate ) %]
                                 <th>&nbsp;</th>
@@ -323,14 +449,18 @@
                     </tr>
                 [% END %]
                 <tr>
+                    <th></th>
                     <th>Total ([% currency %])</th>
-                    <th class="gste"/><th class="gste"/><th class="gsti"/><th class="gsti"/>
+                    <th class="gste">&nbsp;</th>
+                    <th class="gste">&nbsp;</th>
+                    <th class="gsti">&nbsp;</th>
+                    <th class="gsti">&nbsp;</th>
                     <th>[% total_quantity %]</th>
                     <th class="gste">[% total_gste %]</th>
                     <th class="gsti">[% total_gsti %]</th>
-                    <th/>
+                    <th>&nbsp;</th>
                     <th>[% total_gstvalue %]</th>
-                    <th/>
+                    <th>&nbsp;</th>
                     [% IF ( active ) %]
                         [% UNLESS ( closedate ) %]
                             <th>&nbsp;</th>
@@ -343,7 +473,11 @@
                 [% FOREACH books_loo IN books_loop %]
                     [% IF ( books_loo.order_received ) %]<tr class="disabled">[% ELSE %][% IF ( books_loo.toggle ) %]<tr class="highlight">[% ELSE %]<tr>[% END %][% END %]
                         <td>
-                            <p>[% IF ( books_loo.order_received ) %] (rcvd)[% END %]
+                            [% books_loo.ordernumber %]
+                        </td>
+                        <td>
+                            <p>
+                                [% IF ( books_loo.order_received ) %] (rcvd)[% END %]
                                 <a href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% books_loo.biblionumber %]">[% books_loo.title |html %]</a> by [% books_loo.author %]
                                 <br />
                                 [% IF ( books_loo.isbn ) %] - [% books_loo.isbn %][% END %]
@@ -356,27 +490,50 @@
                                     Suggested by: [% books_loo.surnamesuggestedby %][% IF ( books_loo.firstnamesuggestedby ) %], [% books_loo.firstnamesuggestedby %] [% END %]
                                     (<a href="/cgi-bin/koha/suggestion/suggestion.pl?suggestionid=[% books_loo.suggestionid %]&amp;op=show">suggestion #[% books_loo.suggestionid %]</a>)
                                 [% END %]
-                                [% IF ( books_loo.notes ) %]
-                                    <p class="ordernote"><strong>Note: </strong>[% books_loo.notes|html %] [<a href="/cgi-bin/koha/acqui/modordernotes.pl?ordernumber=[% books_loo.ordernumber %]">Change note</a>]</p>
-                                [% ELSE %]
-                                    [<a href="/cgi-bin/koha/acqui/modordernotes.pl?ordernumber=[% books_loo.ordernumber %]">Add note</a>]
-                                [% END %]
                             </p>
+                                [% IF ( books_loo.order_internalnote ) %]
+                                    <p class="ordernote"><strong>Internal note: </strong>[% books_loo.order_internalnote|html %] [<a href="/cgi-bin/koha/acqui/modordernotes.pl?ordernumber=[% books_loo.ordernumber %]&type=internal">Change internal note</a>]</p>
+                                [% ELSE %]
+                                    [<a href="/cgi-bin/koha/acqui/modordernotes.pl?ordernumber=[% books_loo.ordernumber %]&type=internal">Add internal note</a>]
+                                [% END %]
+                                [% IF ( books_loo.order_vendornote ) %]
+                                    <p class="ordernote"><strong>Vendor note: </strong>[% books_loo.order_vendornote|html %] [<a href="/cgi-bin/koha/acqui/modordernotes.pl?ordernumber=[% books_loo.ordernumber %]&type=vendor">Change vendor note</a>]</p>
+                                [% ELSE %]
+                                    [<a href="/cgi-bin/koha/acqui/modordernotes.pl?ordernumber=[% books_loo.ordernumber %]&type=vendor">Add vendor note</a>]
+                                [% END %]
+                            [% IF (books_loo.transferred_from) %]
+                              [% basket = books_loo.transferred_from.basket %]
+                              [% bookseller = books_loo.transferred_from.bookseller %]
+                              [% timestamp = books_loo.transferred_from.timestamp %]
+                              <p>Transferred from
+                                <a href="/cgi-bin/koha/acqui/basket.pl?basketno=[% basket.basketno %]">basket: [% basket.basketname %]</a>
+                                (<a href="/cgi-bin/koha/acqui/supplier.pl?booksellerid=[% bookseller.id %]">[% bookseller.name %]</a>)
+                                on <span title="[% timestamp | $KohaDates with_hours = 1 %]">
+                                  [% timestamp | $KohaDates %]
+                                </span>
+                              </p>
+                            [% END %]
                         </td>
-                        <td class="number gste [% IF books_loo.rrpgste.search('^0') %]error[% END %]">[% books_loo.rrpgste %]</td>
-                        <td class="number gste [% IF books_loo.ecostgste.search('^0') %]error[% END %]">[% books_loo.ecostgste %]</td>
-                        <td class="number gsti [% IF books_loo.rrpgsti.search('^0') %]error[% END %]">[% books_loo.rrpgsti %]</td>
-                        <td class="number gsti [% IF books_loo.ecostgsti.search('^0') %]error[% END %]">[% books_loo.ecostgsti %]</td>
-                        <td class="number [% IF books_loo.quantity.search('^0') %]error[% END %]">[% books_loo.quantity %]</td>
-                        <td class="number gste [% IF books_loo.totalgste.search('^0') %]error[% END %]">[% books_loo.totalgste %]</td>
-                        <td class="number gsti [% IF books_loo.totalgsti.search('^0') %]error[% END %]">[% books_loo.totalgsti %]</td>
-                        <td class="number [% IF books_loo.gstgsti.search('^0') %]error[% END %]">[% books_loo.gstgsti %]</td>
-                        <td class="number [% IF books_loo.gstvalue.search('^0') %]error[% END %]">[% books_loo.gstvalue %]</td>
+                        [% SET zero_regex = "^0{1,}\.?0{1,}[^1-9]" %] [%# 0 or 0.0 or 0.00 or 00 or 00.0 or 00.00 or 0.000 ... %]
+                        [%# FIXME: use of a regexp is not ideal; bugs 9410 and 10929 suggest better way of handling this %]
+                        <td class="number gste [% IF books_loo.rrpgste.search(zero_regex) %]error[% END %]">[% books_loo.rrpgste %]</td>
+                        <td class="number gste [% IF books_loo.ecostgste.search(zero_regex) %]error[% END %]">[% books_loo.ecostgste %]</td>
+                        <td class="number gsti [% IF books_loo.rrpgsti.search(zero_regex) %]error[% END %]">[% books_loo.rrpgsti %]</td>
+                        <td class="number gsti [% IF books_loo.ecostgsti.search(zero_regex) %]error[% END %]">[% books_loo.ecostgsti %]</td>
+                        <td class="number [% IF books_loo.quantity.search(zero_regex) %]error[% END %]">[% books_loo.quantity %]</td>
+                        <td class="number gste [% IF books_loo.totalgste.search(zero_regex) %]error[% END %]">[% books_loo.totalgste %]</td>
+                        <td class="number gsti [% IF books_loo.totalgsti.search(zero_regex) %]error[% END %]">[% books_loo.totalgsti %]</td>
+                        <td class="number [% IF books_loo.gstgsti.search(zero_regex) %]error[% END %]">[% books_loo.gstgsti %]</td>
+                        <td class="number [% IF books_loo.gstvalue.search(zero_regex) %]error[% END %]">[% books_loo.gstvalue %]</td>
                         <td>[% books_loo.budget_name %]</td>
                         [% IF ( active ) %]
                             [% UNLESS ( closedate ) %]
                             <td>
                                 <a href="neworderempty.pl?ordernumber=[% books_loo.ordernumber %]&amp;booksellerid=[% booksellerid %]&amp;basketno=[% basketno %]">Modify</a>
+                                [% UNLESS (books_loo.order_received) %]
+                                    <br />
+                                    <a href="#" onclick="transfer_order_popup([% books_loo.ordernumber %]); return false;">Transfer</a>
+                                [% END %]
                             </td>
                             <td>
                             [% IF ( books_loo.left_holds_on_order ) %]
@@ -418,6 +575,7 @@
             <table id="cancelledorderst">
               <thead>
                 <tr>
+                  <th>No.</th>
                   <th>Order</th>
                   <th class="gste">RRP tax exc.</th>
                   <th class="gste">ecost tax exc.</th>
@@ -435,6 +593,9 @@
                 [% FOREACH order IN cancelledorders_loop %]
                   <tr style="color:grey">
                     <td>
+                        [% order.ordernumber %]
+                    </td>
+                    <td>
                       <p>
                         [% IF ( order.order_received ) %] (rcvd)[% END %]
                         [% IF (order.title) %]
@@ -442,13 +603,25 @@
                         [% ELSE %]
                           <em>Deleted bibliographic record, can't find title</em><br />
                         [% END %]
-                        [% IF ( order.notes ) %] [% order.notes %][% END %]
+                        [% IF ( order.order_internalnote ) %] [% order.order_internalnote %][% END %]
                         [% IF ( order.isbn ) %] - [% order.isbn %][% END %]
                         [% IF ( order.issn ) %] - [% order.issn %][% END %]
                         [% IF ( order.publishercode ) %], [% order.publishercode %][% END %]
                         [% IF ( order.publicationyear ) %], [% order.publicationyear %][% END %]
                         [% IF ( books_loo.editionstatement ) %], [% books_loo.editionstatement %][% END %]
                       </p>
+                      [% IF order.transferred_to %]
+                        [% basket = order.transferred_to.basket %]
+                        [% bookseller = order.transferred_to.bookseller %]
+                        [% timestamp = order.transferred_to.timestamp %]
+                        <p>Transferred to
+                          <a href="/cgi-bin/koha/acqui/basket.pl?basketno=[% basket.basketno %]">basket: [% basket.basketname %]</a>
+                          (<a href="/cgi-bin/koha/acqui/supplier.pl?booksellerid=[% bookseller.id %]">[% bookseller.name %]</a>)
+                          on <span title="[% timestamp | $KohaDates with_hours = 1%]">
+                            [% timestamp | $KohaDates %]
+                          </span>
+                        </p>
+                      [% END %]
                     </td>
                     <td class="number gste">[% order.rrpgste %]</td>
                     <td class="number gste">[% order.ecostgste %]</td>
@@ -468,6 +641,15 @@
         [% END %]
         <br />
         [% UNLESS ( closedate ) %]
+
+    <!-- Modal -->
+    <div id="addtoBasket" class="modal hide" tabindex="-1" role="dialog" aria-labelledby="addtoBasketLabel" aria-hidden="true">
+        <div class="modal-body"></div>
+        <div class="modal-footer">
+            <a href="#" class="cancel" data-dismiss="modal" aria-hidden="true">Cancel</a>
+        </div>
+    </div>
+
         [% INCLUDE 'acquisitions-add-to-basket.inc' %]
         [% END %]
         [% END %]
@@ -479,10 +661,12 @@
 
         <form action="/cgi-bin/koha/acqui/basket.pl" class="confirm">
             <h1>Are you sure you want to close basket [% basketname|html %]?</h1>
+            [% IF ( CAN_user_acquisition_group_manage ) %]
             <p>
             <label for="createbasketgroup">Attach this basket to a new basket group with the same name</label>
             <input type="checkbox" id="createbasketgroup" name="createbasketgroup"/>
             </p>
+            [% END %]
             <input type="hidden" id="basketno" value="[% basketno %]" name="basketno" />
             <input type="hidden" value="close" name="op" />
             <input type="hidden" name="booksellerid" value="[% booksellerid %]" />
@@ -494,6 +678,7 @@
         </div>
     [% END %]
 </div>
+[% END %][%# IF (cannot_manage_basket) %]
 </div>
 <div class="yui-b">
 [% INCLUDE 'acquisitions-menu.inc' %]

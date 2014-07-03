@@ -15,20 +15,20 @@ KOHA.AJAX = {
         KOHA.xhr = xhr;
         if ( !xhr.getResponseHeader( 'content-type' ).match( 'application/json' ) ) {
             // Something really failed
-            humanMsg.displayAlert( _("Internal Server Error, please reload the page") );
+            humanMsg.displayAlert( MSG_INTERNAL_SERVER_ERROR );
             return;
         }
 
         var error = eval( '(' + xhr.responseText + ')' );
 
         if ( error.type == 'auth' ) {
-            humanMsg.displayMsg( _("You need to log in again, your session has timed out") );
+            humanMsg.displayMsg( MSG_SESSION_TIMED_OUT );
         }
 
         if ( callback ) {
             callback( error );
         } else {
-            humanMsg.displayAlert( _("Error; your data might not have been saved") );
+            humanMsg.displayAlert( MSG_DATA_NOT_SAVED );
         }
     },
     MarkRunning: function ( selector, text ) {
@@ -36,7 +36,7 @@ KOHA.AJAX = {
         $( selector )
             .attr( 'disabled', 'disabled' )
             .each( function () {
-                var $image = $( '<img src="/intranet-tmpl/prog/img/spinner-small.gif" alt="" class="spinner" />' );
+                var $spinner = $( '<span class="loading"></span>' );
                 var selector_type = this.localName;
                 if (selector_type === undefined) selector_type = this.nodeName; // IE only
                 switch ( selector_type.toLowerCase() ) {
@@ -48,14 +48,14 @@ KOHA.AJAX = {
                         $( this )
                             .data( 'original-text', $( this ).text )
                             .text( text )
-                            .before( $image )
+                            .before( $spinner )
                             .bind( 'click.disabled', function () { return false; } );
                         break;
                     case 'button':
                         $( this )
                             .data( 'original-text', $( this ).text() )
                             .text( text )
-                            .prepend( $image );
+                            .prepend( $spinner );
                         break;
                 }
             } );
@@ -74,12 +74,12 @@ KOHA.AJAX = {
                         $( this )
                             .text( $( this ).data( 'original-text' ) )
                             .unbind( 'click.disabled' )
-                            .prevAll( 'img.spinner' ).remove();
+                            .prevAll( 'span.loading' ).remove();
                         break;
                     case 'button':
                         $( this )
                             .text( $( this ).data( 'original-text' ) )
-                            .find( 'img.spinner' ).remove();
+                            .find( 'span.loading' ).remove();
                         break;
                 }
             } )

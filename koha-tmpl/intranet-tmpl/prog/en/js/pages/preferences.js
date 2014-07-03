@@ -8,7 +8,7 @@ KOHA.Preferences = {
             humanMsg.displayAlert( MSG_NOTHING_TO_SAVE );
             return;
         }
-        KOHA.AJAX.MarkRunning( $( form ).find( '.save-all' ), _( MSG_SAVING ) );
+        KOHA.AJAX.MarkRunning( $( form ).find( '.save-all' ), MSG_SAVING );
         KOHA.AJAX.Submit( {
             data: data,
             url: '/cgi-bin/koha/svc/config/systempreferences/',
@@ -21,7 +21,7 @@ KOHA.Preferences = {
         modified_prefs.each(function(){
             var modified_pref = $(this).attr("id");
             modified_pref = modified_pref.replace("pref_","");
-            msg += '<strong>Saved preference '+modified_pref+'</strong>\n';
+            msg += "<strong>"+ MSG_SAVED_PREFERENCE.format(modified_pref) + "</strong>\n";
         });
         humanMsg.displayAlert(msg);
 
@@ -95,16 +95,16 @@ $( document ).ready( function () {
     $("h3").attr("class","expanded").attr("title",MSG_CLICK_TO_EXPAND);
     var collapsible = $(".collapsed,.expanded");
 
-    $(collapsible).toggle(
-        function () {
+    $(collapsible).on("click",function(){
+        var panel = $(this).next("div");
+        if(panel.is(":visible")){
             $(this).addClass("collapsed").removeClass("expanded").attr("title",MSG_CLICK_TO_EXPAND);
-            $(this).next("div").hide();
-        },
-        function () {
+            panel.hide();
+        } else {
             $(this).addClass("expanded").removeClass("collapsed").attr("title",MSG_CLICK_TO_COLLAPSE);
-            $(this).next("div").show();
+            panel.show();
         }
-    );
+    });
 
     if ( to_highlight ) {
         var words = to_highlight.split( ' ' );

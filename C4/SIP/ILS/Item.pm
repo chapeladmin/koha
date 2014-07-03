@@ -21,8 +21,11 @@ use C4::Items;
 use C4::Circulation;
 use C4::Members;
 use C4::Reserves;
+use Koha::Database;
 
 our $VERSION = 3.07.00.049;
+
+=encoding UTF-8
 
 =head1 EXAMPLE
 
@@ -86,7 +89,10 @@ sub new {
     $item->{permanent_location}= $item->{homebranch};
     $item->{'collection_code'} = $item->{ccode};
     $item->{  'call_number'  } = $item->{itemcallnumber};
-    # $item->{'destination_loc'}  =  ?
+
+    my $it = C4::Context->preference('item-level_itypes') ? $item->{itype} : $item->{itemtype};
+    my $itemtype = Koha::Database->new()->schema()->resultset('Itemtype')->find( $it );
+    $item->{sip_media_type} = $itemtype->sip_media_type() if $itemtype;
 
 	# check if its on issue and if so get the borrower
 	my $issue = GetItemIssue($item->{'itemnumber'});
@@ -95,8 +101,8 @@ sub new {
     }
 	my $borrower = GetMember(borrowernumber=>$issue->{'borrowernumber'});
 	$item->{patron} = $borrower->{'cardnumber'};
-    my ($whatever, $arrayref) = GetReservesFromBiblionumber($item->{biblionumber});
-	$item->{hold_queue} = [ sort priority_sort @$arrayref ];
+    my $reserves = GetReservesFromBiblionumber({ biblionumber => $item->{biblionumber} });
+    $item->{hold_queue} = [ sort priority_sort @$reserves ];
 	$item->{hold_shelf}    = [( grep {   defined $_->{found}  and $_->{found} eq 'W' } @{$item->{hold_queue}} )];
 	$item->{pending_queue} = [( grep {(! defined $_->{found}) or  $_->{found} ne 'W' } @{$item->{hold_queue}} )];
 	$self = $item;

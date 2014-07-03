@@ -21,6 +21,7 @@ use XML::Simple;
 #use LWP::Simple;
 use C4::Biblio;
 use C4::Koha;
+use C4::Search;
 use C4::External::Syndetics qw(get_syndetics_editions);
 use LWP::UserAgent;
 use HTTP::Request::Common;
@@ -61,18 +62,19 @@ This module provides facilities for retrieving ThingISBN and XISBN content in Ko
 
 sub _get_biblio_from_xisbn {
     my $xisbn = shift;
-    $xisbn.='%';
     my $dbh = C4::Context->dbh;
-    my $query = "SELECT biblionumber FROM biblioitems WHERE isbn LIKE ?";
-    my $sth = $dbh->prepare($query);
-    $sth->execute($xisbn);
-    my $xbib_data =  $sth->fetchrow_hashref();
-    my $xbiblio;
-    if ($xbib_data->{biblionumber}) {
-        $xbiblio = GetBiblioData($xbib_data->{biblionumber});
-        $xbiblio->{normalized_isbn} = GetNormalizedISBN($xbiblio->{isbn});
-    }
-    return ($xbiblio);
+
+    my ( $errors, $results, $total_hits ) = C4::Search::SimpleSearch( "nb=$xisbn", 0, 1 );
+    return unless ( !$errors && scalar @$results );
+
+    my $record = C4::Search::new_record_from_zebra( 'biblioserver', $results->[0] );
+    my $biblionumber = C4::Biblio::get_koha_field_from_marc('biblio', 'biblionumber', $record, '');
+    return unless $biblionumber;
+
+    my $xbiblio = GetBiblioData($biblionumber);
+    return unless $xbiblio;
+    $xbiblio->{normalized_isbn} = GetNormalizedISBN($xbiblio->{isbn});
+    return $xbiblio;
 }
 
 =head1 get_xisbns($isbn);
@@ -156,12 +158,16 @@ sub _get_url {
 sub _service_throttle {
     my ($service_type,$daily_limit) = @_;
     my $dbh = C4::Context->dbh;
-    my $sth = $dbh->prepare("SELECT service_count FROM services_throttle WHERE service_type=?");
+    my $sth = $dbh->prepare(q{ SELECT service_count FROM services_throttle WHERE service_type=? });
     $sth->execute($service_type);
-    my $count = 1;
+    my $count = 0;
 
-    while (my $counter = $sth->fetchrow_hashref()) {
-        $count = $counter->{service_count} if $counter->{service_count};
+    if ($sth->rows == 0) {
+        # initialize services throttle
+        my $sth2 = $dbh->prepare(q{ INSERT INTO services_throttle (service_type, service_count) VALUES (?, ?) });
+        $sth2->execute($service_type, $count);
+    } else {
+        $count = $sth->fetchrow_array;
     }
 
     # we're over the limit
@@ -169,7 +175,9 @@ sub _service_throttle {
 
     # not over the limit
     $count++;
-    $sth = $dbh->do("UPDATE services_throttle SET service_count=$count WHERE service_type='xisbn'");
+    my $sth3 = $dbh->prepare(q{ UPDATE services_throttle SET service_count=? WHERE service_type=? });
+    $sth3->execute($count, $service_type);
+
     return undef;
 }
 

@@ -16,7 +16,6 @@ BEGIN {
 			ok($ret = $ENV{$_}, "ENV{$_} = $ret");
 		}
 		use_ok('C4::Context');
-		use_ok('C4::Utils', qw/ :all /);
 }
 
 ok($koha = C4::Context->new,  'C4::Context->new');
@@ -30,10 +29,10 @@ ok(
 );
 my @keys = keys %$koha;
 diag("Number of keys in \%\$koha: " . scalar @keys); 
-our $width = 0;
+my $width = 0;
 if (ok(@keys)) { 
-	$width = maxwidth(@keys);
-	$debug and diag "widest key is $width";
+    $width = (sort {$a <=> $b} map {length} @keys)[-1];
+    $debug and diag "widest key is $width";
 }
 foreach (sort @keys) {
 	ok(exists $koha->{$_}, 
@@ -41,17 +40,9 @@ foreach (sort @keys) {
 		. ((defined $koha->{$_}) ? "and is defined." : "but is not defined.")
 	);
 }
-diag "Examining defined key values.";
-foreach (grep {defined $koha->{$_}} sort @keys) {
-	print "\n";
-	hashdump('$koha->{' . sprintf('%' . $width . 's', $_)  . '}', $koha->{$_});
-}
 ok($config = $koha->{config}, 'Getting $koha->{config} ');
 
 diag "Testing syspref caching.";
-
-my $dbh = C4::Context->dbh;
-$dbh->disconnect;
 
 my $module = new Test::MockModule('C4::Context');
 $module->mock(
@@ -64,7 +55,7 @@ $module->mock(
 );
 
 my $history;
-$dbh = C4::Context->dbh;
+$dbh = C4::Context->dbh({ new => 1 });
 
 $dbh->{mock_add_resultset} = [ ['value'], ['thing1'] ];
 $dbh->{mock_add_resultset} = [ ['value'], ['thing2'] ];
@@ -106,6 +97,11 @@ $dbh->{mock_clear_history} = 1;
 is(C4::Context->preference("SillyPreference"), 'thing4', "Retrieved syspref (value='thing4') successfully from cache");
 $history = $dbh->{mock_all_history};
 is(scalar(@{$history}), 0, 'Did not retrieve syspref from database');
+
+my $oConnection = C4::Context->Zconn('biblioserver', 0);
+isnt($oConnection->option('async'), 1, "ZOOM connection is synchronous");
+$oConnection = C4::Context->Zconn('biblioserver', 1);
+is($oConnection->option('async'), 1, "ZOOM connection is asynchronous");
 
 done_testing();
 

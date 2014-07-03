@@ -1,10 +1,8 @@
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Tools &rsaquo; Tags &rsaquo; [% IF ( do_it ) %]Review &rsaquo; [% ELSE %]Review tags[% END %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<link rel="stylesheet" type="text/css" href="/intranet-tmpl/prog/en/css/datatables.css" />
-<script type="text/javascript" src="/intranet-tmpl/prog/en/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="/intranet-tmpl/prog/en/js/datatables.js"></script>
+<link rel="stylesheet" type="text/css" href="[% interface %]/[% theme %]/en/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
 //<![CDATA[
     $(document).ready(function() {
@@ -21,8 +19,6 @@
                 { "aTargets": [ -1, -2 ], "bSortable": false, "bSearchable": false },
             ],
             "aaSorting": [[ 0, "asc" ]],
-            "aLengthMenu": [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
-            "iDisplayLength": 20,
             "sPaginationType": "four_button"
         }));
     });

@@ -29,6 +29,8 @@ use C4::Biblio;
 use C4::Serials;
 use C4::Koha;
 use C4::Reserves qw/MergeHolds/;
+use C4::Acquisition qw/ModOrder GetOrdersByBiblionumber/;
+use Koha::MetadataRecord;
 
 my $input = new CGI;
 my @biblionumber = $input->param('biblionumber');
@@ -69,6 +71,7 @@ if ($merge) {
     ModBiblio($record, $tobiblio, $frameworkcode);
 
     # Moving items from the other record to the reference record
+    # Also moving orders from the other record to the reference record, only if the order is linked to an item of the other record
     my $itemnumbers = get_itemnumbers_of($frombiblio);
     foreach my $itloop ($itemnumbers->{$frombiblio}) {
     foreach my $itemnumber (@$itloop) {
@@ -100,6 +103,16 @@ if ($merge) {
     $sth->execute($tobiblio, $frombiblio);
 
     # TODO : Moving reserves
+
+    # Moving orders (orders linked to items of frombiblio have already been moved by MoveItemFromBiblio)
+    my @allorders = GetOrdersByBiblionumber($frombiblio);
+    my @tobiblioitem = GetBiblioItemByBiblioNumber ($tobiblio);
+    my $tobiblioitem_biblioitemnumber = $tobiblioitem [0]-> {biblioitemnumber };
+    foreach my $myorder (@allorders) {
+        $myorder->{'biblionumber'} = $tobiblio;
+        ModOrder ($myorder);
+    # TODO : add error control (in ModOrder?)
+    }
 
     # Deleting the other record
     if (scalar(@errors) == 0) {
@@ -156,8 +169,12 @@ if ($merge) {
             my $notreference = ($biblionumber[0] == $mergereference) ? $biblionumber[1] : $biblionumber[0];
 
             # Creating a loop for display
-            my @record1 = _createMarcHash(GetMarcBiblio($mergereference), $tagslib);
-            my @record2 = _createMarcHash(GetMarcBiblio($notreference), $tagslib);
+
+            my $recordObj1 = new Koha::MetadataRecord({ 'record' => GetMarcBiblio($mergereference), 'schema' => lc C4::Context->preference('marcflavour') });
+            my $recordObj2 = new Koha::MetadataRecord({ 'record' => GetMarcBiblio($notreference), 'schema' => lc C4::Context->preference('marcflavour') });
+
+            my @record1 = $recordObj1->createMergeHash($tagslib);
+            my @record2 = $recordObj2->createMergeHash($tagslib);
 
             # Parameters
             $template->param(
@@ -219,68 +236,3 @@ exit;
 # ------------------------
 # Functions
 # ------------------------
-sub _createMarcHash {
-     my $record = shift;
-    my $tagslib = shift;
-    my @array;
-    my @fields = $record->fields();
-
-
-    foreach my $field (@fields) {
-    my $fieldtag = $field->tag();
-    if ($fieldtag < 10) {
-        if ($tagslib->{$fieldtag}->{'@'}->{'tab'} >= 0) {
-        push @array, {
-            field => [
-                    {
-                    tag => $fieldtag,
-                    key => createKey(),
-                    value => $field->data(),
-                    }
-                ]
-                };
-        }
-    } else {
-        my @subfields = $field->subfields();
-        my @subfield_array;
-        foreach my $subfield (@subfields) {
-        if ($tagslib->{$fieldtag}->{@$subfield[0]}->{'tab'} >= 0) {
-            push @subfield_array, {
-                                    subtag => @$subfield[0],
-                                    subkey => createKey(),
-                                    value => @$subfield[1],
-                                  };
-        }
-
-        }
-
-        if ($tagslib->{$fieldtag}->{'tab'} >= 0 && $fieldtag ne '995') {
-        push @array, {
-            field => [
-                {
-                    tag => $fieldtag,
-                    key => createKey(),
-                    indicator1 => $field->indicator(1),
-                    indicator2 => $field->indicator(2),
-                    subfield   => [@subfield_array],
-                }
-            ]
-            };
-        }
-
-    }
-    }
-    return [@array];
-
-}
-
-=head2 CreateKey
-
-Create a random value to set it into the input name
-
-=cut
-
-sub createKey {
-    return int(rand(1000000));
-}
-

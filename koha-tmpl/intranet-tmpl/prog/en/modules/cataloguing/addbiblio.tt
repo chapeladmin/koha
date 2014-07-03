@@ -1,10 +1,19 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Cataloging &rsaquo; [% IF ( biblionumber ) %]Editing [% title |html %] (Record number [% biblionumber %])[% ELSE %]Add MARC record[% END %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.fixFloat.js"></script>
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.fixFloat.js"></script>
 <script type="text/javascript" src="[% themelang %]/js/cataloging.js"></script>
+[% INCLUDE 'browser-strings.inc' %]
+<!--[if lt IE 9]>
+<script type="text/javascript" src="[% interface %]/lib/shims/json2.min.js"></script>
+<![endif]-->
+<script type="text/javascript" src="[% interface %]/js/browser.js"></script>
 <script type="text/javascript">
 //<![CDATA[
+    var browser = KOHA.browser('[% searchid %]', parseInt('[% biblionumber %]', 10));
+    browser.show();
+
     $(window).load(function(){
         $("#loading").hide();
     });
@@ -12,6 +21,10 @@
         $('#addbibliotabs').tabs().bind('show.ui-tabs', function(e, ui) {
 			$("#"+ui.panel.id+" input:eq(0)").focus();
 		});
+
+        [% IF tab %]
+          $('#addbibliotabs').selectTabByID("#[% tab %]");
+        [% END %]
 
 		/* check cookie to hide/show marcdocs*/
 		if($.cookie("marcdocs_[% borrowernumber %]") == 'false'){
@@ -30,6 +43,32 @@
                 hideMARCdocLinks();
             }
         });
+
+        /* check cookie to hide/show marc tags*/
+        var marctags_cookie = $.cookie("marctags_[% borrowernumber %]");
+        if( marctags_cookie == 'false'){
+            hideMARCTagLinks();
+            $("#marcTagsSelect").removeAttr('checked');
+        } else if( marctags_cookie == 'true'){
+            showMARCTagLinks();
+            $("#marcTagsSelect").attr('checked', 'checked');
+        } else {
+            [% UNLESS Koha.Preference("hide_marc") %]
+                showMARCTagLinks();
+                $("#marcTagsSelect").attr('checked', 'checked');
+            [% ELSE %]
+                hideMARCTagLinks();
+                $("#marcTagsSelect").removeAttr('checked');
+            [% END %]
+        }
+        $("#marcTagsSelect").click(function(){
+            if($(this).attr("checked")){
+                showMARCTagLinks();
+            } else {
+                hideMARCTagLinks();
+            }
+        });
+
         $("#z3950search").click(function(){
             if (confirm(_("Please note that this Z39.50 search could replace the current record."))){
                 PopupZ3950();
@@ -53,7 +92,15 @@
             redirect("items");
             return false;
         });
-	});
+        $("#saveandcontinue").click(function(){
+            $(".btn-group").removeClass("open");
+            var tab = $("#addbibliotabs li.ui-tabs-active:first a").attr('href');
+            tab = tab.replace('#', '');
+            $("#current_tab").val(tab);
+            redirect("just_save", tab);
+            return false;
+        });
+    });
 
 function redirect(dest){
     $("#redirect").attr("value",dest);
@@ -87,11 +134,11 @@ function PopupZ3950() {
     } 
 }
 
-function PopupMARCFieldDoc(field, blocknumber) {
+function PopupMARCFieldDoc(field) {
     [% IF ( marcflavour == 'MARC21' ) %]
         _MARC21FieldDoc(field);
     [% ELSIF ( marcflavour == 'UNIMARC' ) %]
-        _UNIMARCFieldDoc(field, blocknumber);
+        _UNIMARCFieldDoc(field);
     [% END %]
 }
 
@@ -105,25 +152,28 @@ function _MARC21FieldDoc(field) {
     }
 }
 
-function _UNIMARCFieldDoc(field, blocknumber) {
+function _UNIMARCFieldDoc(field) {
     /* http://archive.ifla.org/VI/3/p1996-1/ is an outdated version of UNIMARC, but
        seems to be the only version available that can be linked to per tag.  More recent
        versions of the UNIMARC standard are available on the IFLA website only as
        PDFs!
     */
-    if(field == 0) {
-        window.open("http://archive.ifla.org/VI/3/p1996-1/uni.htm");
-    } else if (field < 100) {
-        window.open("http://archive.ifla.org/VI/3/p1996-1/uni"+blocknumber+".htm#b" + ("000"+field).slice(-3));
-    } else if (field < 900) {
-        window.open("http://archive.ifla.org/VI/3/p1996-1/uni"+blocknumber+".htm#" + ("000"+field).slice(-3));
+    var url;
+    if (field == 0) {
+        url = "http://archive.ifla.org/VI/3/p1996-1/uni.htm";
     } else {
-        window.open("http://archive.ifla.org/VI/3/p1996-1/uni9.htm");
+        var first = field.substring(0,1);
+        url = "http://archive.ifla.org/VI/3/p1996-1/uni" + first + ".htm#";
+        if (first == 0) url = url + "b";
+        url = first == 9
+              ? "http://archive.ifla.org/VI/3/p1996-1/uni9.htm"
+              : url + field;
     }
+    window.open(url);
 }
 
 /*
- * Functions to hide/show marc docs links
+ * Functions to hide/show marc docs and tags links
  */
 function hideMARCdocLinks() {
 	$(".marcdocs").hide();
@@ -134,6 +184,32 @@ function showMARCdocLinks() {
 	$(".marcdocs").show();
 	$.cookie("marcdocs_[% borrowernumber %]",'true', { path: "/", expires: 365 });
 }
+
+function hideMARCTagLinks() {
+    $(".tagnum").hide();
+    $(".subfieldcode").hide();
+    $.cookie("marctags_[% borrowernumber %]",'false', { path: "/", expires: 365 });
+}
+function showMARCTagLinks() {
+    $(".tagnum").show();
+    $(".subfieldcode").show();
+    $.cookie("marctags_[% borrowernumber %]",'true', { path: "/", expires: 365 });
+}
+        [% IF hide_marc %]
+            var hide = false;
+        [% ELSE %]
+            var hide = true;
+        [% END %]
+        $("#show_tags").change( function(){
+            if ( $(this).is(':checked') ) {
+                $(".tagnum").show();
+                $(".subfieldcode").show();
+            } else {
+            }
+        } );
+        $("#show_tags").attr("checked", !hide)
+        $("#show_tags").change();
+
 
 /**
  * check if mandatory subfields are written
@@ -182,7 +258,7 @@ function AreMandatoriesNotOk(){
       if (tabflag[tagsubfieldid][0]==0){
         var tag=tagsubfieldid.substr(0,3);
         var subfield=tagsubfieldid.substr(3,1);    
-        StrAlert += "\t* "+_("tag ")+tag+_(" subfield ")+subfield+" "+tabflag[tagsubfieldid][1]+_(" in tab ")+tabflag[tagsubfieldid][2]+"\n";
+        StrAlert += "\t* "+_("tag %s subfield %s %s in tab %s").format(tag, subfield, tabflag[tagsubfieldid][1], tabflag[tagsubfieldid][2]) + "\n";
         //StrAlert += "\t* "+label[i]+_(" in tab ")+tab[i]+"\n"; 
         flag=1;    
       }   
@@ -232,7 +308,7 @@ function AreMandatoriesNotOk(){
     	
     	if(isempty){
     		flag = 1;
-    		StrAlert += _("\t* Field ") + arr[0] + _(" is mandatory, at least one of its subfields must be filled.") + "\n";
+                StrAlert += "\t* " + _("Field %s is mandatory, at least one of its subfields must be filled.").format(arr[0]) + "\n";
     	}
     	
     }
@@ -280,13 +356,18 @@ function GetZ3950Terms(){
 
 function Changefwk(FwkList) {
     var f = document.f;
-    f.op.value = "";
+    f.op.value = "[% op %]";
+    f.biblionumber.value = "[% biblionumberdata %]";
+    f.changed_framework.value = "changed";
     f.submit();
 }
 
 //]]>
 </script>
 <link type="text/css" rel="stylesheet" href="[% themelang %]/css/addbiblio.css" />
+[% IF ( bidi ) %]
+   <link rel="stylesheet" type="text/css" href="[% themelang %]/css/right-to-left.css" />
+[% END %]
 </head>
 <body id="cat_addbiblio" class="cat">
 
@@ -310,8 +391,11 @@ function Changefwk(FwkList) {
 [% END %]
 </h1>
 
-[% IF marcflavour != 'NORMARC' %]
-<div><input type="checkbox" name="marcDocsSelect" id="marcDocsSelect" checked="true" /> Show MARC tag documentation links<br/></div>
+[% IF marcflavour != 'NORMARC' AND NOT advancedMARCEditor %]
+<div>
+  <label><input type="checkbox" name="marcDocsSelect" id="marcDocsSelect" checked="true" /> Show MARC tag documentation links</label>
+  <label><input type="checkbox" name="marcTagsSelect" id="marcTagsSelect" style="margin-left: 5px;" /> Show tags</label>
+</div>
 [% END %]
 
 [% UNLESS ( number ) %]
@@ -343,7 +427,8 @@ function Changefwk(FwkList) {
 [% ELSE %]
     <form method="post" name="f" id="f" action="/cgi-bin/koha/cataloguing/addbiblio.pl" onsubmit="return Check();">
     <input type="hidden" value="[% IF ( biblionumber ) %]view[% ELSE %]items[% END %]" id="redirect" name="redirect" />
-	<input type="hidden" value="0" id="confirm_not_duplicate" name="confirm_not_duplicate" />
+    <input type="hidden" value="" id="current_tab" name="current_tab" />
+    <input type="hidden" value="0" id="confirm_not_duplicate" name="confirm_not_duplicate" />
 [% END %]
 
 <div id="toolbar" class="btn-toolbar">
@@ -361,6 +446,7 @@ function Changefwk(FwkList) {
                 <ul class="dropdown-menu">
                     <li><a id="saveandview" href="#">Save and view record</a></li>
                     <li><a id="saveanditems" href="#">Save and edit items</a></li>
+                    <li><a id="saveandcontinue" href="#">Save and continue editing</a></li>
                 </ul>
             </div>
         [% END %]
@@ -371,8 +457,30 @@ function Changefwk(FwkList) {
 
     [% UNLESS (circborrowernumber) %][%# Hide in fast cataloging %]
         <div class="btn-group"><a class="btn btn-small" href="#" id="z3950search"><i class="icon-search"></i> Z39.50 search</a></div>
-        <div class="btn-group">
-            <label for="Frameworks">Change framework: </label>
+        [% IF (biblionumber) %]
+            [% IF ( BiblioDefaultViewmarc ) %]
+                <div class="btn-group">
+                    <a class="btn btn-small" id="cancel" href="/cgi-bin/koha/catalogue/MARCdetail.pl?biblionumber=[% biblionumber |url %]">Cancel</a>
+                </div>
+            [% ELSIF ( BiblioDefaultViewlabeled_marc ) %]
+                <div class="btn-group">
+                    <a class="btn btn-small" id="cancel" href="/cgi-bin/koha/catalogue/labeledMARCdetail.pl?biblionumber=[% biblionumber |url %]">Cancel</a>
+                </div>
+            [% ELSIF ( BiblioDefaultViewisbd ) %]
+                <div class="btn-group">
+                    <a class="btn btn-small" id="cancel" href="/cgi-bin/koha/catalogue/ISBDdetail.pl?biblionumber=[% biblionumber |url %]">Cancel</a>
+                </div>
+            [% ELSE %]
+                <div class="btn-group">
+                    <a class="btn btn-small" id="cancel" href="/cgi-bin/koha/catalogue/detail.pl?biblionumber=[% biblionumber |url %]">Cancel</a>
+                </div>
+            [% END %]
+        [% ELSE %]
+            <a class="btn btn-small" id="cancel" href="/cgi-bin/koha/cataloguing/addbooks.pl">Cancel</a>
+        [% END %]
+    [% END %]
+    <div class="btn-group">
+        <label for="Frameworks">Change framework: </label>
             <select name="frameworkcode" id="Frameworks" onchange="Changefwk(this);">
                 <option value="Default">Default</option>
                 [% FOREACH frameworkcodeloo IN frameworkcodeloop %]
@@ -381,12 +489,11 @@ function Changefwk(FwkList) {
                     [% ELSE %]
                         <option value="[% frameworkcodeloo.value %]">
                     [% END %]
-                     [% frameworkcodeloo.frameworktext %]
-                     </option>
+                       [% frameworkcodeloo.frameworktext %]
+                       </option>
                 [% END %]
             </select>
         </div>
-    [% END %]
 </div>
 
 [% IF ( popup ) %]
@@ -396,6 +503,7 @@ function Changefwk(FwkList) {
         <input type="hidden" name="frameworkcode" value="[% frameworkcode %]" />
         <input type="hidden" name="biblionumber" value="[% biblionumber %]" />
         <input type="hidden" name="breedingid" value="[% breedingid %]" />
+        <input type="hidden" name="changed_framework" value="" />
 
 <div id="addbibliotabs" class="toptabs numbered">
     <ul>
@@ -411,13 +519,11 @@ function Changefwk(FwkList) {
     [% IF ( innerloo.tag ) %]
     <div class="tag" id="tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]">
         <div class="tag_title" id="div_indicator_tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]">
-        [% UNLESS hide_marc %]
             [% IF advancedMARCEditor %]
                 <a href="#" tabindex="1" class="tagnum" title="[% innerloo.tag_lib %] - Click to Expand this Tag" onclick="ExpandField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]'); return false;">[% innerloo.tag %]</a>
             [% ELSE %]
-                <span class="tagnum" title="[% innerloo.tag_lib %]">[% innerloo.tag %]
-                [% IF marcflavour != 'NORMARC' %]<a class="marcdocs" onclick="PopupMARCFieldDoc('[% innerloo.tag %]', [% BIG_LOO.number %]); return false;">&nbsp;?</a>[% END %]
-                </span>
+                <span class="tagnum" title="[% innerloo.tag_lib %]">[% innerloo.tag %]</span>
+                [% IF marcflavour != 'NORMARC' %]<a href="#" class="marcdocs" onclick="PopupMARCFieldDoc('[% innerloo.tag %]'); return false;">&nbsp;?</a>[% END %]
             [% END %]
                 [% IF ( innerloo.fixedfield ) %]
                     <input type="text"
@@ -452,39 +558,18 @@ function Changefwk(FwkList) {
                         maxlength="1"
                         value="[% innerloo.indicator2 %]" />
                 [% END %] -
-        [% ELSE %]
-                [% IF ( innerloo.fixedfield ) %]
-                    <input type="hidden"
-                        tabindex="1"
-                        name="tag_[% innerloo.tag %]_indicator1_[% innerloo.index %][% innerloo.random %]"
-                        value="[% innerloo.indicator1 %]" />
-                    <input type="hidden"
-                        tabindex="1"
-                        name="tag_[% innerloo.tag %]_indicator2_[% innerloo.index %][% innerloo.random %]"
-                        value="[% innerloo.indicator2 %]" />
-                [% ELSE %]
-                    <input type="hidden"
-                        tabindex="1"
-                        name="tag_[% innerloo.tag %]_indicator1_[% innerloo.index %][% innerloo.random %]"
-                        value="[% innerloo.indicator1 %]" />
-                    <input type="hidden"
-                        tabindex="1"
-                        name="tag_[% innerloo.tag %]_indicator2_[% innerloo.index %][% innerloo.random %]"
-                        value="[% innerloo.indicator2 %]" />
-                [% END %]
-        [% END %]
 
             [% UNLESS advancedMARCEditor %]
                 <a href="#" tabindex="1" class="expandfield" onclick="ExpandField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]'); return false;" title="Click to Expand this Tag">[% innerloo.tag_lib %]</a>
             [% END %]
                 <span class="field_controls">
                 [% IF ( innerloo.repeatable ) %]
-                    <a href="#" tabindex="1" class="buttonPlus" onclick="CloneField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]','[% hide_marc %]','[% advancedMARCEditor %]'); return false;" title="Repeat this Tag">
-                        <img src="/intranet-tmpl/prog/img/repeat-tag.png" alt="Repeat this Tag" />
+                    <a href="#" tabindex="1" class="buttonPlus" onclick="CloneField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]','0','[% advancedMARCEditor %]'); return false;" title="Repeat this Tag">
+                        <img src="[% interface %]/[% theme %]/img/repeat-tag.png" alt="Repeat this Tag" />
                     </a>
                 [% END %]
                     <a href="#" tabindex="1" class="buttonMinus" onclick="UnCloneField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]'); return false;" title="Delete this Tag">
-                        <img src="/intranet-tmpl/prog/img/delete-tag.png" alt="Delete this Tag" />
+                        <img src="[% interface %]/[% theme %]/img/delete-tag.png" alt="Delete this Tag" />
                     </a>
                 </span>
 
@@ -493,19 +578,18 @@ function Changefwk(FwkList) {
         [% FOREACH subfield_loo IN innerloo.subfield_loop %]
             <!--  One line on the marc editor -->
             <div class="subfield_line" style="[% subfield_loo.visibility %]" id="subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]">
-            
+
                 [% UNLESS advancedMARCEditor %]
                     [% IF ( subfield_loo.fixedfield ) %]<label for="tag_[% subfield_loo.tag %]_subfield_[% subfield_loo.subfield %]_[% subfield_loo.index %]_[% subfield_loo.index_subfield %]" style="display:none;" class="labelsubfield">
                     [% ELSE %]<label for="tag_[% subfield_loo.tag %]_subfield_[% subfield_loo.subfield %]_[% subfield_loo.index %]_[% subfield_loo.index_subfield %]" class="labelsubfield">
                     [% END %]
                 [% END %]
-                
-                [% UNLESS hide_marc %]
+
                 <span class="subfieldcode">
                     [% IF ( subfield_loo.fixedfield ) %]
-                        <img class="buttonUp" style="display:none;" src="/intranet-tmpl/prog/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
+                        <img class="buttonUp" style="display:none;" src="[% interface %]/[% theme %]/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
                     [% ELSE %]
-                        <img class="buttonUp" src="/intranet-tmpl/prog/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
+                        <img class="buttonUp" src="[% interface %]/[% theme %]/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
                     [% END %]
                         <input type="text"
                             title="[% subfield_loo.marc_lib_plain %]"
@@ -517,12 +601,7 @@ function Changefwk(FwkList) {
                             class="flat"
                             tabindex="0" />
                 </span>
-                [% ELSE %]
-                    <input type="hidden"
-                        name="tag_[% subfield_loo.tag %]_code_[% subfield_loo.subfield %]_[% subfield_loo.index %]_[% subfield_loo.index_subfield %]"
-                        value="[% subfield_loo.subfield %]" />
-                [% END %]
-            
+
                 [% UNLESS advancedMARCEditor %]
                     [% IF ( subfield_loo.mandatory ) %]<span class="subfield subfield_mandatory">[% ELSE %]<span class="subfield">[% END %]
                         [% subfield_loo.marc_lib_plain %]
@@ -536,10 +615,10 @@ function Changefwk(FwkList) {
                 <span class="subfield_controls">
                 [% IF ( subfield_loo.repeatable ) %]
                     <a href="#" class="buttonPlus" tabindex="1" onclick="CloneSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]','[% advancedMARCEditor %]'); return false;">
-                        <img src="/intranet-tmpl/prog/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
+                        <img src="[% interface %]/[% theme %]/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
                     </a>
                     <a href="#" class="buttonMinus" tabindex="1" onclick="UnCloneField('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]'); return false;">
-                        <img src="/intranet-tmpl/prog/img/delete-subfield.png" alt="Delete" title="Delete this subfield" />
+                        <img src="[% interface %]/[% theme %]/img/delete-subfield.png" alt="Delete" title="Delete this subfield" />
                     </a>
                 [% END %]
                 </span>

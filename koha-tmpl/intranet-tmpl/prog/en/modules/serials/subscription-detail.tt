@@ -1,4 +1,4 @@
-[% USE KohaBranchName %]
+[% USE Branches %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Serials &rsaquo; Details for subscription #[% subscriptionid %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
@@ -8,21 +8,6 @@
 var text = new Array(_("Number"),_("Volume"),_("Issue"),_("Month"),_("Week"),_("Starting with:"),_("Rollover at:"),_("Choose Hemisphere:"),_("Northern"),_("Southern",
 "Autumn"),_("Winter"),_("Spring"),_("Summer"),_("Fall"),_("Season"),_("Year"));
 
-
-// to display the options section
-function options(x,y,z){
-var textbox = '';
-    // alert("X: "+x+"Y: "+y+"Z: "+z);
-    if(x){
-        document.f.xfield.value = x;
-        if(y){
-            document.f.yfield.value = y;
-            if(z){
-                document.f.zfield.value = z;
-            }
-        }
-    }
-}
 
 function confirm_deletion() {
     var is_confirmed = confirm(_("Are you sure you want to delete this subscription?"));
@@ -102,12 +87,20 @@ $(document).ready(function() {
         <li><span class="label">Librarian identity:</span> [% librarian %]</li>
         <li><span class="label">Vendor:</span> <a href="/cgi-bin/koha/acqui/supplier.pl?booksellerid=[% aqbooksellerid %]">[% aqbooksellername %]</a></li>
         <li><span class="label">Biblio:</span>  <a href="/cgi-bin/koha/catalogue/[% default_bib_view %].pl?biblionumber=[% bibnum %]">[% bibliotitle %]</a> <i>([% bibnum %])</i></li>
-[% IF ( branchcode ) %]<li><span class="label">Library:</span> [% branchcode | $KohaBranchName %]</li>[% END %]
+[% IF ( branchcode ) %]<li><span class="label">Library:</span> [% Branches.GetName( branchcode ) %]</li>[% END %]
         [% IF ( serialsadditems ) %]
             <li><span class="label">Items:</span> Serial receipt creates an item record.</li>
         [% ELSE %]
             <li><span class="label">Items:</span> Serial receipt does not create an item record.</li>
         [% END %]
+        <li>
+            <span class="label">Serial number:</span>
+            [% IF skip_serialseq %]
+                Serial number is skipped when an irregularity is found.
+            [% ELSE %]
+                Serial number is kept when an irregularity is found.
+            [% END %]
+        </li>
         <li><span class="label">Grace period:</span> [% graceperiod %]</li>
         </ol>
     </div>
@@ -131,158 +124,51 @@ $(document).ready(function() {
      </div>
 </div>
 </div>
-    [% IF ( show_acquisition_details ) %]
-        <div id="acquisition_details">
-            <h2>Acquisition details</h2>
-            <table>
-                <thead>
-                    <tr><th></th><th>Price exc. taxes</th><th>Price inc. taxes</th><th>fund</th><th></th></tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Ordered amount</td>
-                        <td>[% valuegste_ordered %]</td>
-                        <td>[% valuegsti_ordered %]</td>
-                        <td>[% budget_name_ordered %]</td>
-                        <td>
-                            [% IF ( ordered_exists ) %]
-                                <a href="/cgi-bin/koha/acqui/basket.pl?basketno=[% basketno %]">See basket informations</a>
-                            [% END %]
-                        </td>
-                    </tr>
-                    <tr>
-                        <td>Spent amount</td>
-                        <td>[% valuegste_spent %]</td>
-                        <td>[% valuegsti_spent %]</td>
-                        <td>[% budget_name_spent %]</td>
-                        <td>
-                            [% IF ( spent_exists ) %]
-                                <a href="/cgi-bin/koha/acqui/invoice.pl?invoicenumber=[% invoicenumber %]">See invoice informations</a>
-                            [% END %]
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    [% END %]
+
     <div id="subscription_planning">
     <div class="yui-g">
     <div class="rows">
         <ol>
             <li><span class="label">Beginning date:</span> [% startdate %]
             </li>
-            <li><span class="label">Frequency (*):</span>
-                [% IF ( periodicity16 ) %]
-                        Without regularity
-                [% END %]
-                [% IF ( periodicity32 ) %]
-                        Irregular
-                [% END %]
-                [% IF ( periodicity0 ) %]
-                        Unknown
-                [% END %]
-                [% IF ( periodicity12 ) %]
-                        2/day
-                [% END %]
-                [% IF ( periodicity1 ) %]
-                        1/day
-                [% END %]
-                [% IF ( periodicity13 ) %]
-                        1/4 months (3/year)
-                [% END %]
-                [% IF ( periodicity2 ) %]
-                        1/week
-                [% END %]
-                [% IF ( periodicity3 ) %]
-                        1/2 weeks
-                [% END %]
-                [% IF ( periodicity4 ) %]
-                        1/3 weeks
-                [% END %]
-                [% IF ( periodicity5 ) %]
-                        1/month
-                [% END %]
-                [% IF ( periodicity6 ) %]
-                        1/2 months (6/year)
-                [% END %]
-                [% IF ( periodicity7 ) %]
-                        1/quarter
-                [% END %]
-                [% IF ( periodicity8 ) %]
-                        1/quarter
-                [% END %]
-                [% IF ( periodicity9 ) %]
-                        2/year
-                [% END %]
-                [% IF ( periodicity10 ) %]
-                        1/year
-                [% END %]
-                [% IF ( periodicity11 ) %]
-                        1/2 years
-                [% END %]
+            <li><span class="label">Frequency:</span>
+                [% frequency.description %]
             </li>
             <li>
               <span class="label">Manual history: </span>
                 [% IF ( manualhistory ) %]
-                    Enabled
+                    Enabled <a href="/cgi-bin/koha/serials/subscription-history.pl?subscriptionid=[% subscriptionid %]">Edit history</a>
                 [% ELSE %]
                     Disabled
                 [% END %]
             </li>
             <li><span class="label">Number pattern:</span>
-                [% IF ( numberpattern1 ) %]
-                    Number only
-                [% END %]
-                [% IF ( numberpattern2 ) %]
-                    Volume, number, issue
-                [% END %]
-                [% IF ( numberpattern3 ) %]
-                    Volume, number
-                [% END %]
-                [% IF ( numberpattern4 ) %]
-                    Volume, issue
-                [% END %]
-                [% IF ( numberpattern5 ) %]
-                    Number, issue
-                [% END %]
-                [% IF ( numberpattern8 ) %]
-                    Year/Number
-                [% END %]
-                [% IF ( numberpattern6 ) %]
-                    Seasonal only
-                [% END %]
-                [% IF ( numberpattern7 ) %]
-                    None of the above
-                [% END %]
+                [% numberpattern.label %]
             </li>
             <li><table>
-            <tr><td>Starting with:</td>
-                <td align="center">[% lastvalue1 %]</td>
-            [% IF ( lastvalue2 ) %]
-                <td align="center">&nbsp; 
-                    [% lastvalue2 %]
-                </td>
-            [% END %]
-            [% IF ( lastvalue3 ) %]
-                <td align="center">&nbsp; 
-                    [% lastvalue3 %]
-                </td>
-            [% END %]
+            <tr>
+                <td>Starting with:</td>
+                [% IF (has_X) %]
+                    <td align="center">[% lastvalue1 %]</td>
+                [% END %]
+                [% IF (has_Y) %]
+                    <td align="center">[% lastvalue2 %]</td>
+                [% END %]
+                [% IF (has_Z) %]
+                    <td align="center">[% lastvalue3 %]</td>
+                [% END %]
             </tr>
-            <tr><td>Rollover:</td>
-                <td align="center">
-                    [% IF ( whenmorethan1 < 9999999 ) %][% whenmorethan1 %][% ELSE %]Never[% END %]
-                </td>
-            [% IF ( whenmorethan2 ) %]
-                <td align="center">&nbsp;
-                    [% IF ( whenmorethan2 < 9999999 ) %][% whenmorethan2 %][% ELSE %]Never[% END %]
-                </td>
-            [% END %]
-            [% IF ( whenmorethan3 ) %]
-                <td align="center">&nbsp;
-                    [% IF ( whenmorethan3 < 9999999 ) %][% whenmorethan3 %][% ELSE %]Never[% END %]
-                </td>
-            [% END %]
+            <tr>
+                <td>Rollover:</td>
+                [% IF (has_X) %]
+                    <td align="center">[% numberpattern.whenmorethan1 %]</td>
+                [% END %]
+                [% IF (has_Y) %]
+                    <td align="center">[% numberpattern.whenmorethan2 %]</td>
+                [% END %]
+                [% IF (has_Z) %]
+                    <td align="center">[% numberpattern.whenmorethan3 %]</td>
+                [% END %]
             </tr>
             </table></li>
             [% IF ( irregular_issues ) %]
@@ -373,16 +259,28 @@ $(document).ready(function() {
                     [% serialslis.serialseq %]
                 </td>
                 <td>
-                    [% serialslis.planneddate %]
+                    [% IF serialslis.planneddate %]
+                      [% serialslis.planneddate %]
+                    [% ELSE %]
+                      Unknown
+                    [% END %]
                 </td>
                 <td>
-                    [% serialslis.publisheddate %]
+                    [% IF serialslis.publisheddate %]
+                      [% serialslis.publisheddate %]
+                    [% ELSE %]
+                      Unknown
+                    [% END %]
                 </td>
                 <td>
                     [% IF ( serialslis.status1 ) %]Expected[% END %]
                     [% IF ( serialslis.status2 ) %]Arrived[% END %]
                     [% IF ( serialslis.status3 ) %]Late[% END %]
                     [% IF ( serialslis.status4 ) %]Missing[% END %]
+                    [% IF ( serialslis.status41 ) %]Missing (never received)[% END %]
+                    [% IF ( serialslis.status42 ) %]Missing (sold out)[% END %]
+                    [% IF ( serialslis.status43 ) %]Missing (damaged)[% END %]
+                    [% IF ( serialslis.status44 ) %]Missing (lost)[% END %]
                     [% IF ( serialslis.status5 ) %]Not issued[% END %]
                     [% IF ( serialslis.status6 ) %]Delete[% END %]
                     [% IF ( serialslis.status7 ) %]
@@ -409,13 +307,51 @@ $(document).ready(function() {
             <li><span class="label">Missing issues:</span>[% missinglist %]</li>
             <li><span class="label">Nonpublic note:</span>[% internalnotes FILTER html_line_break %]</li>
             <li><span class="label">Public note:</span>[% notes FILTER html_line_break %]</li>
-            <li><span class="label">History staff note</span>[% librariannote FILTER html_line_break %]</li>
-            <li><span class="label">History OPAC note</span>[% opacnote FILTER html_line_break %]</li>
+            <li><span class="label">History staff note:</span>[% librariannote FILTER html_line_break %]</li>
+            <li><span class="label">History OPAC note:</span>[% opacnote FILTER html_line_break %]</li>
         </ol>
     </div>
     </div>
     </div>
     </div>
+
+    [% IF ( show_acquisition_details ) %]
+        <div id="acquisition_details">
+            <h2>Acquisition details</h2>
+            <table>
+                <thead>
+                    <tr><th></th><th>Price exc. taxes</th><th>Price inc. taxes</th><th>Fund</th><th></th></tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Ordered amount</td>
+                        <td>[% valuegste_ordered %]</td>
+                        <td>[% valuegsti_ordered %]</td>
+                        <td>[% budget_name_ordered %]</td>
+                        <td>
+                            [% IF ( ordered_exists ) %]
+                                <a href="/cgi-bin/koha/acqui/basket.pl?basketno=[% basketno %]">See basket information</a>
+                            [% END %]
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>Spent amount</td>
+                        <td>[% valuegste_spent %]</td>
+                        <td>[% valuegsti_spent %]</td>
+                        <td>[% budget_name_spent %]</td>
+                        <td>
+                            [% IF ( spent_exists ) %]
+                                <a href="/cgi-bin/koha/acqui/invoice.pl?invoiceid=[% invoiceid %]">See invoice information</a>
+                            [% END %]
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    [% END %]
+
+
+
 </div>
 </div>
 

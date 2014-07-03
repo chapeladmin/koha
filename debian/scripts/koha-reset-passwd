@@ -19,12 +19,13 @@
 
 set -e
 
-
-die() {
-    echo "$@" 1>&2
+# include helper functions
+if [ -f "/usr/share/koha/bin/koha-functions.sh" ]; then
+    . "/usr/share/koha/bin/koha-functions.sh"
+else
+    echo "Error: /usr/share/koha/bin/koha-functions.sh not present." 1>&2
     exit 1
-}
-
+fi
 
 pwdigest() {
     echo -n "$1" |
@@ -45,7 +46,7 @@ eof
 
 for userid in "$@"
 do
-    password="$(pwgen -1)"
+    password="$(pwgen 12 1)"
     digest="$(pwdigest $password)"
     echo "$userid $password"
     echo "UPDATE borrowers SET password = '$digest' WHERE userid = '$userid';" \

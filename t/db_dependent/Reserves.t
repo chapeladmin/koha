@@ -1,24 +1,67 @@
 #!/usr/bin/perl
 
-use strict;
-use warnings;
-use C4::Branch;
+use Modern::Perl;
 
-use Test::More tests => 4;
+use Test::More tests => 35;
+
 use MARC::Record;
+use DateTime::Duration;
+
+use C4::Branch;
 use C4::Biblio;
 use C4::Items;
+use C4::Members;
+use C4::Circulation;
+use t::lib::Mocks;
 
+use Koha::DateUtils;
+
+use Data::Dumper;
 BEGIN {
-	use FindBin;
-	use lib $FindBin::Bin;
-	use_ok('C4::Reserves');
+    use_ok('C4::Reserves');
 }
 
+# a very minimal mack of userenv for use by the test of DelItemCheck
+*C4::Context::userenv = sub {
+    return {};
+};
+
+my $dbh = C4::Context->dbh;
+
+# Start transaction
+$dbh->{AutoCommit} = 0;
+$dbh->{RaiseError} = 1;
+
 # Setup Test------------------------
+
+# Add branches if not existing
+foreach my $addbra ('CPL', 'FPL', 'RPL') {
+    $dbh->do("INSERT INTO branches (branchcode,branchname) VALUES (?,?)", undef, ($addbra,"$addbra branch")) unless GetBranchName($addbra);
+}
+
+# Add categories if not existing
+foreach my $addcat ('S', 'PT') {
+    $dbh->do("INSERT INTO categories (categorycode,hidelostitems,category_type) VALUES (?,?,?)",undef,($addcat, 0, $addcat eq 'S'? 'S': 'A')) unless GetBorrowercategory($addcat);
+}
+
 # Helper biblio.
 diag("\nCreating biblio instance for testing.");
-my ($bibnum, $title, $bibitemnum) = create_helper_biblio();
+my $bib = MARC::Record->new();
+my $title = 'Silence in the library';
+if( C4::Context->preference('marcflavour') eq 'UNIMARC' ) {
+    $bib->append_fields(
+        MARC::Field->new('600', '', '1', a => 'Moffat, Steven'),
+        MARC::Field->new('200', '', '', a => $title),
+    );
+}
+else {
+    $bib->append_fields(
+        MARC::Field->new('100', '', '', a => 'Moffat, Steven'),
+        MARC::Field->new('245', '', '', a => $title),
+    );
+}
+my ($bibnum, $bibitemnum);
+($bibnum, $title, $bibitemnum) = AddBiblio($bib, '');
 
 # Helper item for that biblio.
 diag("Creating item instance for testing.");
@@ -28,16 +71,15 @@ my ($item_bibnum, $item_bibitemnum, $itemnumber) = AddItem({ homebranch => 'CPL'
 my $testbarcode = '97531';
 ModItem({ barcode => $testbarcode }, $bibnum, $itemnumber);
 
-# Get a borrower
-my $dbh = C4::Context->dbh;
-my $query = qq/SELECT borrowernumber
-    FROM   borrowers
-    LIMIT  1/;
-my $sth = $dbh->prepare($query);
-$sth->execute;
-my $borrower = $sth->fetchrow_hashref;
-
-my $borrowernumber = $borrower->{'borrowernumber'};
+# Create a borrower
+my %data = (
+    firstname =>  'my firstname',
+    surname => 'my surname',
+    categorycode => 'S',
+    branchcode => 'CPL',
+);
+my $borrowernumber = AddMember(%data);
+my $borrower = GetMember( borrowernumber => $borrowernumber );
 my $biblionumber   = $bibnum;
 my $barcode        = $testbarcode;
 
@@ -56,33 +98,311 @@ my $branch = $branches[0][0]{value};
 AddReserve($branch,    $borrowernumber, $biblionumber,
         $constraint, $bibitems,  $priority, $resdate, $expdate, $notes,
         $title,      $checkitem, $found);
-        
+
 my ($status, $reserve, $all_reserves) = CheckReserves($itemnumber, $barcode);
-ok($status eq "Reserved", "CheckReserves Test 1");
+
+is($status, "Reserved", "CheckReserves Test 1");
+
+ok(exists($reserve->{reserve_id}), 'CheckReserves() include reserve_id in its response');
 
 ($status, $reserve, $all_reserves) = CheckReserves($itemnumber);
-ok($status eq "Reserved", "CheckReserves Test 2");
+is($status, "Reserved", "CheckReserves Test 2");
 
 ($status, $reserve, $all_reserves) = CheckReserves(undef, $barcode);
-ok($status eq "Reserved", "CheckReserves Test 3");
+is($status, "Reserved", "CheckReserves Test 3");
+
+my $ReservesControlBranch = C4::Context->preference('ReservesControlBranch');
+C4::Context->set_preference( 'ReservesControlBranch', 'ItemHomeLibrary' );
+ok(
+    'ItemHomeLib' eq GetReservesControlBranch(
+        { homebranch => 'ItemHomeLib' },
+        { branchcode => 'PatronHomeLib' }
+    ), "GetReservesControlBranch returns item home branch when set to ItemHomeLibrary"
+);
+C4::Context->set_preference( 'ReservesControlBranch', 'PatronLibrary' );
+ok(
+    'PatronHomeLib' eq GetReservesControlBranch(
+        { homebranch => 'ItemHomeLib' },
+        { branchcode => 'PatronHomeLib' }
+    ), "GetReservesControlBranch returns patron home branch when set to PatronLibrary"
+);
+C4::Context->set_preference( 'ReservesControlBranch', $ReservesControlBranch );
+
+###
+### Regression test for bug 10272
+###
+my %requesters = ();
+$requesters{'CPL'} = AddMember(
+    branchcode   => 'CPL',
+    categorycode => 'PT',
+    surname      => 'borrower from CPL',
+);
+$requesters{'FPL'} = AddMember(
+    branchcode   => 'FPL',
+    categorycode => 'PT',
+    surname      => 'borrower from FPL',
+);
+$requesters{'RPL'} = AddMember(
+    branchcode   => 'RPL',
+    categorycode => 'PT',
+    surname      => 'borrower from RPL',
+);
+
+# Configure rules so that CPL allows only CPL patrons
+# to request its items, while FPL will allow its items
+# to fill holds from anywhere.
+
+$dbh->do('DELETE FROM issuingrules');
+$dbh->do('DELETE FROM branch_item_rules');
+$dbh->do('DELETE FROM branch_borrower_circ_rules');
+$dbh->do('DELETE FROM default_borrower_circ_rules');
+$dbh->do('DELETE FROM default_branch_item_rules');
+$dbh->do('DELETE FROM default_branch_circ_rules');
+$dbh->do('DELETE FROM default_circ_rules');
+$dbh->do(
+    q{INSERT INTO issuingrules (categorycode, branchcode, itemtype, reservesallowed)
+      VALUES (?, ?, ?, ?)},
+    {},
+    '*', '*', '*', 25
+);
+
+# CPL allows only its own patrons to request its items
+$dbh->do(
+    q{INSERT INTO default_branch_circ_rules (branchcode, maxissueqty, holdallowed, returnbranch)
+      VALUES (?, ?, ?, ?)},
+    {},
+    'CPL', 10, 1, 'homebranch',
+);
+
+# ... while FPL allows anybody to request its items
+$dbh->do(
+    q{INSERT INTO default_branch_circ_rules (branchcode, maxissueqty, holdallowed, returnbranch)
+      VALUES (?, ?, ?, ?)},
+    {},
+    'FPL', 10, 2, 'homebranch',
+);
+
+# helper biblio for the bug 10272 regression test
+my $bib2 = MARC::Record->new();
+$bib2->append_fields(
+    MARC::Field->new('100', ' ', ' ', a => 'Moffat, Steven'),
+    MARC::Field->new('245', ' ', ' ', a => $title),
+);
+
+# create one item belonging to FPL and one belonging to CPL
+my ($bibnum2, $bibitemnum2) = AddBiblio($bib, '');
+my ($itemnum_cpl, $itemnum_fpl);
+(undef, undef, $itemnum_cpl) = AddItem({
+        homebranch => 'CPL',
+        holdingbranch => 'CPL',
+        barcode => 'bug10272_CPL'
+    } , $bibnum2);
+(undef, undef, $itemnum_fpl) = AddItem({
+        homebranch => 'FPL',
+        holdingbranch => 'FPL',
+        barcode => 'bug10272_FPL'
+    } , $bibnum2);
+
+# Ensure that priorities are numbered correcly when a hold is moved to waiting
+# (bug 11947)
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum2));
+AddReserve('RPL',  $requesters{'RPL'}, $bibnum2,
+           $constraint, $bibitems,  1, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+AddReserve('FPL',  $requesters{'FPL'}, $bibnum2,
+           $constraint, $bibitems,  2, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum2,
+           $constraint, $bibitems,  3, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+ModReserveAffect($itemnum_cpl, $requesters{'RPL'}, 0);
+
+# Now it should have different priorities.
+my $title_reserves = GetReservesFromBiblionumber({biblionumber => $bibnum2});
+# Sort by reserve number in case the database gives us oddly ordered results
+my @reserves = sort { $a->{reserve_id} <=> $b->{reserve_id} } @$title_reserves;
+is($reserves[0]{priority}, 0, 'Item is correctly waiting');
+is($reserves[1]{priority}, 1, 'Item is correctly priority 1');
+is($reserves[2]{priority}, 2, 'Item is correctly priority 2');
 
 
-# Teardown Test---------------------
-# Delete item.
-diag("Deleting item testing instance.");
-DelItem($dbh, $bibnum, $itemnumber);
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum2));
+AddReserve('RPL',  $requesters{'RPL'}, $bibnum2,
+           $constraint, $bibitems,  1, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+AddReserve('FPL',  $requesters{'FPL'}, $bibnum2,
+           $constraint, $bibitems,  2, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum2,
+           $constraint, $bibitems,  3, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
 
-# Delete helper Biblio.
-diag("Deleting biblio testing instance.");
-DelBiblio($bibnum);
+# Ensure that the item's home library controls hold policy lookup
+C4::Context->set_preference( 'ReservesControlBranch', 'ItemHomeLibrary' );
 
-# Helper method to set up a Biblio.
-sub create_helper_biblio {
-    my $bib = MARC::Record->new();
-    my $title = 'Silence in the library';
-    $bib->append_fields(
-        MARC::Field->new('100', ' ', ' ', a => 'Moffat, Steven'),
-        MARC::Field->new('245', ' ', ' ', a => $title),
-    );
-    return ($bibnum, $title, $bibitemnum) = AddBiblio($bib, '');
+my $messages;
+# Return the CPL item at FPL.  The hold that should be triggered is
+# the one placed by the CPL patron, as the other two patron's hold
+# requests cannot be filled by that item per policy.
+(undef, $messages, undef, undef) = AddReturn('bug10272_CPL', 'FPL');
+is( $messages->{ResFound}->{borrowernumber},
+    $requesters{'CPL'},
+    'restrictive library\'s items only fill requests by own patrons (bug 10272)');
+
+# Return the FPL item at FPL.  The hold that should be triggered is
+# the one placed by the RPL patron, as that patron is first in line
+# and RPL imposes no restrictions on whose holds its items can fill.
+(undef, $messages, undef, undef) = AddReturn('bug10272_FPL', 'FPL');
+is( $messages->{ResFound}->{borrowernumber},
+    $requesters{'RPL'},
+    'for generous library, its items fill first hold request in line (bug 10272)');
+
+# Tests for bug 9761 (ConfirmFutureHolds): new CheckReserves lookahead parameter, and corresponding change in AddReturn
+# Note that CheckReserve uses its lookahead parameter and does not check ConfirmFutureHolds pref (it should be passed if needed like AddReturn does)
+# Test 9761a: Add a reserve without date, CheckReserve should return it
+$resdate= undef; #defaults to today in AddReserve
+$expdate= undef; #no expdate
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum));
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  1, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+($status)=CheckReserves($itemnumber,undef,undef);
+is( $status, 'Reserved', 'CheckReserves returns reserve without lookahead');
+($status)=CheckReserves($itemnumber,undef,7);
+is( $status, 'Reserved', 'CheckReserves also returns reserve with lookahead');
+
+# Test 9761b: Add a reserve with future date, CheckReserve should not return it
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum));
+C4::Context->set_preference('AllowHoldDateInFuture', 1);
+$resdate= dt_from_string();
+$resdate->add_duration(DateTime::Duration->new(days => 4));
+$resdate=output_pref($resdate);
+$expdate= undef; #no expdate
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  1, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+($status)=CheckReserves($itemnumber,undef,undef);
+is( $status, '', 'CheckReserves returns no future reserve without lookahead');
+
+# Test 9761c: Add a reserve with future date, CheckReserve should return it if lookahead is high enough
+($status)=CheckReserves($itemnumber,undef,3);
+is( $status, '', 'CheckReserves returns no future reserve with insufficient lookahead');
+($status)=CheckReserves($itemnumber,undef,4);
+is( $status, 'Reserved', 'CheckReserves returns future reserve with sufficient lookahead');
+
+# Test 9761d: Check ResFound message of AddReturn for future hold
+# Note that AddReturn is in Circulation.pm, but this test really pertains to reserves; AddReturn uses the ConfirmFutureHolds pref when calling CheckReserves
+# In this test we do not need an issued item; it is just a 'checkin'
+C4::Context->set_preference('ConfirmFutureHolds', 0);
+(my $doreturn, $messages)= AddReturn('97531','CPL');
+is($messages->{ResFound}//'', '', 'AddReturn does not care about future reserve when ConfirmFutureHolds is off');
+C4::Context->set_preference('ConfirmFutureHolds', 3);
+($doreturn, $messages)= AddReturn('97531','CPL');
+is(exists $messages->{ResFound}?1:0, 0, 'AddReturn ignores future reserve beyond ConfirmFutureHolds days');
+C4::Context->set_preference('ConfirmFutureHolds', 7);
+($doreturn, $messages)= AddReturn('97531','CPL');
+is(exists $messages->{ResFound}?1:0, 1, 'AddReturn considers future reserve within ConfirmFutureHolds days');
+
+# End of tests for bug 9761 (ConfirmFutureHolds)
+
+# test marking a hold as captured
+my $hold_notice_count = count_hold_print_messages();
+ModReserveAffect($itemnumber, $requesters{'CPL'}, 0);
+my $new_count = count_hold_print_messages();
+is($new_count, $hold_notice_count + 1, 'patron notified when item set to waiting');
+
+# test that duplicate notices aren't generated
+ModReserveAffect($itemnumber, $requesters{'CPL'}, 0);
+$new_count = count_hold_print_messages();
+is($new_count, $hold_notice_count + 1, 'patron not notified a second time (bug 11445)');
+
+# avoiding the not_same_branch error
+t::lib::Mocks::mock_preference('IndependentBranches', 0);
+is(
+    DelItemCheck($dbh, $bibnum, $itemnumber),
+    'book_reserved',
+    'item that is captured to fill a hold cannot be deleted',
+);
+
+my $letter = ReserveSlip('CPL', $requesters{'CPL'}, $bibnum);
+ok(defined($letter), 'can successfully generate hold slip (bug 10949)');
+
+# Tests for bug 9788: Does GetReservesFromItemnumber return a future wait?
+# 9788a: GetReservesFromItemnumber does not return future next available hold
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum));
+C4::Context->set_preference('ConfirmFutureHolds', 2);
+C4::Context->set_preference('AllowHoldDateInFuture', 1);
+$resdate= dt_from_string();
+$resdate->add_duration(DateTime::Duration->new(days => 2));
+$resdate=output_pref($resdate);
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  1, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+my @results= GetReservesFromItemnumber($itemnumber);
+is(defined $results[3]?1:0, 0, 'GetReservesFromItemnumber does not return a future next available hold');
+# 9788b: GetReservesFromItemnumber does not return future item level hold
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum));
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  1, $resdate, $expdate, $notes,
+           $title,      $itemnumber, $found); #item level hold
+@results= GetReservesFromItemnumber($itemnumber);
+is(defined $results[3]?1:0, 0, 'GetReservesFromItemnumber does not return a future item level hold');
+# 9788c: GetReservesFromItemnumber returns future wait (confirmed future hold)
+ModReserveAffect( $itemnumber,  $requesters{'CPL'} , 0); #confirm hold
+@results= GetReservesFromItemnumber($itemnumber);
+is(defined $results[3]?1:0, 1, 'GetReservesFromItemnumber returns a future wait (confirmed future hold)');
+# End of tests for bug 9788
+
+# Tests for CalculatePriority (bug 8918)
+my $p = C4::Reserves::CalculatePriority($bibnum2);
+is($p, 4, 'CalculatePriority should now return priority 4');
+$resdate=undef;
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum2,
+           $constraint, $bibitems,  $p, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+$p = C4::Reserves::CalculatePriority($bibnum2);
+is($p, 5, 'CalculatePriority should now return priority 5');
+#some tests on bibnum
+$dbh->do("DELETE FROM reserves WHERE biblionumber=?",undef,($bibnum));
+$p = C4::Reserves::CalculatePriority($bibnum);
+is($p, 1, 'CalculatePriority should now return priority 1');
+#add a new reserve and confirm it to waiting
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  $p, $resdate, $expdate, $notes,
+           $title,      $itemnumber, $found);
+$p = C4::Reserves::CalculatePriority($bibnum);
+is($p, 2, 'CalculatePriority should now return priority 2');
+ModReserveAffect( $itemnumber,  $requesters{'CPL'} , 0);
+$p = C4::Reserves::CalculatePriority($bibnum);
+is($p, 1, 'CalculatePriority should now return priority 1');
+#add another biblio hold, no resdate
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  $p, $resdate, $expdate, $notes,
+           $title,      $checkitem, $found);
+$p = C4::Reserves::CalculatePriority($bibnum);
+is($p, 2, 'CalculatePriority should now return priority 2');
+#add another future hold
+C4::Context->set_preference('AllowHoldDateInFuture', 1);
+$resdate= dt_from_string();
+$resdate->add_duration(DateTime::Duration->new(days => 1));
+AddReserve('CPL',  $requesters{'CPL'}, $bibnum,
+           $constraint, $bibitems,  $p, output_pref($resdate), $expdate, $notes,
+           $title,      $checkitem, $found);
+$p = C4::Reserves::CalculatePriority($bibnum);
+is($p, 2, 'CalculatePriority should now still return priority 2');
+#calc priority with future resdate
+$p = C4::Reserves::CalculatePriority($bibnum, $resdate);
+is($p, 3, 'CalculatePriority should now return priority 3');
+# End of tests for bug 8918
+
+$dbh->rollback;
+
+sub count_hold_print_messages {
+    my $message_count = $dbh->selectall_arrayref(q{
+        SELECT COUNT(*)
+        FROM message_queue
+        WHERE letter_code = 'HOLD' 
+        AND   message_transport_type = 'print'
+    });
+    return $message_count->[0]->[0];
 }

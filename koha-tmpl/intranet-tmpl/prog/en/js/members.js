@@ -8,7 +8,7 @@ if (d!=="") {
       var ok=1;
       var msg;
       if ( (date.length < 2) && (ok==1) ) {
-        msg = MSG_SEPARATOR+field.name;
+        msg = MSG_SEPARATOR.format(field.name);
         alert(msg); ok=0; field.focus();
         return;
       }
@@ -17,19 +17,19 @@ if (d!=="") {
       var yyyy = date[2];
       // checking days
       if ( ((isNaN(dd))||(dd<1)||(dd>31)) && (ok==1) ) {
-        msg = MSG_INCORRECT_DAY+field.name;
+        msg = MSG_INCORRECT_DAY.format(field.name);
         alert(msg); ok=0; field.focus();
         return false;
       }
       // checking months
       if ( ((isNaN(mm))||(mm<1)||(mm>12)) && (ok==1) ) {
-        msg = MSG_INCORRECT_MONTH+field.name;
+        msg = MSG_INCORRECT_MONTH.format(field.name);
         alert(msg); ok=0; field.focus();
         return false;
       }
       // checking years
       if ( ((isNaN(yyyy))||(yyyy<amin)||(yyyy>amax)) && (ok==1) ) {
-        msg = MSG_INCORRECT_YEAR+field.name;
+        msg = MSG_INCORRECT_YEAR.format(field.name);
         alert(msg); ok=0; field.focus();
         return false;
       }
@@ -98,38 +98,6 @@ function check_form_borrowers(nav){
         }
     }
 
-    if (document.form.BorrowerMandatoryField.value==='')
-    {}
-    else
-    {
-        var champ_verif = document.form.BorrowerMandatoryField.value.split ('|');
-        message += MSG_MISSING_MANDATORY;
-        message += "\n";
-        for (var i=0; i<champ_verif.length; i++) {
-            if (document.getElementsByName(""+champ_verif[i]+"")[0]) {
-                var val_champ=eval("document.form."+champ_verif[i]+".value");
-                var ref_champ=eval("document.form."+champ_verif[i]);
-                //check if it's a select
-                if (ref_champ.type=='select-one'){
-                    // check to see if first option is selected and is blank
-                    if (ref_champ.options[0].selected &&
-                        ref_champ.options[0].text === ''){
-                        // action if field is empty
-                        message_champ+=champ_verif[i]+"\n";
-                        //test to know if you must show a message with error
-                        statut=1;
-                    }
-                } else {
-                    if ( val_champ === '' ) {
-                        // action if the field is not empty
-                        message_champ+=champ_verif[i]+"\n";
-                        statut=1;
-                    }
-                }
-            }
-        }
-    }
-
     if ( document.form.password.value != document.form.password2.value ){
             if ( message_champ !== '' ){
                 message_champ += "\n";
@@ -154,7 +122,7 @@ function check_form_borrowers(nav){
         alert(message+"\n"+message_champ);
         return false;
     } else {
-        document.form.submit();
+        return true;
     }
 }
 
@@ -181,5 +149,9 @@ $(document).ready(function(){
         } else {
             $("#debarreduntil").hide();
         }
+    });
+    var mandatory_fields = $("input[name='BorrowerMandatoryField']").val().split ('|');
+    $(mandatory_fields).each(function(){
+        $("[name='"+this+"']").attr('required', 'required');
     });
 });

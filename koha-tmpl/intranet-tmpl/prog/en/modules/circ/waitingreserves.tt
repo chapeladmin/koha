@@ -1,24 +1,20 @@
+[% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Circulation &rsaquo; Holds awaiting pickup</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<link rel="stylesheet" type="text/css" href="/intranet-tmpl/prog/en/css/datatables.css" />
-<script type="text/javascript" src="/intranet-tmpl/prog/en/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="/intranet-tmpl/prog/en/js/datatables.js"></script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
 //<![CDATA[
-[% IF (dateformat == 'metric') %]
-dt_add_type_uk_date();
-[% END %]
      $(document).ready(function() {
          $('#resultlist').tabs();
          $("th a").hide();
         $("#holdst,#holdso").dataTable($.extend(true, {}, dataTablesDefaults, {
             "aoColumnDefs": [
                 { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false },
+                { "sType": "anti-the", "aTargets" : [ "anti-the" ] },
+                { "sType": "title-string", "aTargets" : [ "title-string" ] }
             ],
-            "aLengthMenu": [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
-            "iDisplayLength": 20,
             "sPaginationType": "four_button"
         }));
       });
@@ -81,8 +77,8 @@ dt_add_type_uk_date();
             [% IF ( reserveloop ) %]
                <table id="holdst">
                <thead><tr>
-                    <th>Available since</th>
-                    <th>Title</th>
+                    <th class="title-string">Available since</th>
+                    <th class="anti-the">Title</th>
                     <th>Patron</th>
                     <th>Location</th>
                     <th>Copy number</th>
@@ -91,7 +87,7 @@ dt_add_type_uk_date();
                </tr></thead>
                <tbody>[% FOREACH reserveloo IN reserveloop %]
                 <tr>
-                    <td><p>[% reserveloo.waitingdate %]</p></td>
+                    <td><span title="[% reserveloo.waitingdate %]">[% reserveloo.waitingdate | $KohaDates %]</span></td>
                     <td>[% INCLUDE 'biblio-default-view.inc' biblionumber = reserveloo.biblionumber %]
                         [% reserveloo.title |html %] [% reserveloo.subtitle |html %]
                         </a>
@@ -141,8 +137,8 @@ dt_add_type_uk_date();
                <br/>
                <table id="holdso">
                <thead><tr>
-                    <th>Available since</th>
-                    <th>Title</th>
+                    <th class="title-string">Available since</th>
+                    <th class="anti-the">Title</th>
                     <th>Patron</th>
                     <th>Location</th>
                     <th>Copy number</th>
@@ -151,7 +147,7 @@ dt_add_type_uk_date();
                </tr></thead>
                <tbody>[% FOREACH overloo IN overloop %]
                     <tr>
-                        <td><p>[% overloo.waitingdate %]</p></td>
+                        <td><p><span title="[% overloo.waitingdate %]">[% overloo.waitingdate | $KohaDates %]</span></p></td>
                         <td>[% INCLUDE 'biblio-default-view.inc' biblionumber = overloo.biblionumber %][% overloo.title |html %] [% overloo.subtitle |html %]
                         </a>
                             [% UNLESS ( item_level_itypes ) %][% IF ( overloo.itemtype ) %]&nbsp; (<b>[% overloo.itemtype %]</b>)[% END %][% END %]

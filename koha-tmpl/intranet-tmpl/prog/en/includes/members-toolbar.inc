@@ -3,21 +3,25 @@
 $(document).ready(function(){
     [% IF ( CAN_user_borrowers ) %]
         $("#deletepatron").click(function(){
-                confirm_deletion();
-                $(".btn-group").removeClass("open");
-                return false;
-            });
-        $("#renewpatron").click(function(){
-            confirm_reregistration();
+            confirm_deletion();
             $(".btn-group").removeClass("open");
             return false;
         });
-        [% IF ( is_child ) %]$("#updatechild").click(function(){
-            update_child();
-            $(".btn-group").removeClass("open");
-        });[% END %]
+        [% IF !( usef1 ) || !( f1_id > 0 ) %]
+            $("#renewpatron").click(function(){
+                confirm_reregistration();
+                $(".btn-group").removeClass("open");
+                return false;
+            });
+        [% END %]
+        [% IF ( is_child ) %]
+            $("#updatechild").click(function(){
+                update_child();
+                $(".btn-group").removeClass("open");
+            });
+        [% END %]
     [% END %]
-
+    $("#updatechild, #patronflags, #renewpatron, #deletepatron").tooltip();
     $("#exportcheckins").click(function(){
         export_barcodes();
         $(".btn-group").removeClass("open");
@@ -44,7 +48,11 @@ $(document).ready(function(){
     })
 });
 function confirm_deletion() {
-    var is_confirmed = window.confirm(_("Are you sure you want to delete this patron? This cannot be undone."));
+    var confirm_string = "Are you sure you want to delete this patron? This cannot be undone.";
+    [% IF ( usef1 ) && ( f1_id > 0) %]
+        confirm_string += " User may still exist in Fellowship One, which would allow this user to reset their account.";
+    [% END %]
+    var is_confirmed = window.confirm(_(confirm_string));
     if (is_confirmed) {
         window.location='/cgi-bin/koha/members/deletemem.pl?member=[% borrowernumber %]';
     }
@@ -66,12 +74,15 @@ function update_child() {
 }
 [% END %]
 
+[% IF !( usef1 ) || !( f1_id > 0 ) %]
 function confirm_reregistration() {
     var is_confirmed = window.confirm(_("Are you sure you want to renew this patron's registration?"));
     if (is_confirmed) {
     window.location = '/cgi-bin/koha/members/setstatus.pl?borrowernumber=[% borrowernumber %]&amp;cardnumber=[% cardnumber %]&amp;desintation=[% destination %]&amp;reregistration=y';
     }
 }
+[% END %]
+
 function export_barcodes() {
     window.open('/cgi-bin/koha/members/readingrec.pl?borrowernumber=[% borrowernumber %]&amp;op=export_barcodes');
 }
@@ -87,37 +98,39 @@ function searchToHold(){
     $.cookie("holdfor", "[% borrowernumber %]", { path: "/", expires: date });
     location.href="/cgi-bin/koha/catalogue/search.pl";
 }
-//]]>
+//]V]>
 </script>
 
 <div id="toolbar" class="btn-toolbar">
     [% IF ( CAN_user_borrowers ) %]
-        [% IF ( category_type ) %]
-            [% IF ( guarantor ) %]
-                <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;guarantorid=[% guarantorborrowernumber %]&amp;category_type=[% category_type %]">
-            [% ELSE %]
-                <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;category_type=[% category_type %]">
-            [% END %]
-                <i class="icon-pencil"></i> Edit</a>
-        [% ELSE %] <!-- try with categorycode if no category_type -->
-            [% IF ( categorycode ) %]
-                <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;categorycode=[% categorycode %]"><i class="icon-pencil"></i> Edit</a>
-            [% ELSE %] <!-- if no categorycode, set category_type to A by default -->
-                <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;category_type=A"><i class="icon-pencil"></i> Edit</a>
+        [% IF !( usef1 ) || !( f1_id > 0 ) %]
+            [% IF ( category_type ) %]
+                [% IF ( guarantor ) %]
+                    <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;guarantorid=[% guarantorborrowernumber %]&amp;category_type=[% category_type %]">
+                [% ELSE %]
+                    <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;category_type=[% category_type %]">
+                [% END %]
+                    <i class="icon-pencil"></i> Edit</a>
+            [% ELSE %] <!-- try with categorycode if no category_type -->
+                [% IF ( categorycode ) %]
+                    <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;categorycode=[% categorycode %]"><i class="icon-pencil"></i> Edit</a>
+                [% ELSE %] <!-- if no categorycode, set category_type to A by default -->
+                    <a id="editpatron" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=modify&amp;destination=circ&amp;borrowernumber=[% borrowernumber %]&amp;category_type=A"><i class="icon-pencil"></i> Edit</a>
+                [% END %]
             [% END %]
         [% END %]
     [% END %]
 
-    [% IF ( CAN_user_borrowers ) %]
+    [% IF ( CAN_user_borrowers AND (!( usef1 ) || !( f1_id > 0 ))) %]
         [% IF ( adultborrower AND activeBorrowerRelationship ) %]
             <a id="addchild" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=add&amp;guarantorid=[% borrowernumber %]&amp;category_type=C"><i class="icon-plus"></i> Add child</a>
         [% END %]
         [% IF ( CAN_user_borrowers ) %]
             <a id="changepassword" class="btn btn-small" href="/cgi-bin/koha/members/member-password.pl?member=[% borrowernumber %]"><i class="icon-lock"></i> Change password</a>
         [% END %]
+        <a id="duplicate" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=duplicate&amp;borrowernumber=[% borrowernumber %]&amp;category_type=[% category_type %]"><i class="icon-copy"></i>Duplicate</a>
     [% END %]
 
-    <a id="duplicate" class="btn btn-small" href="/cgi-bin/koha/members/memberentry.pl?op=duplicate&amp;borrowernumber=[% borrowernumber %]&amp;category_type=[% category_type %]"><i class="icon-copy"></i>Duplicate</a>
     <div class="btn-group">
         <button class="btn btn-small dropdown-toggle" data-toggle="dropdown"><i class="icon-print"></i> Print <span class="caret"></span></button>
             <ul class="dropdown-menu">
@@ -130,25 +143,27 @@ function searchToHold(){
     <div class="btn-group">
         <button class="btn btn-small dropdown-toggle" data-toggle="dropdown">More <span class="caret"></span></button>
             <ul class="dropdown-menu">
-                [% IF ( CAN_user_borrowers ) %]
-                    <li><a id="renewpatron" href="/cgi-bin/koha/members/moremember.pl?reregistration=y&amp;borrowernumber=[% borrowernumber %]">Renew patron</a></li>
-                [% ELSE %]
-                    <li class="disabled"><a id="renewpatron" href="#">Renew patron</a></li>
+                [% IF !( usef1 ) || !( f1_id > 0 ) %]
+                    [% IF ( CAN_user_borrowers ) %]
+                        <li><a id="renewpatron" href="/cgi-bin/koha/members/setstatus.pl?borrowernumber=[% borrowernumber %]&amp;cardnumber=[% cardnumber %]&amp;destination=[% destination %]&amp;reregistration=y">Renew patron</a></li>
+                    [% ELSE %]
+                        <li class="disabled"><a data-toggle="tooltip" data-placement="left" title="You are not authorized to renew patrons" id="renewpatron" href="#">Renew patron</a></li>
+                    [% END %]
                 [% END %]
                 [% IF ( CAN_user_permissions ) %]
                     <li><a id="patronflags" href="/cgi-bin/koha/members/member-flags.pl?member=[% borrowernumber %]">Set permissions</a></li>
                 [% ELSE %]
-                    <li class="disabled"><a id="patronflags" href="#">Set permissions</a></li>
+                    <li class="disabled"><a data-toggle="tooltip" data-placement="left" title="You are not authorized to set permissions" id="patronflags" href="#">Set permissions</a></li>
                 [% END %]
                 [% IF ( CAN_user_borrowers ) %]
                     <li><a id="deletepatron" href="#">Delete</a></li>
                 [% ELSE %]
-                    <li class="disabled"><a id="deletepatron" href="#">Delete</a></li>
+                    <li class="disabled"><a data-toggle="tooltip" data-placement="left" title="You are not authorized to delete patrons" id="deletepatron" href="#">Delete</a></li>
                 [% END %]
                 [% IF ( is_child ) %]
                     <li><a id="updatechild" href="#">Update child to adult patron</a></li>
                 [% ELSE %]
-                    <li class="disabled"><a id="updatechild" href="#">Update child to adult patron</a></li></li>
+                    <li class="disabled"><a data-toggle="tooltip" data-placement="left" title="Patron is an adult" id="updatechild" href="#">Update child to adult patron</a></li></li>
                 [% END %]
                 <li><a id="exportcheckins" href="#">Export today's checked in barcodes</a></li>
             </ul>

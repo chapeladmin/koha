@@ -1,7 +1,7 @@
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Authorities &rsaquo; [% IF ( authid ) %]Modify authority #[% authid %] ([% authtypetext %])[% ELSE %]Adding authority ([% authtypetext %])[% END %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.fixFloat.js"></script>
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.fixFloat.js"></script>
 <script type="text/javascript" src="[% themelang %]/js/cataloging.js"></script>
 
 <script type="text/javascript">
@@ -46,7 +46,7 @@ function AreMandatoriesNotOk(){
         // alert (id_string);
         if( ! $("#" + id_string).val() ){
             $("#" + id_string).attr('class','subfield_not_filled').focus();
-            StrAlert += "\t* "+label[i]+_(" in tab ")+tab[i]+"\n";
+            StrAlert += "\t* " + _("%s in tab %s").format(label[i], tab[i]) + "\n";
         }
     }
     
@@ -79,7 +79,7 @@ function AreMandatoriesNotOk(){
     	
     	if(isempty){
     		flag = 1;
-			StrAlert += "\t* Field " + arr[0] + _(" is mandatory, at least one of its subfields must be filled") + "\n";
+                StrAlert += "\t* " + _("Field %s is mandatory, at least one of its subfields must be filled.").format(arr[0]) + "\n";
     	}
     	
     }
@@ -125,6 +125,9 @@ function confirmnotdup(redirect){
 //]]>
 </script>
 <link type="text/css" rel="stylesheet" href="[% themelang %]/css/addbiblio.css" />
+[% IF ( bidi ) %]
+   <link rel="stylesheet" type="text/css" href="[% themelang %]/css/right-to-left.css" />
+[% END %]
 </head>
 <body id="auth_authorities" class="auth">
 
@@ -155,7 +158,7 @@ function confirmnotdup(redirect){
 
                 <form action="authorities.pl" method="get">
                     <input type="hidden" name="authid" value="[% duplicateauthid %]" />
-                    <input type="submit" class="edit" value="Yes: Edit exisiting authority" />
+                    <input type="submit" class="edit" value="Yes: Edit existing authority" />
                 </form>
                 <form action="authorities.pl" method="get">
                     <input type="button" value="No: Save as new authority" class="save" accesskey="w" onclick="confirmnotdup('items'); return false;" />
@@ -188,7 +191,7 @@ function confirmnotdup(redirect){
 
     [% FOREACH innerloo IN BIG_LOO.innerloop %]
     [% IF ( innerloo.tag ) %]
-    <div class="tag" id="tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]">
+    <div class="tag clearfix" id="tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]">
         <div class="tag_title" id="div_indicator_tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]">
         [% UNLESS hide_marc %]
             [% IF advancedMARCEditor %]
@@ -257,11 +260,11 @@ function confirmnotdup(redirect){
                 <span class="field_controls">
                 [% IF ( innerloo.repeatable ) %]
                     <a href="#" tabindex="1" class="buttonPlus" onclick="CloneField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]','[% hide_marc %]','[% advancedMARCEditor %]'); return false;" title="Repeat this Tag">
-                        <img src="/intranet-tmpl/prog/img/repeat-tag.png" alt="Repeat this Tag" />
+                        <img src="[% interface %]/[% theme %]/img/repeat-tag.png" alt="Repeat this Tag" />
                     </a>
                 [% END %]
                     <a href="#" tabindex="1" class="buttonMinus" onclick="UnCloneField('tag_[% innerloo.tag %]_[% innerloo.index %][% innerloo.random %]'); return false;" title="Delete this Tag">
-                        <img src="/intranet-tmpl/prog/img/delete-tag.png" alt="Delete this Tag" />
+                        <img src="[% interface %]/[% theme %]/img/delete-tag.png" alt="Delete this Tag" />
                     </a>
                 </span>
 
@@ -280,9 +283,9 @@ function confirmnotdup(redirect){
                 [% UNLESS hide_marc %]
                 <span class="subfieldcode">
                     [% IF ( subfield_loo.fixedfield ) %]
-                        <img class="buttonUp" style="display:none;" src="/intranet-tmpl/prog/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
+                        <img class="buttonUp" style="display:none;" src="[% interface %]/[% theme %]/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
                     [% ELSE %]
-                        <img class="buttonUp" src="/intranet-tmpl/prog/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
+                        <img class="buttonUp" src="[% interface %]/[% theme %]/img/up.png" onclick="upSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]')" alt="Move Up" title="Move Up" />
                     [% END %]
                         <input type="text"
                             title="[% subfield_loo.marc_lib_plain %]"
@@ -313,10 +316,10 @@ function confirmnotdup(redirect){
                 <span class="subfield_controls">
                 [% IF ( subfield_loo.repeatable ) %]
                     <a href="#" class="buttonPlus" tabindex="1" onclick="CloneSubfield('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]','[% advancedMARCEditor %]'); return false;">
-                        <img src="/intranet-tmpl/prog/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
+                        <img src="[% interface %]/[% theme %]/img/clone-subfield.png" alt="Clone" title="Clone this subfield" />
                     </a>
                     <a href="#" class="buttonMinus" tabindex="1" onclick="UnCloneField('subfield[% subfield_loo.tag %][% subfield_loo.subfield %][% subfield_loo.random %]'); return false;">
-                        <img src="/intranet-tmpl/prog/img/delete-subfield.png" alt="Delete" title="Delete this subfield" />
+                        <img src="[% interface %]/[% theme %]/img/delete-subfield.png" alt="Delete" title="Delete this subfield" />
                     </a>
                 [% END %]
                 </span>

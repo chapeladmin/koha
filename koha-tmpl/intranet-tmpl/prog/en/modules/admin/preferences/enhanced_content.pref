@@ -319,3 +319,21 @@ Enhanced Content:
             - pref: HTML5MediaExtensions
               class: multi
             - (separated with |).
+    Plugins:
+        -
+            - pref: UseKohaPlugins
+              choices:
+                  yes: Enable
+                  no: "Don't enable"
+            - the ability to use Koha Plugins. Note, the plugin system must also be enabled in the Koha configuration file to be fully enabled.
+    OverDrive:
+        -
+            - Include OverDrive availability information with the client key
+            - pref: OverDriveClientKey
+            - and client secret
+            - pref: OverDriveClientSecret
+            - .
+        -
+            - "Show items from the OverDrive catalog of library #"
+            - pref: OverDriveLibraryID
+            - .

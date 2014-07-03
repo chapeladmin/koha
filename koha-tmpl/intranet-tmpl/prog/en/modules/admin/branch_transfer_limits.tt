@@ -2,10 +2,8 @@
 <title>Koha &rsaquo; Administration &rsaquo; Library checkin and transfer policy</title>
 [% INCLUDE 'doc-head-close.inc' %]
 <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
 <script type="text/javascript">
 //<![CDATA[
 	$(document).ready(function(){
@@ -37,8 +35,6 @@
             "aoColumnDefs": [
                 { "aTargets": [ -1 ], "bSortable": false, "bSearchable": false },
             ],
-            "iDisplayLength": 20,
-            "aLengthMenu": [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
             "sPaginationType": "four_button"
         }));
 	});

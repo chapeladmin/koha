@@ -91,7 +91,10 @@ the patrons are printed to standard out.
 
 Defines the maximum number of days in advance to send advance notices.
 
+=item B<-c>
 
+Confirm flag: Add this option. The script will only print a usage
+statement otherwise.
 
 =item B<--itemscontent>
 
@@ -160,7 +163,6 @@ messages to patrons when their messages are overdue.
 
 # These are defaults for command line options.
 my $confirm;                                                        # -c: Confirm that the user has read and configured this script.
-# my $confirm     = 1;                                                # -c: Confirm that the user has read and configured this script.
 my $nomail;                                                         # -n: No mail. Will not send any emails.
 my $mindays     = 0;                                                # -m: Maximum number of days in advance to send notices
 my $maxdays     = 30;                                               # -e: the End of the time period
@@ -222,13 +224,14 @@ END_SQL
 
 my $admin_adress = C4::Context->preference('KohaAdminEmailAddress');
 
+my @letters;
 UPCOMINGITEM: foreach my $upcoming ( @$upcoming_dues ) {
+    @letters = ();
     warn 'examining ' . $upcoming->{'itemnumber'} . ' upcoming due items' if $verbose;
     # warn( Data::Dumper->Dump( [ $upcoming ], [ 'overdue' ] ) );
 
     my $from_address = $upcoming->{branchemail} || $admin_adress;
 
-    my $letter;
     my $borrower_preferences;
     if ( 0 == $upcoming->{'days_until_due'} ) {
         # This item is due today. Send an 'item due' message.
@@ -253,14 +256,18 @@ UPCOMINGITEM: foreach my $upcoming ( @$upcoming_dues ) {
             }
 
             ## Get branch info for borrowers home library.
-            $letter = parse_letter( { letter_code    => $letter_type,
+            foreach my $transport ( keys %{$borrower_preferences->{'transports'}} ) {
+                my $letter = parse_letter( { letter_code    => $letter_type,
                                       borrowernumber => $upcoming->{'borrowernumber'},
                                       branchcode     => $upcoming->{'branchcode'},
                                       biblionumber   => $biblio->{'biblionumber'},
                                       itemnumber     => $upcoming->{'itemnumber'},
-                                      substitute     => { 'items.content' => $titles }
+                                      substitute     => { 'items.content' => $titles },
+                                      message_transport_type => $transport,
                                     } )
-              or die "no letter of type '$letter_type' found. Please see sample_notices.sql";
+                    or warn "no letter of type '$letter_type' found. Please see sample_notices.sql";
+                push @letters, $letter;
+            }
         }
     } else {
         $borrower_preferences = C4::Members::Messaging::GetMessagingPreferences( { borrowernumber => $upcoming->{'borrowernumber'},
@@ -285,29 +292,35 @@ UPCOMINGITEM: foreach my $upcoming ( @$upcoming_dues ) {
             }
 
             ## Get branch info for borrowers home library.
-            $letter = parse_letter( { letter_code    => $letter_type,
+            foreach my $transport ( keys %{$borrower_preferences->{'transports'}} ) {
+                my $letter = parse_letter( { letter_code    => $letter_type,
                                       borrowernumber => $upcoming->{'borrowernumber'},
                                       branchcode     => $upcoming->{'branchcode'},
                                       biblionumber   => $biblio->{'biblionumber'},
                                       itemnumber     => $upcoming->{'itemnumber'},
-                                      substitute     => { 'items.content' => $titles }
+                                      substitute     => { 'items.content' => $titles },
+                                      message_transport_type => $transport,
                                     } )
-              or die "no letter of type '$letter_type' found. Please see sample_notices.sql";
+                    or warn "no letter of type '$letter_type' found. Please see sample_notices.sql";
+                push @letters, $letter;
+            }
         }
     }
 
     # If we have prepared a letter, send it.
-    if ($letter) {
+    if ( @letters ) {
       if ($nomail) {
-        local $, = "\f";
-        print $letter->{'content'};
+        for my $letter ( @letters ) {
+            local $, = "\f";
+            print $letter->{'content'};
+        }
       }
       else {
-        foreach my $transport ( keys %{$borrower_preferences->{'transports'}} ) {
+        for my $letter ( @letters ) {
             C4::Letters::EnqueueLetter( { letter                 => $letter,
                                           borrowernumber         => $upcoming->{'borrowernumber'},
                                           from_address           => $from_address,
-                                          message_transport_type => $transport } );
+                                          message_transport_type => $letter->{message_transport_type} } );
         }
       }
     }
@@ -326,8 +339,8 @@ SELECT biblio.*, items.*, issues.*
     AND issues.borrowernumber = ?
     AND (TO_DAYS(date_due)-TO_DAYS(NOW()) = ?)
 END_SQL
-
 PATRON: while ( my ( $borrowernumber, $digest ) = each %$upcoming_digest ) {
+    @letters = ();
     my $count = $digest->{count};
     my $from_address = $digest->{email};
 
@@ -349,30 +362,45 @@ PATRON: while ( my ( $borrowernumber, $digest ) = each %$upcoming_digest ) {
     ## Get branch info for borrowers home library.
     my %branch_info = get_branch_info( $borrowernumber );
 
-    my $letter = parse_letter( { letter_code    => $letter_type,
-                              borrowernumber => $borrowernumber,
-                              substitute     => { count => $count,
-                                                  'items.content' => $titles,
-                                                  %branch_info,
-                                                }
-                         } )
-      or die "no letter of type '$letter_type' found. Please see sample_notices.sql";
-    if ($nomail) {
-      local $, = "\f";
-      print $letter->{'content'};
+    foreach my $transport ( keys %{ $borrower_preferences->{'transports'} } ) {
+        my $letter = parse_letter(
+            {
+                letter_code    => $letter_type,
+                borrowernumber => $borrowernumber,
+                substitute     => {
+                    count           => $count,
+                    'items.content' => $titles,
+                    %branch_info,
+                },
+                branchcode             => $branch_info{"branches.branchcode"},
+                message_transport_type => $transport,
+            }
+          )
+          or die "no letter of type '$letter_type' found. Please see sample_notices.sql";
+        push @letters, $letter;
     }
-    else {
-      foreach my $transport ( keys %{$borrower_preferences->{'transports'}} ) {
-        C4::Letters::EnqueueLetter( { letter                 => $letter,
-                                      borrowernumber         => $borrowernumber,
-                                      from_address           => $from_address,
-                                      message_transport_type => $transport } );
+
+    if ( @letters ) {
+      if ($nomail) {
+        for my $letter ( @letters ) {
+            local $, = "\f";
+            print $letter->{'content'};
+        }
+      }
+      else {
+        for my $letter ( @letters ) {
+            C4::Letters::EnqueueLetter( { letter                 => $letter,
+                                          borrowernumber         => $borrowernumber,
+                                          from_address           => $from_address,
+                                          message_transport_type => $letter->{message_transport_type} } );
+        }
       }
     }
 }
 
 # Now, run through all the people that want digests and send them
 PATRON: while ( my ( $borrowernumber, $digest ) = each %$due_digest ) {
+    @letters = ();
     my $count = $digest->{count};
     my $from_address = $digest->{email};
 
@@ -392,27 +420,41 @@ PATRON: while ( my ( $borrowernumber, $digest ) = each %$due_digest ) {
     ## Get branch info for borrowers home library.
     my %branch_info = get_branch_info( $borrowernumber );
 
-    my $letter = parse_letter( { letter_code    => $letter_type,
-                              borrowernumber => $borrowernumber,
-                              substitute     => { count => $count,
-                                                  'items.content' => $titles,
-                                                  %branch_info,
-                                                }
-                         } )
-      or die "no letter of type '$letter_type' found. Please see sample_notices.sql";
-
-    if ($nomail) {
-      local $, = "\f";
-      print $letter->{'content'};
+    for my $transport ( keys %{ $borrower_preferences->{'transports'} } ) {
+        my $letter = parse_letter(
+            {
+                letter_code    => $letter_type,
+                borrowernumber => $borrowernumber,
+                substitute     => {
+                    count           => $count,
+                    'items.content' => $titles,
+                    %branch_info,
+                },
+                branchcode             => $branch_info{"branches.branchcode"},
+                message_transport_type => $transport,
+            }
+          )
+          or die "no letter of type '$letter_type' found. Please see sample_notices.sql";
+        push @letters, $letter;
     }
-    else {
-      foreach my $transport ( keys %{$borrower_preferences->{'transports'}} ) {
-        C4::Letters::EnqueueLetter( { letter                 => $letter,
-                                      borrowernumber         => $borrowernumber,
-                                      from_address           => $from_address,
-                                      message_transport_type => $transport } );
+
+    if ( @letters ) {
+      if ($nomail) {
+        for my $letter ( @letters ) {
+            local $, = "\f";
+            print $letter->{'content'};
+        }
+      }
+      else {
+        for my $letter ( @letters ) {
+            C4::Letters::EnqueueLetter( { letter                 => $letter,
+                                          borrowernumber         => $borrowernumber,
+                                          from_address           => $from_address,
+                                          message_transport_type => $letter->{message_transport_type} } );
+        }
       }
     }
+
 }
 
 =head1 METHODS
@@ -447,6 +489,7 @@ sub parse_letter {
         branchcode => $table_params{'branches'},
         substitute => $params->{'substitute'},
         tables     => \%table_params,
+        message_transport_type => $params->{message_transport_type},
     );
 }
 

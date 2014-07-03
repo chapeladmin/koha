@@ -6,7 +6,7 @@
 
 
 # Copyright 2000-2002 Katipo Communications
-# Copyright 2010 BibLibre
+# Copyright 2013 BibLibre
 #
 # This file is part of Koha.
 #
@@ -23,23 +23,20 @@
 # with Koha; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use strict;
-#use warnings; FIXME - Bug 2505
+use Modern::Perl;
 use C4::Auth;
 use C4::Output;
 use CGI;
-use C4::Members;
 use C4::Branch;
 use C4::Category;
-use File::Basename;
+use C4::Members qw( GetMember );
+use Koha::DateUtils;
+use Koha::List::Patron;
 
 my $input = new CGI;
-my $quicksearch = $input->param('quicksearch');
-my $startfrom = $input->param('startfrom')||1;
-my $resultsperpage = $input->param('resultsperpage')||C4::Context->preference("PatronsPerPage")||20;
 
 my ($template, $loggedinuser, $cookie)
-    = get_template_and_user({template_name => "members/member.tmpl",
+    = get_template_and_user({template_name => "members/member.tt",
                  query => $input,
                  type => "intranet",
                  authnotrequired => 0,
@@ -50,146 +47,80 @@ my $theme = $input->param('theme') || "default";
 
 my $patron = $input->Vars;
 foreach (keys %$patron){
-	delete $$patron{$_} unless($$patron{$_});
-}
-my @categories=C4::Category->all;
-
-my $branches = GetBranches;
-my @branchloop;
-
-foreach (sort { $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname} } keys %$branches) {
-  my $selected;
-  $selected = 1 if $branches->{$_}->{branchcode} eq $$patron{branchcode};
-  my %row = ( value => $_,
-        selected => $selected,
-        branchname => $branches->{$_}->{branchname},
-      );
-  push @branchloop, \%row;
+    delete $patron->{$_} unless($patron->{$_});
 }
 
-my %categories_dislay;
+my $searchmember = $input->param('searchmember');
+my $quicksearch = $input->param('quicksearch') // 0;
 
-foreach my $category (@categories){
-	my $hash={
-			category_description=>$$category{description},
-			category_type=>$$category{category_type}
-			 };
-	$categories_dislay{$$category{categorycode}} = $hash;
-}
-my $AddPatronLists = C4::Context->preference("AddPatronLists") || '';
-$template->param( 
-        "AddPatronLists_$AddPatronLists" => "1",
-            );
-if ($AddPatronLists=~/code/){
-    $categories[0]->{'first'}=1;
-}  
-
-my $member=$input->param('member');
-my $orderbyparams=$input->param('orderby');
-my @orderby;
-if ($orderbyparams){
-	my @orderbyelt=split(/,/,$orderbyparams);
-	push @orderby, {$orderbyelt[0]=>$orderbyelt[1]||0};
-}
-else {
-	@orderby = ({surname=>0},{firstname=>0});
-}
-
-my $searchfields = $input->param('searchfields');
-my @searchfields = $searchfields ? split( ',', $searchfields ) : ( "firstname", "surname", "othernames", "cardnumber", "userid", "email" );
-
-$member =~ s/,//g;   #remove any commas from search string
-$member =~ s/\*/%/g;
-
-my $searchtype = $input->param('searchtype');
-my %searchtype_ok = ( 'contain' => 1 );
-if ( !defined($searchtype_ok{$searchtype}) ) {
-    undef $searchtype;
-}
-
-my $from = ( $startfrom - 1 ) * $resultsperpage;
-my $to   = $from + $resultsperpage;
-
-my ($count,$results);
-if ($member || keys %$patron) {
-    #($results)=Search($member || $patron,{surname=>1,firstname=>1},[$from,$to],undef,["firstname","surname","email","othernames"]  );
-    my $search_scope = $searchtype || ( $quicksearch ? "field_start_with" : "start_with" );
-    ($results) = Search( $member || $patron, \@orderby, undef, undef, \@searchfields, $search_scope );
-}
-
-if ($results) {
-	for my $field ('categorycode','branchcode'){
-		next unless ($patron->{$field});
-		@$results = grep { $_->{$field} eq $patron->{$field} } @$results; 
-	}
-    $count = scalar(@$results);
-}
-
-if($count == 1){
-    print $input->redirect("/cgi-bin/koha/members/moremember.pl?borrowernumber=" . @$results[0]->{borrowernumber});
-    exit;
-}
-
-my @resultsdata;
-$to=($count>$to?$to:$count);
-my $index=$from;
-foreach my $borrower(@$results[$from..$to-1]){
-  #find out stats
-  my ($od,$issue,$fines)=GetMemberIssuesAndFines($$borrower{'borrowernumber'});
-
-  $$borrower{'dateexpiry'}= C4::Dates->new($$borrower{'dateexpiry'},'iso')->output('syspref');
-
-  my %row = (
-    count => $index++,
-    %$borrower,
-    (defined $categories_dislay{ $borrower->{categorycode} }?   %{ $categories_dislay{ $borrower->{categorycode} } }:()),
-    overdues => $od,
-    issues => $issue,
-    odissue => "$od/$issue",
-    fines =>  sprintf("%.2f",$fines),
-    branchname => $branches->{$borrower->{branchcode}}->{branchname},
+if ( $quicksearch and $searchmember ) {
+    my $branchcode;
+    if ( C4::Branch::onlymine ) {
+        my $userenv = C4::Context->userenv;
+        $branchcode = $userenv->{'branch'};
+    }
+    my $member = GetMember(
+        cardnumber => $searchmember,
+        ( $branchcode ? ( branchcode => $branchcode ) : () ),
     );
-  push(@resultsdata, \%row);
+    if( $member ){
+        print $input->redirect("/cgi-bin/koha/members/moremember.pl?borrowernumber=" . $member->{borrowernumber});
+        exit;
+    }
 }
 
-if ($$patron{categorycode}){
-	foreach my $category (grep{$_->{categorycode} eq $$patron{categorycode}}@categories){
-		$$category{selected}=1;
-	}
-}
-my %parameters=
-        (  %$patron
-		, 'orderby'			=> $orderbyparams 
-		, 'resultsperpage'	=> $resultsperpage 
-        , 'type'=> 'intranet'); 
-my $base_url =
-    'member.pl?&amp;'
-  . join(
-    '&amp;',
-    map { "$_=$parameters{$_}" } (keys %parameters)
-  );
+my $searchfieldstype = $input->param('searchfieldstype') || 'standard';
 
-my @letters = map { {letter => $_} } ( 'A' .. 'Z');
+if ( $searchfieldstype eq "dateofbirth" ) {
+    $searchmember = output_pref({dt => dt_from_string($searchmember), dateformat => 'iso', dateonly => 1});
+}
+
+my $branches = C4::Branch::GetBranches;
+my @branches_loop;
+if ( C4::Branch::onlymine ) {
+    my $userenv = C4::Context->userenv;
+    my $branch = C4::Branch::GetBranchDetail( $userenv->{'branch'} );
+    push @branches_loop, {
+        value => $branch->{branchcode},
+        branchcode => $branch->{branchcode},
+        branchname => $branch->{branchname},
+        selected => 1
+    }
+} else {
+    foreach ( sort { lc($branches->{$a}->{branchname}) cmp lc($branches->{$b}->{branchname}) } keys %$branches ) {
+        my $selected = 0;
+        $selected = 1 if($patron->{branchcode} and $patron->{branchcode} eq $_);
+        push @branches_loop, {
+            value => $_,
+            branchcode => $_,
+            branchname => $branches->{$_}->{branchname},
+            selected => $selected
+        };
+    }
+}
+
+my @categories = C4::Category->all;
+if ( $patron->{categorycode} ) {
+    foreach my $category ( grep { $_->{categorycode} eq $patron->{categorycode} } @categories ) {
+        $category->{selected} = 1;
+    }
+}
+
+$template->param( 'alphabet' => C4::Context->preference('alphabet') || join ' ', 'A' .. 'Z' );
+
+my $view = $input->request_method() eq "GET" ? "show_form" : "show_results";
 
 $template->param(
-    letters => \@letters,
-    paginationbar => pagination_bar(
-        $base_url,
-        int( $count / $resultsperpage ) + ($count % $resultsperpage ? 1 : 0),
-        $startfrom, 'startfrom'
-    ),
-    startfrom => $startfrom,
-    from      => ($startfrom-1)*$resultsperpage+1,  
-    to        => $to,
-    multipage => ($count != $to || $startfrom!=1),
-    advsearch => ($$patron{categorycode} || $$patron{branchcode}),
-    branchloop=>\@branchloop,
-    categories=>\@categories,
-    searching       => "1",
-		actionname		=>basename($0),
-		%$patron,
-        numresults      => $count,
-        resultsloop     => \@resultsdata,
-            );
+    patron_lists => [ GetPatronLists() ],
+    searchmember        => $searchmember,
+    branchloop          => \@branches_loop,
+    categories          => \@categories,
+    branchcode          => $patron->{branchcode},
+    categorycode        => $patron->{categorycode},
+    searchtype          => $input->param('searchtype') || 'start_with',
+    searchfieldstype    => $searchfieldstype,
+    PatronsPerPage      => C4::Context->preference("PatronsPerPage") || 20,
+    view                => $view,
+);
 
 output_html_with_http_headers $input, $cookie, $template->output;

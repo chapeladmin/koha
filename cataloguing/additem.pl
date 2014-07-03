@@ -27,6 +27,7 @@ use C4::Output;
 use C4::Biblio;
 use C4::Items;
 use C4::Context;
+use C4::Circulation;
 use C4::Koha; # XXX subfield_is_koha_internal_p
 use C4::Branch; # XXX subfield_is_koha_internal_p
 use C4::ClassSource;
@@ -153,7 +154,8 @@ sub generate_subfield_form {
 	    my $input = new CGI;
 	    $value = $input->param('barcode');
 	}
-        my $attributes_no_value = qq(tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="$subfield_data{maxlength}" );
+        my $attributes_no_value = qq(id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="$subfield_data{maxlength}" );
+        my $attributes_no_value_textarea = qq(id="$subfield_data{id}" name="field_value" class="input_marceditor" rows="5" cols="64" );
         my $attributes          = qq($attributes_no_value value="$value" );
         
         if ( $subfieldlib->{authorised_value} ) {
@@ -222,7 +224,6 @@ sub generate_subfield_form {
                     -override => 1,
                     -size     => 1,
                     -multiple => 0,
-                    -tabindex => 1,
                     -id       => "tag_".$tag."_subfield_".$subfieldtag."_".$index_subfield,
                     -class    => "input_marceditor",
                 );
@@ -270,7 +271,7 @@ sub generate_subfield_form {
                           500 <= $tag && $tag < 600                     )
                   ) {
             # oversize field (textarea)
-            $subfield_data{marc_value} = "<textarea $attributes_no_value>$value</textarea>\n";
+            $subfield_data{marc_value} = "<textarea $attributes_no_value_textarea>$value</textarea>\n";
         } else {
            # it's a standard field
            $subfield_data{marc_value} = "<input type=\"text\" $attributes />";
@@ -314,6 +315,7 @@ my $itemnumber   = $input->param('itemnumber');
 my $op           = $input->param('op');
 my $hostitemnumber = $input->param('hostitemnumber');
 my $marcflavour  = C4::Context->preference("marcflavour");
+my $searchid     = $input->param('searchid');
 # fast cataloguing datas
 my $fa_circborrowernumber = $input->param('circborrowernumber');
 my $fa_barcode            = $input->param('barcode');
@@ -396,11 +398,6 @@ if ($op eq "additem") {
 
     # if autoBarcode is set to 'incremental', calculate barcode...
     if ( C4::Context->preference('autoBarcode') eq 'incremental' ) {
-        $record = _increment_barcode($record, $frameworkcode);
-    }
-
-
-    if (C4::Context->preference('autoBarcode') eq 'incremental') {
         $record = _increment_barcode($record, $frameworkcode);
     }
 
@@ -537,7 +534,7 @@ if ($op eq "additem") {
     # check that there is no issue on this item before deletion.
     $error = &DelItemCheck($dbh,$biblionumber,$itemnumber);
     if($error == 1){
-        print $input->redirect("additem.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode");
+        print $input->redirect("additem.pl?biblionumber=$biblionumber&frameworkcode=$frameworkcode&searchid=$searchid");
     }else{
         push @errors,$error;
         $nextop="additem";
@@ -569,13 +566,13 @@ if ($op eq "additem") {
             my $defaultview = C4::Context->preference('IntranetBiblioDefaultView');
             my $views = { C4::Search::enabled_staff_search_views };
             if ($defaultview eq 'isbd' && $views->{can_view_ISBD}) {
-                print $input->redirect("/cgi-bin/koha/catalogue/ISBDdetail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/ISBDdetail.pl?biblionumber=$biblionumber&searchid=$searchid");
             } elsif  ($defaultview eq 'marc' && $views->{can_view_MARC}) {
-                print $input->redirect("/cgi-bin/koha/catalogue/MARCdetail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/MARCdetail.pl?biblionumber=$biblionumber&searchid=$searchid");
             } elsif  ($defaultview eq 'labeled_marc' && $views->{can_view_labeledMARC}) {
-                print $input->redirect("/cgi-bin/koha/catalogue/labeledMARCdetail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/labeledMARCdetail.pl?biblionumber=$biblionumber&searchid=$searchid");
             } else {
-                print $input->redirect("/cgi-bin/koha/catalogue/detail.pl?biblionumber=$biblionumber");
+                print $input->redirect("/cgi-bin/koha/catalogue/detail.pl?biblionumber=$biblionumber&searchid=$searchid");
             }
             exit;
         }
@@ -603,6 +600,15 @@ if ($op eq "additem") {
     } else {
         ModItemFromMarc($itemtosave,$biblionumber,$itemnumber);
         $itemnumber="";
+    }
+  my $item = GetItem( $itemnumber );
+    my $olditemlost =  $item->{'itemlost'};
+
+   my ($lost_tag,$lost_subfield) = GetMarcFromKohaField("items.itemlost",'');
+
+   my $newitemlost = $itemtosave->subfield( $lost_tag, $lost_subfield );
+    if (($olditemlost eq '0' or $olditemlost eq '' ) and $newitemlost ge '1'){
+  LostItem($itemnumber,'MARK RETURNED');
     }
     $nextop="additem";
 } elsif ($op eq "delinkitem"){
@@ -688,10 +694,10 @@ foreach my $field (@fields) {
 						|| $subfieldvalue;
         }
 
-        if (($field->tag eq $branchtagfield) && ($subfieldcode eq $branchtagsubfield) && C4::Context->preference("IndependantBranches")) {
+        if (($field->tag eq $branchtagfield) && ($subfieldcode eq $branchtagsubfield) && C4::Context->preference("IndependentBranches")) {
             #verifying rights
             my $userenv = C4::Context->userenv();
-            unless (($userenv->{'flags'} == 1) or (($userenv->{'branch'} eq $subfieldvalue))){
+            unless (C4::Context->IsSuperLibrarian() or (($userenv->{'branch'} eq $subfieldvalue))){
                 $this_row{'nomod'} = 1;
             }
         }
@@ -749,10 +755,11 @@ my $i=0;
 
 my $pref_itemcallnumber = C4::Context->preference('itemcallnumber');
 
-my $onlymine = C4::Context->preference('IndependantBranches') && 
-               C4::Context->userenv                           && 
-               C4::Context->userenv->{flags}!=1               && 
-               C4::Context->userenv->{branch};
+my $onlymine =
+     C4::Context->preference('IndependentBranches')
+  && C4::Context->userenv
+  && !C4::Context->IsSuperLibrarian()
+  && C4::Context->userenv->{branch};
 my $branch = $input->param('branch') || C4::Context->userenv->{branch};
 my $branches = GetBranchesLoop($branch,$onlymine);  # build once ahead of time, instead of multiple times later.
 
@@ -793,7 +800,7 @@ foreach my $tag ( keys %{$tagslib}){
         next if any { /^$tag$subtag$/ }  @fields;
 
         my @values = (undef);
-        @values = $itemrecord->field($tag)->subfield($subtag) if ($itemrecord && defined($itemrecord->field($tag)->subfield($subtag)));
+        @values = $itemrecord->field($tag)->subfield($subtag) if ($itemrecord && defined($itemrecord->field($tag)) && defined($itemrecord->field($tag)->subfield($subtag)));
         for my $value (@values){
             my $subfield_data = generate_subfield_form($tag, $subtag, $value, $tagslib, $tagslib->{$tag}->{$subtag}, $branches, $today_iso, $biblionumber, $temp, \@loop_data, $i); 
             push (@loop_data, $subfield_data);
@@ -821,6 +828,7 @@ $template->param(
     popup => $input->param('popup') ? 1: 0,
     C4::Search::enabled_staff_search_views,
 );
+$template->{'VARS'}->{'searchid'} = $searchid;
 
 if ($frameworkcode eq 'FA'){
     # fast cataloguing datas

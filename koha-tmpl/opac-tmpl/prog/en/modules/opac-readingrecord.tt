@@ -1,6 +1,7 @@
+[% USE Koha %]
 [% USE KohaDates %]
-
-[% INCLUDE 'doc-head-open.inc' %][% LibraryNameTitle or "Koha online" %] catalog &rsaquo; Your checkout history
+[% INCLUDE 'doc-head-open.inc' %]
+[% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo; Your checkout history
 [% INCLUDE 'doc-head-close.inc' %]
 <style type="text/css">ul.ui-tabs-nav li a, ul.ui-tabs-nav li span.a  { padding:0.6em 1em; }</style>
 <script type="text/javascript">
@@ -70,7 +71,7 @@ You have never borrowed anything from this library.
 <td>
 [% IF  OPACAmazonCoverImages %]
     [% IF  issue.normalized_isbn %]
-        <a href="http://www.amazon.com/gp/reader/[% issue.normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img border="0" src="http://images.amazon.com/images/P/[% issue.normalized_isbn %].01.THUMBZZZ.jpg" alt="Cover Image" /></a>
+        <a href="http://www.amazon.com/gp/reader/[% issue.normalized_isbn %]/ref=sib_dp_pt/002-7879865-0184864#reader-link"><img border="0" src="https://images-na.ssl-images-amazon.com/images/P/[% issue.normalized_isbn %].01.THUMBZZZ.jpg" alt="Cover Image" /></a>
     [% ELSE %]
          <span class="no-image">No cover image available</span>
     [% END %]

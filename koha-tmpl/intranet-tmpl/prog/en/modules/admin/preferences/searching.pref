@@ -58,12 +58,26 @@ Searching:
                   no: "Not using"
             - 'ICU Zebra indexing. Please note: This setting will not affect Zebra indexing, it should only be used to tell Koha that you have activated ICU indexing if you have actually done so, since there is no way for Koha to figure this out on its own.'
         -
+            - pref: UseQueryParser
+              default: 1
+              choices:
+                  yes: Try
+                  no: "Do not try"
+            - 'to use the QueryParser module for parsing queries. Please note: enabling this will have no impact if you do not have QueryParser installed, and everything will continue to work as usual.'
+        -
             - pref: IncludeSeeFromInSearches
               default: 0
               choices:
                   yes: Include
                   no: "Don't include"
             - "<i>see from</i> (non-preferred form) headings in bibliographic searches. Please note: you will need to reindex your bibliographic database when changing this preference."
+        -
+            - pref: EnableSearchHistory
+              default: 0
+              choices:
+                  yes: Keep
+                  no: "Don't keep"
+            - patron search history in the staff client.
     Search Form:
         -
             - Show tabs in OPAC and staff-side advanced search for limiting searches on the
@@ -71,6 +85,12 @@ Searching:
               class: long
             - "fields (separate values with |). Tabs appear in the order listed.<br/>"
             - "<em>Currently supported values</em>: Item types (<strong>itemtypes</strong>), Collection Codes (<strong>ccode</strong>) and Shelving Location (<strong>loc</strong>)."
+        -
+            - Limit the languages listed in the advanced search drop-down to the
+            - pref: AdvancedSearchLanguages
+              class: long
+            - "ISO 639-2 language codes (separate values with | or ,)."
+            - "For example, to limit listing to French and Italian, enter <em>ita|fre</em>."
         -
             - By default,
             - pref: expandedSearchOption
@@ -165,6 +185,14 @@ Searching:
               class: integer
             - results per page in the OPAC.
         -
+            - "Show facets for"
+            - pref: DisplayLibraryFacets
+              type: choice
+              choices:
+                  home: "home library"
+                  holding: "holding library"
+                  both: "both home and holding library"
+        -
             - pref: OPACItemsResultsDisplay
               type: boolean
               choices:
@@ -176,3 +204,7 @@ Searching:
             - pref: FacetLabelTruncationLength
               class: integer
             - characters, in OPAC/staff interface.
+        -
+            - Use the following text as separator for UNIMARC authors facets
+            - pref: UNIMARCAuthorsFacetsSeparator
+              class: short

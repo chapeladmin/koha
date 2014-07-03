@@ -7,32 +7,6 @@
 [% INCLUDE 'doc-head-close.inc' %]
 <script type="text/javascript">
 //<![CDATA[
-    function toUC(f) {
-        var x=f.value.toUpperCase();
-        f.value=x;
-        return true;
-    }
-    function Check(f) {
-        var _alertString="";
-        var alertString2;
-        if (f.currency.value.length==0) {
-            _alertString += _("- Currency name missing") + "\n";
-        }
-        if (f.rate.value.length==0) {
-            _alertString += _("- Rate missing") + "\n";
-        }
-        if (f.symbol.value.length==0) {
-            _alertString += _("- Symbol missing") + "\n";
-        }
-        if (_alertString.length==0) {
-            document.Aform.submit();
-        } else {
-            alertString2 = _("Form not submitted because of the following problem(s)") + "\n";
-            alertString2 += "------------------------------------------------------------------------------------\n";
-            alertString2 += _alertString;
-            alert(alertString2);
-        }
-    }
 
     function check_currency(val) {
         if ( val == 1.0 ) {
@@ -72,7 +46,6 @@
 <div id="bd">
     <div id="yui-main">
     <div class="yui-b">
-
 [% IF ( else ) %]
 <div id="toolbar" class="btn-toolbar">
     <a class="btn btn-small" id="newcurrency" href="[% script_name %]?op=add_form"><i class="icon-plus"></i> New currency</a>
@@ -81,7 +54,7 @@
 
 [% IF ( add_form ) %]
 
-<form action="[% script_name %]" name="Aform" method="post">
+<form action="[% script_name %]" name="Aform" method="post" class="validated">
     <input type="hidden" name="op" value="save" />
     <fieldset class="rows">
     <legend>[% IF ( searchfield ) %]
@@ -95,19 +68,22 @@
             <span class="label">Currency: </span>
             <input type="hidden" name="currency" id="currency" value="[% searchfield %]" />[% searchfield %]
     [% ELSE %]
-            <label for="currency">Currency: </label>
-            <input type="text" name="currency" id="currency" size="50" maxlength="50" onblur="toUC(this);" />
+            <label for="currency" class="required">Currency: </label>
+            <input type="text" name="currency" id="currency" size="50" maxlength="50" onblur="toUC(this);" required="required" class="required" /> <span class="required">Required</span>
     [% END %]
         </li>
         <li>
-            <label for="rate">Rate: </label>
-            <input type="text" name="rate" id="rate" size="10" maxlength="10" value="[% rate %]" />
+            <label for="rate" class="required">Rate: </label>
+            <input type="text" name="rate" id="rate" size="10" maxlength="10" value="[% rate %]" required="required" class="required" /> <span class="required">Required</span>
         </li>
         <li>
-            <label for="symbol">Symbol: </label>
-            <input type="text" name="symbol" id="symbol" size="5" maxlength="5" value="[% symbol %]" />
+            <label for="symbol" class="required">Symbol: </label>
+            <input type="text" name="symbol" id="symbol" size="5" maxlength="5" value="[% symbol %]" required="required" class="required" /> <span class="required">Required</span>
         </li>
-
+        <li>
+            <label for="isocode">ISO code: </label>
+            <input type="text" name="isocode" id="isocode" size="5" maxlength="5" value="[% isocode %]" />
+        </li>
         <li>
             <span class="label">Last updated: </span>[% timestamp %]
         </li>
@@ -125,7 +101,7 @@
         </fieldset>
 
     <fieldset class="action">
-        <input type="submit" value="Submit" onclick="Check(this.form); return false;" />
+        <input type="submit" value="Submit" />
         <a href="/cgi-bin/koha/admin/currency.pl" class="cancel">Cancel</a>
     </fieldset>
     </form>
@@ -187,6 +163,7 @@
             <th>Currency</th>
             <th>Rate</th>
             <th>Symbol</th>
+            <th>ISO code</th>
             <th>Last updated</th>
             <th>Active</th>
             <th colspan="2">Actions&nbsp;</th>
@@ -200,6 +177,7 @@
             <td>[% loo.currency %]</td>
             <td>[% loo.rate %]</td>
             <td>[% loo.symbol |html %]</td>
+            <td>[% loo.isocode |html %]</td>
             <td>[% loo.timestamp %]</td>
             <td style="color:green;">[% IF ( loo.active ) %]✓[% END %]</td>
             <td><a href="[% loo.script_name %]?op=add_form&amp;searchfield=[% loo.currency %]">Edit</a></td>
@@ -216,6 +194,16 @@
     [% IF ( ltcount ) %]
         <a href="[% script_name %]?offset=[% nextpage %]">Next &gt;&gt;</a>
     [% END %]
+
+    <div class="hint">
+        <p>
+            When importing MARC files via the staging tools, the tool will attempt to find and use the price of the currently active currency.
+        </p>
+        <p>
+            Some examples of compatible price fields include "$9.99", "9.99 USD", "$9.99 USD", "9.99 USD (10.00 CAN)", "$9.99 USD (paperback)".
+            These examples assume USD is the active currency.
+        </p>
+    </div>
 
 [% END %]
 

@@ -28,7 +28,7 @@ use C4::Dates qw(format_date);
 use C4::Members qw(GetHideLostItemsPreference);
 use C4::XSLT;
 use C4::Branch;
-use C4::Reserves;    # CheckReserves
+use C4::Reserves;    # GetReserveStatus
 use C4::Debug;
 use C4::Charset;
 use YAML;
@@ -36,7 +36,7 @@ use URI::Escape;
 use Business::ISBN;
 use MARC::Record;
 use MARC::Field;
-
+use utf8;
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS $DEBUG);
 
 # set the version for version checking
@@ -68,11 +68,9 @@ This module provides searching functions for Koha's bibliographic databases
   &searchResults
   &getRecords
   &buildQuery
-  &NZgetRecords
-  &AddSearchHistory
   &GetDistinctValues
   &enabled_staff_search_views
-  &SimpleSearch
+  &PurgeSearchHistory
 );
 
 # make all your functions, whether exported or not;
@@ -100,9 +98,26 @@ sub FindDuplicate {
     if ( $result->{isbn} ) {
         $result->{isbn} =~ s/\(.*$//;
         $result->{isbn} =~ s/\s+$//;
-        $query = "isbn=$result->{isbn}";
+        $query = "isbn:$result->{isbn}";
     }
     else {
+        my $QParser;
+        $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser'));
+        my $titleindex;
+        my $authorindex;
+        my $op;
+
+        if ($QParser) {
+            $titleindex = 'title|exact';
+            $authorindex = 'author|exact';
+            $op = '&&';
+            $QParser->custom_data->{'QueryAutoTruncate'} = C4::Context->preference('QueryAutoTruncate');
+        } else {
+            $titleindex = 'ti,ext';
+            $authorindex = 'au,ext';
+            $op = 'and';
+        }
+
         $result->{title} =~ s /\\//g;
         $result->{title} =~ s /\"//g;
         $result->{title} =~ s /\(//g;
@@ -111,7 +126,7 @@ sub FindDuplicate {
         # FIXME: instead of removing operators, could just do
         # quotes around the value
         $result->{title} =~ s/(and|or|not)//g;
-        $query = "ti,ext=$result->{title}";
+        $query = "$titleindex:\"$result->{title}\"";
         if   ( $result->{author} ) {
             $result->{author} =~ s /\\//g;
             $result->{author} =~ s /\"//g;
@@ -120,7 +135,7 @@ sub FindDuplicate {
 
             # remove valid operators
             $result->{author} =~ s/(and|or|not)//g;
-            $query .= " and au,ext=$result->{author}";
+            $query .= " $op $authorindex:\"$result->{author}\"";
         }
     }
 
@@ -128,8 +143,11 @@ sub FindDuplicate {
     my @results;
     if (!defined $error) {
         foreach my $possible_duplicate_record (@{$searchresults}) {
-            my $marcrecord =
-            MARC::Record->new_from_usmarc($possible_duplicate_record);
+            my $marcrecord = new_record_from_zebra(
+                'biblioserver',
+                $possible_duplicate_record
+            );
+
             my $result = TransformMarcToKoha( $dbh, $marcrecord, '' );
 
             # FIXME :: why 2 $biblionumber ?
@@ -207,80 +225,86 @@ $template->param(result=>\@results);
 sub SimpleSearch {
     my ( $query, $offset, $max_results, $servers )  = @_;
 
-    if ( C4::Context->preference('NoZebra') ) {
-        my $result = NZorder( NZanalyse($query) )->{'biblioserver'};
-        my $search_result =
-          (      $result->{hits}
-              && $result->{hits} > 0 ? $result->{'RECORDS'} : [] );
-        return ( undef, $search_result, scalar($result->{hits}) );
-    }
-    else {
-        return ( 'No query entered', undef, undef ) unless $query;
-        # FIXME hardcoded value. See catalog/search.pl & opac-search.pl too.
-        my @servers = defined ( $servers ) ? @$servers : ( 'biblioserver' );
-        my @zoom_queries;
-        my @tmpresults;
-        my @zconns;
-        my $results = [];
-        my $total_hits = 0;
+    return ( 'No query entered', undef, undef ) unless $query;
+    # FIXME hardcoded value. See catalog/search.pl & opac-search.pl too.
+    my @servers = defined ( $servers ) ? @$servers : ( 'biblioserver' );
+    my @zoom_queries;
+    my @tmpresults;
+    my @zconns;
+    my $results = [];
+    my $total_hits = 0;
 
-        # Initialize & Search Zebra
-        for ( my $i = 0 ; $i < @servers ; $i++ ) {
-            eval {
-                $zconns[$i] = C4::Context->Zconn( $servers[$i], 1 );
+    my $QParser;
+    $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser') && ! ($query =~ m/\w,\w|\w=\w/));
+    if ($QParser) {
+        $QParser->custom_data->{'QueryAutoTruncate'} = C4::Context->preference('QueryAutoTruncate');
+    }
+
+    # Initialize & Search Zebra
+    for ( my $i = 0 ; $i < @servers ; $i++ ) {
+        eval {
+            $zconns[$i] = C4::Context->Zconn( $servers[$i], 1 );
+            if ($QParser) {
+                $query =~ s/=/:/g;
+                $QParser->parse( $query );
+                $query = $QParser->target_syntax($servers[$i]);
+                $zoom_queries[$i] = new ZOOM::Query::PQF( $query, $zconns[$i]);
+            } else {
+                $query =~ s/:/=/g;
                 $zoom_queries[$i] = new ZOOM::Query::CCL2RPN( $query, $zconns[$i]);
-                $tmpresults[$i] = $zconns[$i]->search( $zoom_queries[$i] );
-
-                # error handling
-                my $error =
-                    $zconns[$i]->errmsg() . " ("
-                  . $zconns[$i]->errcode() . ") "
-                  . $zconns[$i]->addinfo() . " "
-                  . $zconns[$i]->diagset();
-
-                return ( $error, undef, undef ) if $zconns[$i]->errcode();
-            };
-            if ($@) {
-
-                # caught a ZOOM::Exception
-                my $error =
-                    $@->message() . " ("
-                  . $@->code() . ") "
-                  . $@->addinfo() . " "
-                  . $@->diagset();
-                warn $error." for query: $query";
-                return ( $error, undef, undef );
             }
+            $tmpresults[$i] = $zconns[$i]->search( $zoom_queries[$i] );
+
+            # error handling
+            my $error =
+                $zconns[$i]->errmsg() . " ("
+              . $zconns[$i]->errcode() . ") "
+              . $zconns[$i]->addinfo() . " "
+              . $zconns[$i]->diagset();
+
+            return ( $error, undef, undef ) if $zconns[$i]->errcode();
+        };
+        if ($@) {
+
+            # caught a ZOOM::Exception
+            my $error =
+                $@->message() . " ("
+              . $@->code() . ") "
+              . $@->addinfo() . " "
+              . $@->diagset();
+            warn $error." for query: $query";
+            return ( $error, undef, undef );
         }
-
-        _ZOOM_event_loop(
-            \@zconns,
-            \@tmpresults,
-            sub {
-                my ($i, $size) = @_;
-                my $first_record = defined($offset) ? $offset + 1 : 1;
-                my $hits = $tmpresults[ $i - 1 ]->size();
-                $total_hits += $hits;
-                my $last_record = $hits;
-                if ( defined $max_results && $offset + $max_results < $hits ) {
-                    $last_record = $offset + $max_results;
-                }
-
-                for my $j ( $first_record .. $last_record ) {
-                    my $record =
-                      $tmpresults[ $i - 1 ]->record( $j - 1 )->raw()
-                      ;    # 0 indexed
-                    push @{$results}, $record;
-                }
-            }
-        );
-
-        foreach my $zoom_query (@zoom_queries) {
-            $zoom_query->destroy();
-        }
-
-        return ( undef, $results, $total_hits );
     }
+
+    _ZOOM_event_loop(
+        \@zconns,
+        \@tmpresults,
+        sub {
+            my ($i, $size) = @_;
+            my $first_record = defined($offset) ? $offset + 1 : 1;
+            my $hits = $tmpresults[ $i - 1 ]->size();
+            $total_hits += $hits;
+            my $last_record = $hits;
+            if ( defined $max_results && $offset + $max_results < $hits ) {
+                $last_record = $offset + $max_results;
+            }
+
+            for my $j ( $first_record .. $last_record ) {
+                my $record = eval {
+                  $tmpresults[ $i - 1 ]->record( $j - 1 )->raw()
+                  ;    # 0 indexed
+                };
+                push @{$results}, $record if defined $record;
+            }
+        }
+    );
+
+    foreach my $zoom_query (@zoom_queries) {
+        $zoom_query->destroy();
+    }
+
+    return ( undef, $results, $total_hits );
 }
 
 =head2 getRecords
@@ -401,7 +425,7 @@ sub getRecords {
                 warn "Ignoring unrecognized sort '$sort' requested" if $sort_by;
             }
         }
-        if ($sort_by && !$scan) {
+        if ( $sort_by && !$scan && $results[$i] ) {
             if ( $results[$i]->sort( "yaz", $sort_by ) < 0 ) {
                 warn "WARNING sort $sort_by failed";
             }
@@ -425,13 +449,14 @@ sub getRecords {
                 else {
                     $times = $size;
                 }
+
                 for ( my $j = $offset ; $j < $times ; $j++ ) {
                     my $records_hash;
                     my $record;
 
                     ## Check if it's an index scan
                     if ($scan) {
-                        my ( $term, $occ ) = $results[ $i - 1 ]->term($j);
+                        my ( $term, $occ ) = $results[ $i - 1 ]->display_term($j);
 
                  # here we create a minimal MARC record and hand it off to the
                  # template just like a normal result ... perhaps not ideal, but
@@ -467,7 +492,6 @@ sub getRecords {
                     # not an index scan
                     else {
                         $record = $results[ $i - 1 ]->record($j)->raw();
-
                         # warn "RECORD $j:".$record;
                         $results_hash->{'RECORDS'}[$j] = $record;
                     }
@@ -482,39 +506,37 @@ sub getRecords {
                       $size > $facets_maxrecs ? $facets_maxrecs : $size;
                     for my $facet (@$facets) {
                         for ( my $j = 0 ; $j < $jmax ; $j++ ) {
-                            my $render_record =
-                              $results[ $i - 1 ]->record($j)->render();
+
+                            my $marc_record = new_record_from_zebra (
+                                    'biblioserver',
+                                    $results[ $i - 1 ]->record($j)->raw()
+                            );
+
+                            if ( ! defined $marc_record ) {
+                                warn "ERROR DECODING RECORD - $@: " .
+                                    $results[ $i - 1 ]->record($j)->raw();
+                                next;
+                            }
+
                             my @used_datas = ();
+
                             foreach my $tag ( @{ $facet->{tags} } ) {
 
                                 # avoid first line
                                 my $tag_num = substr( $tag, 0, 3 );
-                                my $letters = substr( $tag, 3 );
-                                my $field_pattern =
-                                  '\n' . $tag_num . ' ([^z][^\n]+)';
-                                $field_pattern = '\n' . $tag_num . ' ([^\n]+)'
-                                  if ( int($tag_num) < 10 );
-                                my @field_tokens =
-                                  ( $render_record =~ /$field_pattern/g );
-                                foreach my $field_token (@field_tokens) {
-                                    my @subf = ( $field_token =~
-                                          /\$([a-zA-Z0-9]) ([^\$]+)/g );
-                                    my @values;
-                                    for ( my $i = 0 ; $i < @subf ; $i += 2 ) {
-                                        if ( $letters =~ $subf[$i] ) {
-                                            my $value = $subf[ $i + 1 ];
-                                            $value =~ s/^ *//;
-                                            $value =~ s/ *$//;
-                                            push @values, $value;
-                                        }
-                                    }
-                                    my $data = join( $facet->{sep}, @values );
+                                my $subfield_letters = substr( $tag, 3 );
+                                # Removed when as_string fixed
+                                my @subfields = $subfield_letters =~ /./sg;
+
+                                my @fields = $marc_record->field($tag_num);
+                                foreach my $field (@fields) {
+                                    my $data = $field->as_string( $subfield_letters, $facet->{sep} );
+
                                     unless ( $data ~~ @used_datas ) {
-                                        $facets_counter->{ $facet->{idx} }
-                                          ->{$data}++;
                                         push @used_datas, $data;
+                                        $facets_counter->{ $facet->{idx} }->{$data}++;
                                     }
-                                }    # fields
+                                } # fields
                             }    # field codes
                         }    # records
                         $facets_info->{ $facet->{idx} }->{label_value} =
@@ -546,7 +568,7 @@ sub getRecords {
                           )
                         {
                             $number_of_facets++;
-                            if (   ( $number_of_facets < 6 )
+                            if (   ( $number_of_facets <= 5 )
                                 || ( $expanded_facet eq $link_value )
                                 || ( $facets_info->{$link_value}->{'expanded'} )
                               )
@@ -623,7 +645,7 @@ sub getRecords {
                         # handle expanded option
                         unless ( $facets_info->{$link_value}->{'expanded'} ) {
                             $expandable = 1
-                              if ( ( $number_of_facets > 6 )
+                              if ( ( $number_of_facets > 5 )
                                 && ( $expanded_facet ne $link_value ) );
                         }
                         push @facets_loop,
@@ -730,7 +752,7 @@ sub _remove_stopwords {
     my @stopwords_removed;
 
     # phrase and exact-qualified indexes shouldn't have stopwords removed
-    if ( $index !~ m/phr|ext/ ) {
+    if ( $index !~ m/,(phr|ext)/ ) {
 
 # remove stopwords from operand : parse all stopwords & remove them (case insensitive)
 #       we use IsAlpha unicode definition, to deal correctly with diacritics.
@@ -826,6 +848,7 @@ sub _build_weighted_query {
     my $stemming      = C4::Context->preference("QueryStemming")     || 0;
     my $weight_fields = C4::Context->preference("QueryWeightFields") || 0;
     my $fuzzy_enabled = C4::Context->preference("QueryFuzzy")        || 0;
+    $operand =~ s/"/ /g;    # Bug 7518: searches with quotation marks don't work
 
     my $weighted_query .= "(rk=(";    # Specifies that we're applying rank
 
@@ -835,6 +858,7 @@ sub _build_weighted_query {
           "Title-cover,ext,r1=\"$operand\"";    # exact title-cover
         $weighted_query .= " or ti,ext,r2=\"$operand\"";    # exact title
         $weighted_query .= " or Title-cover,phr,r3=\"$operand\"";    # phrase title
+        $weighted_query .= " or ti,wrdl,r4=\"$operand\"";    # words in title
           #$weighted_query .= " or any,ext,r4=$operand";               # exact any
           #$weighted_query .=" or kw,wrdl,r5=\"$operand\"";            # word list any
         $weighted_query .= " or wrdl,fuzzy,r8=\"$operand\""
@@ -870,8 +894,11 @@ sub _build_weighted_query {
         $weighted_query .= " $index,ext,r1=\"$operand\"";    # exact index
           #$weighted_query .= " or (title-sort-az=0 or $index,startswithnt,st-word,r3=$operand #)";
         $weighted_query .= " or $index,phr,r3=\"$operand\"";    # phrase index
-        $weighted_query .=
-          " or $index,rt,wrdl,r3=\"$operand\"";    # word list index
+        $weighted_query .= " or $index,wrdl,r6=\"$operand\"";    # word list index
+        $weighted_query .= " or $index,wrdl,fuzzy,r8=\"$operand\""
+          if $fuzzy_enabled;    # add fuzzy, word list
+        $weighted_query .= " or $index,wrdl,rt,r9=\"$stemmed_operand\""
+          if ( $stemming and $stemmed_operand );    # add stemming, right truncation
     }
 
     $weighted_query .= "))";                       # close rank specification
@@ -932,11 +959,14 @@ sub getIndexes{
                     'Corporate-name-heading',
                     'Corporate-name-see',
                     'Corporate-name-seealso',
+                    'Country-publication',
                     'ctype',
+                    'curriculum',
                     'date-entered-on-file',
                     'Date-of-acquisition',
                     'Date-of-publication',
                     'Dewey-classification',
+                    'Dissertation-information',
                     'EAN',
                     'extent',
                     'fic',
@@ -952,6 +982,8 @@ sub getIndexes{
                     'Host-item',
                     'id-other',
                     'Illustration-code',
+                    'Index-term-genre',
+                    'Index-term-uncontrolled',
                     'ISBN',
                     'isbn',
                     'ISSN',
@@ -961,11 +993,15 @@ sub getIndexes{
                     'Koha-Auth-Number',
                     'l-format',
                     'language',
+                    'language-original',
                     'lc-card',
                     'LC-card-number',
                     'lcn',
+                    'lex',
                     'llength',
                     'ln',
+                    'ln-audio',
+                    'ln-subtitle',
                     'Local-classification',
                     'Local-number',
                     'Match-heading',
@@ -1017,7 +1053,6 @@ sub getIndexes{
                     'su-to',
                     'su-ut',
                     'ut',
-                    'UPC',
                     'Term-genre-form',
                     'Term-genre-form-heading',
                     'Term-genre-form-see',
@@ -1026,7 +1061,6 @@ sub getIndexes{
                     'Title',
                     'Title-cover',
                     'Title-series',
-                    'Title-host',
                     'Title-uniform',
                     'Title-uniform-heading',
                     'Title-uniform-see',
@@ -1061,6 +1095,7 @@ sub getIndexes{
                     'mc-itype',
                     'mc-loc',
                     'notforloan',
+                    'Number-local-acquisition',
                     'onloan',
                     'price',
                     'renewals',
@@ -1091,7 +1126,9 @@ on authority data).
 =cut
 
 sub _handle_exploding_index {
-    my ( $index, $term ) = @_;
+    my ($QParser, $filter, $params, $negate, $server) = @_;
+    my $index = $filter;
+    my $term = join(' ', @$params);
 
     return unless ($index =~ m/(su-br|su-na|su-rl)/ && $term);
 
@@ -1099,8 +1136,8 @@ sub _handle_exploding_index {
 
     my $codesubfield = $marcflavour eq 'UNIMARC' ? '5' : 'w';
     my $wantedcodes = '';
-    my @subqueries = ( "(su=\"$term\")");
-    my ($error, $results, $total_hits) = SimpleSearch( "Heading,wrdl=$term", undef, undef, [ "authorityserver" ] );
+    my @subqueries = ( "\@attr 1=Subject \@attr 4=1 \"$term\"");
+    my ($error, $results, $total_hits) = SimpleSearch( "he:$term", undef, undef, [ "authorityserver" ] );
     foreach my $auth (@$results) {
         my $record = MARC::Record->new_from_usmarc($auth);
         my @references = $record->field('5..');
@@ -1114,11 +1151,12 @@ sub _handle_exploding_index {
             }
             foreach my $reference (@references) {
                 my $codes = $reference->subfield($codesubfield);
-                push @subqueries, '(su="' . $reference->as_string('abcdefghijlmnopqrstuvxyz') . '")' if (($codes && $codes eq $wantedcodes) || !$wantedcodes);
+                push @subqueries, '@attr 1=Subject @attr 4=1 "' . $reference->as_string('abcdefghijlmnopqrstuvxyz') . '"' if (($codes && $codes eq $wantedcodes) || !$wantedcodes);
             }
         }
     }
-    return join(' or ', @subqueries);
+    my $query = ' @or ' x (scalar(@subqueries) - 1) . join(' ', @subqueries);
+    return $query;
 }
 
 =head2 parseQuery
@@ -1145,37 +1183,63 @@ sub parseQuery {
     my $query = $operands[0];
     my $index;
     my $term;
+    my $query_desc;
 
-# TODO: once we are using QueryParser, all this special case code for
-#       exploded search indexes will be replaced by a callback to
-#       _handle_exploding_index
-    if ( $query =~ m/^(.*)\b(su-br|su-na|su-rl)[:=](\w.*)$/ ) {
-        $query = $1;
-        $index = $2;
-        $term  = $3;
-    } else {
+    my $QParser;
+    $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser') || $query =~ s/^qp=//);
+    undef $QParser if ($query =~ m/^(ccl=|pqf=|cql=)/ || grep (/\w,\w|\w=\w/, @operands, @indexes) );
+    undef $QParser if (scalar @limits > 0);
+
+    if ($QParser)
+    {
+        $QParser->custom_data->{'QueryAutoTruncate'} = C4::Context->preference('QueryAutoTruncate');
         $query = '';
-        for ( my $i = 0 ; $i <= @operands ; $i++ ) {
-            if ($operands[$i] && $indexes[$i] =~ m/(su-br|su-na|su-rl)/) {
-                $index = $indexes[$i];
-                $term = $operands[$i];
-            } elsif ($operands[$i]) {
-                $query .= $operators[$i] eq 'or' ? ' or ' : ' and ' if ($query);
-                $query .= "($indexes[$i]:$operands[$i])";
+        for ( my $ii = 0 ; $ii <= @operands ; $ii++ ) {
+            next unless $operands[$ii];
+            $query .= $operators[ $ii - 1 ] eq 'or' ? ' || ' : ' && '
+              if ($query);
+            if ( $operands[$ii] =~ /^[^"]\W*[-|_\w]*:\w.*[^"]$/ ) {
+                $query .= $operands[$ii];
+            }
+            elsif ( $indexes[$ii] =~ m/su-/ ) {
+                $query .= $indexes[$ii] . '(' . $operands[$ii] . ')';
+            }
+            else {
+                $query .=
+                  ( $indexes[$ii] ? "$indexes[$ii]:" : '' ) . $operands[$ii];
             }
         }
-    }
-
-    if ($index) {
-        my $queryPart = _handle_exploding_index($index, $term);
-        if ($queryPart) {
-            $query .= "($queryPart)";
+        foreach my $limit (@limits) {
         }
-        $operators = ();
-        $operands[0] = "ccl=$query";
+        if ( scalar(@sort_by) > 0 ) {
+            my $modifier_re =
+              '#(' . join( '|', @{ $QParser->modifiers } ) . ')';
+            $query =~ s/$modifier_re//g;
+            foreach my $modifier (@sort_by) {
+                $query .= " #$modifier";
+            }
+        }
+
+        $query_desc = $query;
+        $query_desc =~ s/\s+/ /g;
+        if ( C4::Context->preference("QueryWeightFields") ) {
+        }
+        $QParser->add_bib1_filter_map( 'su-br' => 'biblioserver' =>
+              { 'target_syntax_callback' => \&_handle_exploding_index } );
+        $QParser->add_bib1_filter_map( 'su-na' => 'biblioserver' =>
+              { 'target_syntax_callback' => \&_handle_exploding_index } );
+        $QParser->add_bib1_filter_map( 'su-rl' => 'biblioserver' =>
+              { 'target_syntax_callback' => \&_handle_exploding_index } );
+        $QParser->parse($query);
+        $operands[0] = "pqf=" . $QParser->target_syntax('biblioserver');
+    }
+    else {
+        require Koha::QueryParser::Driver::PQF;
+        my $modifier_re = '#(' . join( '|', @{Koha::QueryParser::Driver::PQF->modifiers}) . ')';
+        s/$modifier_re//g for @operands;
     }
 
-    return ( $operators, \@operands, $indexes, $limits, $sort_by, $scan, $lang);
+    return ( $operators, \@operands, $indexes, $limits, $sort_by, $scan, $lang, $query_desc);
 }
 
 =head2 buildQuery
@@ -1199,7 +1263,8 @@ sub buildQuery {
 
     warn "---------\nEnter buildQuery\n---------" if $DEBUG;
 
-    ( $operators, $operands, $indexes, $limits, $sort_by, $scan, $lang) = parseQuery($operators, $operands, $indexes, $limits, $sort_by, $scan, $lang);
+    my $query_desc;
+    ( $operators, $operands, $indexes, $limits, $sort_by, $scan, $lang, $query_desc) = parseQuery($operators, $operands, $indexes, $limits, $sort_by, $scan, $lang);
 
     # dereference
     my @operators = $operators ? @$operators : ();
@@ -1214,20 +1279,11 @@ sub buildQuery {
     my $fuzzy_enabled    = C4::Context->preference("QueryFuzzy")           || 0;
     my $remove_stopwords = C4::Context->preference("QueryRemoveStopwords") || 0;
 
-    # no stemming/weight/fuzzy in NoZebra
-    if ( C4::Context->preference("NoZebra") ) {
-        $stemming         = 0;
-        $weight_fields    = 0;
-        $fuzzy_enabled    = 0;
-    	$auto_truncation  = 0;
-    }
-
     my $query        = $operands[0];
     my $simple_query = $operands[0];
 
     # initialize the variables we're passing back
     my $query_cgi;
-    my $query_desc;
     my $query_type;
 
     my $limit;
@@ -1238,7 +1294,7 @@ sub buildQuery {
 
     my $cclq       = 0;
     my $cclindexes = getIndexes();
-    if ( $query !~ /\s*ccl=/ ) {
+    if ( $query !~ /\s*(ccl=|pqf=|cql=)/ ) {
         while ( !$cclq && $query =~ /(?:^|\W)([\w-]+)(,[\w-]+)*[:=]/g ) {
             my $dx = lc($1);
             $cclq = grep { lc($_) eq $dx } @$cclindexes;
@@ -1256,13 +1312,19 @@ sub buildQuery {
         if ( @limits ) {
             $q .= ' and '.join(' and ', @limits);
         }
-        return ( undef, $q, $q, "q=ccl=$q", $q, '', '', '', '', 'ccl' );
+        return ( undef, $q, $q, "q=ccl=".uri_escape($q), $q, '', '', '', '', 'ccl' );
     }
     if ( $query =~ /^cql=/ ) {
-        return ( undef, $', $', "q=cql=$'", $', '', '', '', '', 'cql' );
+        return ( undef, $', $', "q=cql=".uri_escape($'), $', '', '', '', '', 'cql' );
     }
     if ( $query =~ /^pqf=/ ) {
-        return ( undef, $', $', "q=pqf=$'", $', '', '', '', '', 'pqf' );
+        if ($query_desc) {
+            $query_cgi = "q=".uri_escape($query_desc);
+        } else {
+            $query_desc = $';
+            $query_cgi = "q=pqf=".uri_escape($');
+        }
+        return ( undef, $', $', $query_cgi, $query_desc, '', '', '', '', 'pqf' );
     }
 
     # pass nested queries directly
@@ -1342,7 +1404,7 @@ sub buildQuery {
 
                 # Set default structure attribute (word list)
                 my $struct_attr = q{};
-                unless ( $indexes_set || !$index || $index =~ /(st-|phr|ext|wrdl|nb|ns)/ ) {
+                unless ( $indexes_set || !$index || $index =~ /,(st-|phr|ext|wrdl)/ || $index =~ /^(nb|ns)$/ ) {
                     $struct_attr = ",wrdl";
                 }
 
@@ -1360,7 +1422,7 @@ sub buildQuery {
                 }
 
                 if ($auto_truncation){
-					unless ( $index =~ /(st-|phr|ext)/ ) {
+                        unless ( $index =~ /,(st-|phr|ext)/ ) {
 						#FIXME only valid with LTR scripts
 						$operand=join(" ",map{
 											(index($_,"*")>0?"$_":"$_*")
@@ -1428,43 +1490,19 @@ sub buildQuery {
 
                 warn "FIELD WEIGHTED OPERAND: >$weighted_operand<" if $DEBUG;
 
-                # If there's a previous operand, we need to add an operator
-                if ($previous_operand) {
+                ($query,$query_cgi,$query_desc,$previous_operand) = _build_initial_query({
+                    query => $query,
+                    query_cgi => $query_cgi,
+                    query_desc => $query_desc,
+                    operator => ($operators[ $i - 1 ]) ? $operators[ $i - 1 ] : '',
+                    parsed_operand => $operand,
+                    original_operand => ($operands[$i]) ? $operands[$i] : '',
+                    index => $index,
+                    index_plus => $index_plus,
+                    indexes_set => $indexes_set,
+                    previous_operand => $previous_operand,
+                });
 
-                    # User-specified operator
-                    if ( $operators[ $i - 1 ] ) {
-                        $query     .= " $operators[$i-1] ";
-                        $query     .= " $index_plus " unless $indexes_set;
-                        $query     .= " $operand";
-                        $query_cgi .= "&op=$operators[$i-1]";
-                        $query_cgi .= "&idx=$index" if $index;
-                        $query_cgi .= "&q=$operands[$i]" if $operands[$i];
-                        $query_desc .=
-                          " $operators[$i-1] $index_plus $operands[$i]";
-                    }
-
-                    # Default operator is and
-                    else {
-                        $query      .= " and ";
-                        $query      .= "$index_plus " unless $indexes_set;
-                        $query      .= "$operand";
-                        $query_cgi  .= "&op=and&idx=$index" if $index;
-                        $query_cgi  .= "&q=$operands[$i]" if $operands[$i];
-                        $query_desc .= " and $index_plus $operands[$i]";
-                    }
-                }
-
-                # There isn't a pervious operand, don't need an operator
-                else {
-
-                    # Field-weighted queries already have indexes set
-                    $query .= " $index_plus " unless $indexes_set;
-                    $query .= $operand;
-                    $query_desc .= " $index_plus $operands[$i]";
-                    $query_cgi  .= "&idx=$index" if $index;
-                    $query_cgi  .= "&q=$operands[$i]" if $operands[$i];
-                    $previous_operand = 1;
-                }
             }    #/if $operands
         }    # /for
     }
@@ -1499,7 +1537,7 @@ sub buildQuery {
             $group_OR_limits{$k} .= " or " if $group_OR_limits{$k};
             $limit_desc      .= " or " if $group_OR_limits{$k};
             $group_OR_limits{$k} .= "$this_limit";
-            $limit_cgi       .= "&limit=$this_limit";
+            $limit_cgi       .= "&limit=" . uri_escape($this_limit);
             $limit_desc      .= " $this_limit";
         }
 
@@ -1507,7 +1545,7 @@ sub buildQuery {
         else {
             $limit .= " and " if $limit || $query;
             $limit      .= "$this_limit";
-            $limit_cgi  .= "&limit=$this_limit";
+            $limit_cgi  .= "&limit=" . uri_escape($this_limit);
             if ($this_limit =~ /^branch:(.+)/) {
                 my $branchcode = $1;
                 my $branchname = GetBranchName($branchcode);
@@ -1567,6 +1605,42 @@ sub buildQuery {
         $query_desc,        $limit, $limit_cgi,    $limit_desc,
         $stopwords_removed, $query_type
     );
+}
+
+=head2 _build_initial_query
+
+  ($query, $query_cgi, $query_desc, $previous_operand) = _build_initial_query($initial_query_params);
+
+  Build a section of the initial query containing indexes, operators, and operands.
+
+=cut
+
+sub _build_initial_query {
+    my ($params) = @_;
+
+    my $operator = "";
+    if ($params->{previous_operand}){
+        #If there is a previous operand, add a supplied operator or the default 'and'
+        $operator = ($params->{operator}) ? " ".($params->{operator})." " : ' and ';
+    }
+
+    #NOTE: indexes_set is typically set when doing truncation or field weighting
+    my $operand = ($params->{indexes_set}) ? $params->{parsed_operand} : $params->{index_plus}.$params->{parsed_operand};
+
+    #e.g. "kw,wrdl:test"
+    #e.g. " and kw,wrdl:test"
+    $params->{query} .= $operator . $operand;
+
+    $params->{query_cgi} .= "&op=".uri_escape($operator) if $operator;
+    $params->{query_cgi} .= "&idx=".uri_escape($params->{index}) if $params->{index};
+    $params->{query_cgi} .= "&q=".uri_escape($params->{original_operand}) if $params->{original_operand};
+
+    #e.g. " and kw,wrdl: test"
+    $params->{query_desc} .= $operator . $params->{index_plus} . " " . $params->{original_operand};
+
+    $params->{previous_operand} = 1 unless $params->{previous_operand}; #If there is no previous operand, mark this as one
+
+    return ($params->{query}, $params->{query_cgi}, $params->{query_desc}, $params->{previous_operand});
 }
 
 =head2 searchResults
@@ -1636,7 +1710,9 @@ sub searchResults {
     while ( ( my $column ) = $sth2->fetchrow ) {
         my ( $tagfield, $tagsubfield ) =
           &GetMarcFromKohaField( "items." . $column, "" );
-        $subfieldstosearch{$column} = $tagsubfield;
+        if ( defined $tagsubfield ) {
+            $subfieldstosearch{$column} = $tagsubfield;
+        }
     }
 
     # handle which records to actually retrieve
@@ -1648,13 +1724,30 @@ sub searchResults {
         $times = $hits;	 # FIXME: if $hits is undefined, why do we want to equal it?
     }
 
-	my $marcflavour = C4::Context->preference("marcflavour");
+    my $marcflavour = C4::Context->preference("marcflavour");
     # We get the biblionumber position in MARC
     my ($bibliotag,$bibliosubf)=GetMarcFromKohaField('biblio.biblionumber','');
 
     # loop through all of the records we've retrieved
     for ( my $i = $offset ; $i <= $times - 1 ; $i++ ) {
-        my $marcrecord = MARC::File::USMARC::decode( $marcresults->[$i] );
+
+        my $marcrecord;
+        if ($scan) {
+            # For Scan searches we built USMARC data
+            $marcrecord = MARC::Record->new_from_usmarc( $marcresults->[$i]);
+        } else {
+            # Normal search, render from Zebra's output
+            $marcrecord = new_record_from_zebra(
+                'biblioserver',
+                $marcresults->[$i]
+            );
+
+            if ( ! defined $marcrecord ) {
+                warn "ERROR DECODING RECORD - $@: " . $marcresults->[$i];
+                next;
+            }
+        }
+
         my $fw = $scan
              ? undef
              : $bibliotag < 10
@@ -1771,7 +1864,7 @@ sub searchResults {
         my $onloan_count          = 0;
         my $longoverdue_count     = 0;
         my $other_count           = 0;
-        my $wthdrawn_count        = 0;
+        my $withdrawn_count        = 0;
         my $itemlost_count        = 0;
         my $hideatopac_count      = 0;
         my $itembinding_count     = 0;
@@ -1779,6 +1872,7 @@ sub searchResults {
         my $item_in_transit_count = 0;
         my $can_place_holds       = 0;
         my $item_onhold_count     = 0;
+        my $notforloan_count      = 0;
         my $items_count           = scalar(@fields);
         my $maxitems_pref = C4::Context->preference('maxItemsinSearchResults');
         my $maxitems = $maxitems_pref ? $maxitems_pref - 1 : 1;
@@ -1849,6 +1943,8 @@ sub searchResults {
                 # item is on order
                 if ( $item->{notforloan} < 0 ) {
                     $ordered_count++;
+                } elsif ( $item->{notforloan} > 0 ) {
+                    $notforloan_count++;
                 }
 
                 # is item in transit?
@@ -1856,10 +1952,9 @@ sub searchResults {
                 my ($transfertfrom, $transfertto);
 
                 # is item on the reserve shelf?
-		my $reservestatus = '';
-		my $reserveitem;
+                my $reservestatus = '';
 
-                unless ($item->{wthdrawn}
+                unless ($item->{withdrawn}
                         || $item->{itemlost}
                         || $item->{damaged}
                         || $item->{notforloan}
@@ -1878,46 +1973,40 @@ sub searchResults {
                     #        should map transit status to record indexed in Zebra.
                     #
                     ($transfertwhen, $transfertfrom, $transfertto) = C4::Circulation::GetTransfers($item->{itemnumber});
-		    ($reservestatus, $reserveitem, undef) = C4::Reserves::CheckReserves($item->{itemnumber});
+                    $reservestatus = C4::Reserves::GetReserveStatus( $item->{itemnumber}, $oldbiblio->{biblionumber} );
                 }
 
                 # item is withdrawn, lost, damaged, not for loan, reserved or in transit
-                if (   $item->{wthdrawn}
+                if (   $item->{withdrawn}
                     || $item->{itemlost}
                     || $item->{damaged}
                     || $item->{notforloan}
-		    || $reservestatus eq 'Waiting'
+                    || $reservestatus eq 'Waiting'
                     || ($transfertwhen ne ''))
                 {
-                    $wthdrawn_count++        if $item->{wthdrawn};
+                    $withdrawn_count++        if $item->{withdrawn};
                     $itemlost_count++        if $item->{itemlost};
                     $itemdamaged_count++     if $item->{damaged};
                     $item_in_transit_count++ if $transfertwhen ne '';
-		    $item_onhold_count++     if $reservestatus eq 'Waiting';
-                    $item->{status} = $item->{wthdrawn} . "-" . $item->{itemlost} . "-" . $item->{damaged} . "-" . $item->{notforloan};
+                    $item_onhold_count++     if $reservestatus eq 'Waiting';
+                    $item->{status} = $item->{withdrawn} . "-" . $item->{itemlost} . "-" . $item->{damaged} . "-" . $item->{notforloan};
 
-                    # can place hold on item ?
-                    if ( !$item->{itemlost} ) {
-                        if ( !$item->{wthdrawn} ){
-                            if ( $item->{damaged} ){
-                                if ( C4::Context->preference('AllowHoldsOnDamagedItems') ){
-                                    # can place a hold on a damaged item if AllowHoldsOnDamagedItems is true
-                                    if ( ( !$item->{notforloan} || $item->{notforloan} < 0 ) ){
-                                        # item is either for loan or has notforloan < 0
-                                        $can_place_holds = 1;
-                                    }
-                                }
-                            } elsif ( $item->{notforloan} < 0 ) {
-                                # item is not damaged and notforloan is < 0
-                                $can_place_holds = 1;
-                            }
-                        }
-                    }
+                    # can place a hold on a item if
+                    # not lost nor withdrawn
+                    # not damaged unless AllowHoldsOnDamagedItems is true
+                    # item is either for loan or on order (notforloan < 0)
+                    $can_place_holds = 1
+                      if (
+                           !$item->{itemlost}
+                        && !$item->{withdrawn}
+                        && ( !$item->{damaged} || C4::Context->preference('AllowHoldsOnDamagedItems') )
+                        && ( !$item->{notforloan} || $item->{notforloan} < 0 )
+                      );
 
                     $other_count++;
 
                     my $key = $prefix . $item->{status};
-                    foreach (qw(wthdrawn itemlost damaged branchname itemcallnumber)) {
+                    foreach (qw(withdrawn itemlost damaged branchname itemcallnumber)) {
                         $other_items->{$key}->{$_} = $item->{$_};
                     }
                     $other_items->{$key}->{intransit} = ( $transfertwhen ne '' ) ? 1 : 0;
@@ -1989,12 +2078,13 @@ sub searchResults {
         $oldbiblio->{onloanplural}         = 1 if $onloan_count > 1;
         $oldbiblio->{othercount}           = $other_count;
         $oldbiblio->{otherplural}          = 1 if $other_count > 1;
-        $oldbiblio->{wthdrawncount}        = $wthdrawn_count;
+        $oldbiblio->{withdrawncount}        = $withdrawn_count;
         $oldbiblio->{itemlostcount}        = $itemlost_count;
         $oldbiblio->{damagedcount}         = $itemdamaged_count;
         $oldbiblio->{intransitcount}       = $item_in_transit_count;
         $oldbiblio->{onholdcount}          = $item_onhold_count;
         $oldbiblio->{orderedcount}         = $ordered_count;
+        $oldbiblio->{notforloancount}      = $notforloan_count;
 
         if (C4::Context->preference("AlternateHoldingsField") && $items_count == 0) {
             my $fieldspec = C4::Context->preference("AlternateHoldingsField");
@@ -2118,602 +2208,6 @@ sub SearchAcquisitions{
     $qdataacquisitions->finish;
     return \@loopacquisitions;
 }
-#----------------------------------------------------------------------
-#
-# Non-Zebra GetRecords#
-#----------------------------------------------------------------------
-
-=head2 NZgetRecords
-
-  NZgetRecords has the same API as zera getRecords, even if some parameters are not managed
-
-=cut
-
-sub NZgetRecords {
-    my (
-        $query,            $simple_query, $sort_by_ref,    $servers_ref,
-        $results_per_page, $offset,       $expanded_facet, $branches,
-        $query_type,       $scan
-    ) = @_;
-    warn "query =$query" if $DEBUG;
-    my $result = NZanalyse($query);
-    warn "results =$result" if $DEBUG;
-    return ( undef,
-        NZorder( $result, @$sort_by_ref[0], $results_per_page, $offset ),
-        undef );
-}
-
-=head2 NZanalyse
-
-  NZanalyse : get a CQL string as parameter, and returns a list of biblionumber;title,biblionumber;title,...
-  the list is built from an inverted index in the nozebra SQL table
-  note that title is here only for convenience : the sorting will be very fast when requested on title
-  if the sorting is requested on something else, we will have to reread all results, and that may be longer.
-
-=cut
-
-sub NZanalyse {
-    my ( $string, $server ) = @_;
-#     warn "---------"       if $DEBUG;
-    warn " NZanalyse" if $DEBUG;
-#     warn "---------"       if $DEBUG;
-
- # $server contains biblioserver or authorities, depending on what we search on.
- #warn "querying : $string on $server";
-    $server = 'biblioserver' unless $server;
-
-# if we have a ", replace the content to discard temporarily any and/or/not inside
-    my $commacontent;
-    if ( $string =~ /"/ ) {
-        $string =~ s/"(.*?)"/__X__/;
-        $commacontent = $1;
-        warn "commacontent : $commacontent" if $DEBUG;
-    }
-
-# split the query string in 3 parts : X AND Y means : $left="X", $operand="AND" and $right="Y"
-# then, call again NZanalyse with $left and $right
-# (recursive until we find a leaf (=> something without and/or/not)
-# delete repeated operator... Would then go in infinite loop
-    while ( $string =~ s/( and| or| not| AND| OR| NOT)\1/$1/g ) {
-    }
-
-    #process parenthesis before.
-    if ( $string =~ /^\s*\((.*)\)(( and | or | not | AND | OR | NOT )(.*))?/ ) {
-        my $left     = $1;
-        my $right    = $4;
-        my $operator = lc($3);   # FIXME: and/or/not are operators, not operands
-        warn
-"dealing w/parenthesis before recursive sub call. left :$left operator:$operator right:$right"
-          if $DEBUG;
-        my $leftresult = NZanalyse( $left, $server );
-        if ($operator) {
-            my $rightresult = NZanalyse( $right, $server );
-
-            # OK, we have the results for right and left part of the query
-            # depending of operand, intersect, union or exclude both lists
-            # to get a result list
-            if ( $operator eq ' and ' ) {
-                return NZoperatorAND($leftresult,$rightresult);
-            }
-            elsif ( $operator eq ' or ' ) {
-
-                # just merge the 2 strings
-                return $leftresult . $rightresult;
-            }
-            elsif ( $operator eq ' not ' ) {
-                return NZoperatorNOT($leftresult,$rightresult);
-            }
-        }
-        else {
-# this error is impossible, because of the regexp that isolate the operand, but just in case...
-            return $leftresult;
-        }
-    }
-    warn "string :" . $string if $DEBUG;
-    my $left = "";
-    my $right = "";
-    my $operator = "";
-    if ($string =~ /(.*?)( and | or | not | AND | OR | NOT )(.*)/) {
-        $left     = $1;
-        $right    = $3;
-        $operator = lc($2);    # FIXME: and/or/not are operators, not operands
-    }
-    warn "no parenthesis. left : $left operator: $operator right: $right"
-      if $DEBUG;
-
-    # it's not a leaf, we have a and/or/not
-    if ($operator) {
-
-        # reintroduce comma content if needed
-        $right =~ s/__X__/"$commacontent"/ if $commacontent;
-        $left  =~ s/__X__/"$commacontent"/ if $commacontent;
-        warn "node : $left / $operator / $right\n" if $DEBUG;
-        my $leftresult  = NZanalyse( $left,  $server );
-        my $rightresult = NZanalyse( $right, $server );
-        warn " leftresult : $leftresult" if $DEBUG;
-        warn " rightresult : $rightresult" if $DEBUG;
-        # OK, we have the results for right and left part of the query
-        # depending of operand, intersect, union or exclude both lists
-        # to get a result list
-        if ( $operator eq ' and ' ) {
-            return NZoperatorAND($leftresult,$rightresult);
-        }
-        elsif ( $operator eq ' or ' ) {
-
-            # just merge the 2 strings
-            return $leftresult . $rightresult;
-        }
-        elsif ( $operator eq ' not ' ) {
-            return NZoperatorNOT($leftresult,$rightresult);
-        }
-        else {
-
-# this error is impossible, because of the regexp that isolate the operand, but just in case...
-            die "error : operand unknown : $operator for $string";
-        }
-
-        # it's a leaf, do the real SQL query and return the result
-    }
-    else {
-        $string =~ s/__X__/"$commacontent"/ if $commacontent;
-        $string =~ s/-|\.|\?|,|;|!|'|\(|\)|\[|\]|{|}|"|&|\+|\*|\// /g;
-        #remove trailing blank at the beginning
-        $string =~ s/^ //g;
-        warn "leaf:$string" if $DEBUG;
-
-        # parse the string in in operator/operand/value again
-        my $left = "";
-        my $operator = "";
-        my $right = "";
-        if ($string =~ /(.*)(>=|<=)(.*)/) {
-            $left     = $1;
-            $operator = $2;
-            $right    = $3;
-        } else {
-            $left = $string;
-        }
-#         warn "handling leaf... left:$left operator:$operator right:$right"
-#           if $DEBUG;
-        unless ($operator) {
-            if ($string =~ /(.*)(>|<|=)(.*)/) {
-                $left     = $1;
-                $operator = $2;
-                $right    = $3;
-                warn
-    "handling unless (operator)... left:$left operator:$operator right:$right"
-                if $DEBUG;
-            } else {
-                $left = $string;
-            }
-        }
-        my $results;
-
-# strip adv, zebra keywords, currently not handled in nozebra: wrdl, ext, phr...
-        $left =~ s/ .*$//;
-
-        # automatic replace for short operators
-        $left = 'title'            if $left =~ '^ti$';
-        $left = 'author'           if $left =~ '^au$';
-        $left = 'publisher'        if $left =~ '^pb$';
-        $left = 'subject'          if $left =~ '^su$';
-        $left = 'koha-Auth-Number' if $left =~ '^an$';
-        $left = 'keyword'          if $left =~ '^kw$';
-        $left = 'itemtype'         if $left =~ '^mc$'; # Fix for Bug 2599 - Search limits not working for NoZebra
-        warn "handling leaf... left:$left operator:$operator right:$right" if $DEBUG;
-        my $dbh = C4::Context->dbh;
-        if ( $operator && $left ne 'keyword' ) {
-            #do a specific search
-            $operator = 'LIKE' if $operator eq '=' and $right =~ /%/;
-            my $sth = $dbh->prepare(
-"SELECT biblionumbers,value FROM nozebra WHERE server=? AND indexname=? AND value $operator ?"
-            );
-            warn "$left / $operator / $right\n" if $DEBUG;
-
-            # split each word, query the DB and build the biblionumbers result
-            #sanitizing leftpart
-            $left =~ s/^\s+|\s+$//;
-            foreach ( split / /, $right ) {
-                my $biblionumbers;
-                $_ =~ s/^\s+|\s+$//;
-                next unless $_;
-                warn "EXECUTE : $server, $left, $_" if $DEBUG;
-                $sth->execute( $server, $left, $_ )
-                  or warn "execute failed: $!";
-                while ( my ( $line, $value ) = $sth->fetchrow ) {
-
-# if we are dealing with a numeric value, use only numeric results (in case of >=, <=, > or <)
-# otherwise, fill the result
-                    $biblionumbers .= $line
-                      unless ( $right =~ /^\d+$/ && $value =~ /\D/ );
-                    warn "result : $value "
-                      . ( $right  =~ /\d/ ) . "=="
-                      . ( $value =~ /\D/?$line:"" ) if $DEBUG;         #= $line";
-                }
-
-# do a AND with existing list if there is one, otherwise, use the biblionumbers list as 1st result list
-                if ($results) {
-                    warn "NZAND" if $DEBUG;
-                    $results = NZoperatorAND($biblionumbers,$results);
-                } else {
-                    $results = $biblionumbers;
-                }
-            }
-        }
-        else {
-      #do a complete search (all indexes), if index='kw' do complete search too.
-            my $sth = $dbh->prepare(
-"SELECT biblionumbers FROM nozebra WHERE server=? AND value LIKE ?"
-            );
-
-            # split each word, query the DB and build the biblionumbers result
-            foreach ( split / /, $string ) {
-                next if C4::Context->stopwords->{ uc($_) };   # skip if stopword
-                warn "search on all indexes on $_" if $DEBUG;
-                my $biblionumbers;
-                next unless $_;
-                $sth->execute( $server, $_ );
-                while ( my $line = $sth->fetchrow ) {
-                    $biblionumbers .= $line;
-                }
-
-# do a AND with existing list if there is one, otherwise, use the biblionumbers list as 1st result list
-                if ($results) {
-                    $results = NZoperatorAND($biblionumbers,$results);
-                }
-                else {
-                    warn "NEW RES for $_ = $biblionumbers" if $DEBUG;
-                    $results = $biblionumbers;
-                }
-            }
-        }
-        warn "return : $results for LEAF : $string" if $DEBUG;
-        return $results;
-    }
-    warn "---------\nLeave NZanalyse\n---------" if $DEBUG;
-}
-
-sub NZoperatorAND{
-    my ($rightresult, $leftresult)=@_;
-
-    my @leftresult = split /;/, $leftresult;
-    warn " @leftresult / $rightresult \n" if $DEBUG;
-
-    #             my @rightresult = split /;/,$leftresult;
-    my $finalresult;
-
-# parse the left results, and if the biblionumber exist in the right result, save it in finalresult
-# the result is stored twice, to have the same weight for AND than OR.
-# example : TWO : 61,61,64,121 (two is twice in the biblio #61) / TOWER : 61,64,130
-# result : 61,61,61,61,64,64 for two AND tower : 61 has more weight than 64
-    foreach (@leftresult) {
-        my $value = $_;
-        my $countvalue;
-        ( $value, $countvalue ) = ( $1, $2 ) if ($value=~/(.*)-(\d+)$/);
-        if ( $rightresult =~ /\Q$value\E-(\d+);/ ) {
-            $countvalue = ( $1 > $countvalue ? $countvalue : $1 );
-            $finalresult .=
-                "$value-$countvalue;$value-$countvalue;";
-        }
-    }
-    warn "NZAND DONE : $finalresult \n" if $DEBUG;
-    return $finalresult;
-}
-
-sub NZoperatorOR{
-    my ($rightresult, $leftresult)=@_;
-    return $rightresult.$leftresult;
-}
-
-sub NZoperatorNOT{
-    my ($leftresult, $rightresult)=@_;
-
-    my @leftresult = split /;/, $leftresult;
-
-    #             my @rightresult = split /;/,$leftresult;
-    my $finalresult;
-    foreach (@leftresult) {
-        my $value=$_;
-        $value=$1 if $value=~m/(.*)-\d+$/;
-        unless ($rightresult =~ "$value-") {
-            $finalresult .= "$_;";
-        }
-    }
-    return $finalresult;
-}
-
-=head2 NZorder
-
-  $finalresult = NZorder($biblionumbers, $ordering,$results_per_page,$offset);
-
-  TODO :: Description
-
-=cut
-
-sub NZorder {
-    my ( $biblionumbers, $ordering, $results_per_page, $offset ) = @_;
-    warn "biblionumbers = $biblionumbers and ordering = $ordering\n" if $DEBUG;
-
-    # order title asc by default
-    #     $ordering = '1=36 <i' unless $ordering;
-    $results_per_page = 20 unless $results_per_page;
-    $offset           = 0  unless $offset;
-    my $dbh = C4::Context->dbh;
-
-    #
-    # order by POPULARITY
-    #
-    if ( $ordering =~ /popularity/ ) {
-        my %result;
-        my %popularity;
-
-        # popularity is not in MARC record, it's builded from a specific query
-        my $sth =
-          $dbh->prepare("select sum(issues) from items where biblionumber=?");
-        foreach ( split /;/, $biblionumbers ) {
-            my ( $biblionumber, $title ) = split /,/, $_;
-            $result{$biblionumber} = GetMarcBiblio($biblionumber);
-            $sth->execute($biblionumber);
-            my $popularity = $sth->fetchrow || 0;
-
-# hint : the key is popularity.title because we can have
-# many results with the same popularity. In this case, sub-ordering is done by title
-# we also have biblionumber to avoid bug for 2 biblios with the same title & popularity
-# (un-frequent, I agree, but we won't forget anything that way ;-)
-            $popularity{ sprintf( "%10d", $popularity ) . $title
-                  . $biblionumber } = $biblionumber;
-        }
-
-    # sort the hash and return the same structure as GetRecords (Zebra querying)
-        my $result_hash;
-        my $numbers = 0;
-        if ( $ordering eq 'popularity_dsc' ) {    # sort popularity DESC
-            foreach my $key ( sort { $b cmp $a } ( keys %popularity ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{ $popularity{$key} }->as_usmarc();
-            }
-        }
-        else {                                    # sort popularity ASC
-            foreach my $key ( sort ( keys %popularity ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{ $popularity{$key} }->as_usmarc();
-            }
-        }
-        my $finalresult = ();
-        $result_hash->{'hits'}         = $numbers;
-        $finalresult->{'biblioserver'} = $result_hash;
-        return $finalresult;
-
-        #
-        # ORDER BY author
-        #
-    }
-    elsif ( $ordering =~ /author/ ) {
-        my %result;
-        foreach ( split /;/, $biblionumbers ) {
-            my ( $biblionumber, $title ) = split /,/, $_;
-            my $record = GetMarcBiblio($biblionumber);
-            my $author;
-            if ( C4::Context->preference('marcflavour') eq 'UNIMARC' ) {
-                $author = $record->subfield( '200', 'f' );
-                $author = $record->subfield( '700', 'a' ) unless $author;
-            }
-            else {
-                $author = $record->subfield( '100', 'a' );
-            }
-
-# hint : the result is sorted by title.biblionumber because we can have X biblios with the same title
-# and we don't want to get only 1 result for each of them !!!
-            $result{ $author . $biblionumber } = $record;
-        }
-
-    # sort the hash and return the same structure as GetRecords (Zebra querying)
-        my $result_hash;
-        my $numbers = 0;
-        if ( $ordering eq 'author_za' || $ordering eq 'author_dsc' ) {    # sort by author desc
-            foreach my $key ( sort { $b cmp $a } ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{$key}->as_usmarc();
-            }
-        }
-        else {                               # sort by author ASC
-            foreach my $key ( sort ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{$key}->as_usmarc();
-            }
-        }
-        my $finalresult = ();
-        $result_hash->{'hits'}         = $numbers;
-        $finalresult->{'biblioserver'} = $result_hash;
-        return $finalresult;
-
-        #
-        # ORDER BY callnumber
-        #
-    }
-    elsif ( $ordering =~ /callnumber/ ) {
-        my %result;
-        foreach ( split /;/, $biblionumbers ) {
-            my ( $biblionumber, $title ) = split /,/, $_;
-            my $record = GetMarcBiblio($biblionumber);
-            my $callnumber;
-            my $frameworkcode = GetFrameworkCode($biblionumber);
-            my ( $callnumber_tag, $callnumber_subfield ) = GetMarcFromKohaField(  'items.itemcallnumber', $frameworkcode);
-               ( $callnumber_tag, $callnumber_subfield ) = GetMarcFromKohaField('biblioitems.callnumber', $frameworkcode)
-                unless $callnumber_tag;
-            if ( C4::Context->preference('marcflavour') eq 'UNIMARC' ) {
-                $callnumber = $record->subfield( '200', 'f' );
-            } else {
-                $callnumber = $record->subfield( '100', 'a' );
-            }
-
-# hint : the result is sorted by title.biblionumber because we can have X biblios with the same title
-# and we don't want to get only 1 result for each of them !!!
-            $result{ $callnumber . $biblionumber } = $record;
-        }
-
-    # sort the hash and return the same structure as GetRecords (Zebra querying)
-        my $result_hash;
-        my $numbers = 0;
-        if ( $ordering eq 'call_number_dsc' ) {    # sort by title desc
-            foreach my $key ( sort { $b cmp $a } ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{$key}->as_usmarc();
-            }
-        }
-        else {                                     # sort by title ASC
-            foreach my $key ( sort { $a cmp $b } ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{$key}->as_usmarc();
-            }
-        }
-        my $finalresult = ();
-        $result_hash->{'hits'}         = $numbers;
-        $finalresult->{'biblioserver'} = $result_hash;
-        return $finalresult;
-    }
-    elsif ( $ordering =~ /pubdate/ ) {             #pub year
-        my %result;
-        foreach ( split /;/, $biblionumbers ) {
-            my ( $biblionumber, $title ) = split /,/, $_;
-            my $record = GetMarcBiblio($biblionumber);
-            my ( $publicationyear_tag, $publicationyear_subfield ) =
-              GetMarcFromKohaField( 'biblioitems.publicationyear', '' );
-            my $publicationyear =
-              $record->subfield( $publicationyear_tag,
-                $publicationyear_subfield );
-
-# hint : the result is sorted by title.biblionumber because we can have X biblios with the same title
-# and we don't want to get only 1 result for each of them !!!
-            $result{ $publicationyear . $biblionumber } = $record;
-        }
-
-    # sort the hash and return the same structure as GetRecords (Zebra querying)
-        my $result_hash;
-        my $numbers = 0;
-        if ( $ordering eq 'pubdate_dsc' ) {    # sort by pubyear desc
-            foreach my $key ( sort { $b cmp $a } ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{$key}->as_usmarc();
-            }
-        }
-        else {                                 # sort by pub year ASC
-            foreach my $key ( sort ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] =
-                  $result{$key}->as_usmarc();
-            }
-        }
-        my $finalresult = ();
-        $result_hash->{'hits'}         = $numbers;
-        $finalresult->{'biblioserver'} = $result_hash;
-        return $finalresult;
-
-        #
-        # ORDER BY title
-        #
-    }
-    elsif ( $ordering =~ /title/ ) {
-
-# the title is in the biblionumbers string, so we just need to build a hash, sort it and return
-        my %result;
-        foreach ( split /;/, $biblionumbers ) {
-            my ( $biblionumber, $title ) = split /,/, $_;
-
-# hint : the result is sorted by title.biblionumber because we can have X biblios with the same title
-# and we don't want to get only 1 result for each of them !!!
-# hint & speed improvement : we can order without reading the record
-# so order, and read records only for the requested page !
-            $result{ $title . $biblionumber } = $biblionumber;
-        }
-
-    # sort the hash and return the same structure as GetRecords (Zebra querying)
-        my $result_hash;
-        my $numbers = 0;
-        if ( $ordering eq 'title_az' ) {    # sort by title desc
-            foreach my $key ( sort ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] = $result{$key};
-            }
-        }
-        else {                              # sort by title ASC
-            foreach my $key ( sort { $b cmp $a } ( keys %result ) ) {
-                $result_hash->{'RECORDS'}[ $numbers++ ] = $result{$key};
-            }
-        }
-
-        # limit the $results_per_page to result size if it's more
-        $results_per_page = $numbers - 1 if $numbers < $results_per_page;
-
-        # for the requested page, replace biblionumber by the complete record
-        # speed improvement : avoid reading too much things
-        for (
-            my $counter = $offset ;
-            $counter <= $offset + $results_per_page ;
-            $counter++
-          )
-        {
-            $result_hash->{'RECORDS'}[$counter] =
-              GetMarcBiblio( $result_hash->{'RECORDS'}[$counter] )->as_usmarc;
-        }
-        my $finalresult = ();
-        $result_hash->{'hits'}         = $numbers;
-        $finalresult->{'biblioserver'} = $result_hash;
-        return $finalresult;
-    }
-    else {
-
-#
-# order by ranking
-#
-# we need 2 hashes to order by ranking : the 1st one to count the ranking, the 2nd to order by ranking
-        my %result;
-        my %count_ranking;
-        foreach ( split /;/, $biblionumbers ) {
-            my ( $biblionumber, $title ) = split /,/, $_;
-            $title =~ /(.*)-(\d)/;
-
-            # get weight
-            my $ranking = $2;
-
-# note that we + the ranking because ranking is calculated on weight of EACH term requested.
-# if we ask for "two towers", and "two" has weight 2 in biblio N, and "towers" has weight 4 in biblio N
-# biblio N has ranking = 6
-            $count_ranking{$biblionumber} += $ranking;
-        }
-
-# build the result by "inverting" the count_ranking hash
-# hing : as usual, we don't order by ranking only, to avoid having only 1 result for each rank. We build an hash on concat(ranking,biblionumber) instead
-#         warn "counting";
-        foreach ( keys %count_ranking ) {
-            $result{ sprintf( "%10d", $count_ranking{$_} ) . '-' . $_ } = $_;
-        }
-
-    # sort the hash and return the same structure as GetRecords (Zebra querying)
-        my $result_hash;
-        my $numbers = 0;
-        foreach my $key ( sort { $b cmp $a } ( keys %result ) ) {
-            $result_hash->{'RECORDS'}[ $numbers++ ] = $result{$key};
-        }
-
-        # limit the $results_per_page to result size if it's more
-        $results_per_page = $numbers - 1 if $numbers < $results_per_page;
-
-        # for the requested page, replace biblionumber by the complete record
-        # speed improvement : avoid reading too much things
-        for (
-            my $counter = $offset ;
-            $counter <= $offset + $results_per_page ;
-            $counter++
-          )
-        {
-            $result_hash->{'RECORDS'}[$counter] =
-              GetMarcBiblio( $result_hash->{'RECORDS'}[$counter] )->as_usmarc
-              if $result_hash->{'RECORDS'}[$counter];
-        }
-        my $finalresult = ();
-        $result_hash->{'hits'}         = $numbers;
-        $finalresult->{'biblioserver'} = $result_hash;
-        return $finalresult;
-    }
-}
 
 =head2 enabled_staff_search_views
 
@@ -2748,26 +2242,11 @@ sub enabled_staff_search_views
 	);
 }
 
-sub AddSearchHistory{
-	my ($borrowernumber,$session,$query_desc,$query_cgi, $total)=@_;
+sub PurgeSearchHistory{
+    my ($pSearchhistory)=@_;
     my $dbh = C4::Context->dbh;
-
-    # Add the request the user just made
-    my $sql = "INSERT INTO search_history(userid, sessionid, query_desc, query_cgi, total, time) VALUES(?, ?, ?, ?, ?, NOW())";
-    my $sth   = $dbh->prepare($sql);
-    $sth->execute($borrowernumber, $session, $query_desc, $query_cgi, $total);
-	return $dbh->last_insert_id(undef, 'search_history', undef,undef,undef);
-}
-
-sub GetSearchHistory{
-	my ($borrowernumber,$session)=@_;
-    my $dbh = C4::Context->dbh;
-
-    # Add the request the user just made
-    my $query = "SELECT FROM search_history WHERE (userid=? OR sessionid=?)";
-    my $sth   = $dbh->prepare($query);
-	$sth->execute($borrowernumber, $session);
-    return  $sth->fetchall_hashref({});
+    my $sth = $dbh->prepare("DELETE FROM search_history WHERE time < DATE_SUB( NOW(), INTERVAL ? DAY )");
+    $sth->execute($pSearchhistory) or die $dbh->errstr;
 }
 
 =head2 z3950_search_args
@@ -2776,7 +2255,7 @@ $arrayref = z3950_search_args($matchpoints)
 
 This function returns an array reference that contains the search parameters to be
 passed to the Z39.50 search script (z3950_search.pl). The array elements
-are hash refs whose keys are name, value and encvalue, and whose values are the
+are hash refs whose keys are name and value, and whose values are the
 name of a search parameter, the value of that search parameter and the URL encoded
 value of that parameter.
 
@@ -2787,7 +2266,7 @@ data is in a hash reference in $matchpoints, as returned by Biblio::GetBiblioDat
 
 If $matchpoints is a scalar, it is assumed to be an unnamed query descriptor, e.g.
 a general purpose search argument. In this case, the returned array contains only
-entry: the key is 'title' and the value and encvalue are derived from $matchpoints.
+entry: the key is 'title' and the value is derived from $matchpoints.
 
 If a search parameter value is undefined or empty, it is not included in the returned
 array.
@@ -2815,11 +2294,18 @@ $template->param ( MYLOOP => C4::Search::z3950_search_args($searchscalar) )
 
 sub z3950_search_args {
     my $bibrec = shift;
-    my $isbn = Business::ISBN->new($bibrec);
+
+    my $isbn_string = ref( $bibrec ) ? $bibrec->{title} : $bibrec;
+    my $isbn = Business::ISBN->new( $isbn_string );
 
     if (defined $isbn && $isbn->is_valid)
     {
-        $bibrec = { isbn => $bibrec } if !ref $bibrec;
+        if ( ref($bibrec) ) {
+            $bibrec->{isbn} = $isbn_string;
+            $bibrec->{title} = undef;
+        } else {
+            $bibrec = { isbn => $isbn_string };
+        }
     }
     else {
         $bibrec = { title => $bibrec } if !ref $bibrec;
@@ -2827,8 +2313,8 @@ sub z3950_search_args {
     my $array = [];
     for my $field (qw/ lccn isbn issn title author dewey subject /)
     {
-        my $encvalue = URI::Escape::uri_escape_utf8($bibrec->{$field});
-        push @$array, { name=>$field, value=>$bibrec->{$field}, encvalue=>$encvalue } if defined $bibrec->{$field};
+        push @$array, { name => $field, value => $bibrec->{$field} }
+          if defined $bibrec->{$field};
     }
     return $array;
 }
@@ -2911,6 +2397,43 @@ sub _ZOOM_event_loop {
     }
 }
 
+=head2 new_record_from_zebra
+
+Given raw data from a Zebra result set, return a MARC::Record object
+
+This helper function is needed to take into account all the involved
+system preferences and configuration variables to properly create the
+MARC::Record object.
+
+If we are using GRS-1, then the raw data we get from Zebra should be USMARC
+data. If we are using DOM, then it has to be MARCXML.
+
+=cut
+
+sub new_record_from_zebra {
+
+    my $server   = shift;
+    my $raw_data = shift;
+    # Set the default indexing modes
+    my $index_mode = ( $server eq 'biblioserver' )
+                        ? C4::Context->config('zebra_bib_index_mode') // 'grs1'
+                        : C4::Context->config('zebra_auth_index_mode') // 'dom';
+
+    my $marc_record =  eval {
+        if ( $index_mode eq 'dom' ) {
+            MARC::Record->new_from_xml( $raw_data, 'UTF-8' );
+        } else {
+            MARC::Record->new_from_usmarc( $raw_data );
+        }
+    };
+
+    if ($@) {
+        return;
+    } else {
+        return $marc_record;
+    }
+
+}
 
 END { }    # module clean-up code here (global destructor)
 

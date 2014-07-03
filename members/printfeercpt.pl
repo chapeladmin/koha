@@ -41,13 +41,13 @@ my ($template, $loggedinuser, $cookie)
                             query => $input,
                             type => "intranet",
                             authnotrequired => 0,
-                            flagsrequired => {borrowers => 1, updatecharges => 1},
+                            flagsrequired => {borrowers => 1, updatecharges => 'remaining_permissions'},
                             debug => 1,
                             });
 
 my $borrowernumber=$input->param('borrowernumber');
 my $action = $input->param('action') || '';
-my $accountno = $input->param('accountno');
+my $accountlines_id = $input->param('accountlines_id');
 
 #get borrower details
 my $data=GetMember('borrowernumber' => $borrowernumber);
@@ -73,7 +73,7 @@ my @accountrows; # this is for the tmpl-loop
 
 my $toggle;
 for (my $i=0;$i<$numaccts;$i++){
-   next if ($accts->[$i]{'accountno'} ne $accountno);
+    next if ( $accts->[$i]{'accountlines_id'} ne $accountlines_id );
     if($i%2){
             $toggle = 0;
     } else {
@@ -99,7 +99,7 @@ for (my $i=0;$i<$numaccts;$i++){
                 'amount'            => sprintf("%.2f",$accts->[$i]{'amount'}),
                 'amountoutstanding' => sprintf("%.2f",$accts->[$i]{'amountoutstanding'}),
                 'accountno' => $accts->[$i]{'accountno'},
-                'payment' => ( $accts->[$i]{'accounttype'} eq 'Pay' ),
+                'payment' => ( $accts->[$i]{'accounttype'} =~ /^Pay/ ),
 
                 );
 
@@ -113,7 +113,7 @@ for (my $i=0;$i<$numaccts;$i++){
 
 $template->param( adultborrower => 1 ) if ( $data->{'category_type'} eq 'A' );
 
-my ($picture, $dberror) = GetPatronImage($data->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($data->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 $template->param(

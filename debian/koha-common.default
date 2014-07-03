@@ -1,0 +1,5 @@
+## General koha-common default options
+
+PERL5LIB="/usr/share/koha/lib"
+
+## End of general koha-common default options

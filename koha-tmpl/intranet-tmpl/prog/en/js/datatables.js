@@ -23,7 +23,9 @@ var dataTablesDefaults = {
         "sSearch"           : window.MSG_DT_SEARCH || "Search:",
         "sZeroRecords"      : window.MSG_DT_ZERO_RECORDS || "No matching records found"
     },
-    "sDom": '<"top pager"ilpf>t<"bottom pager"ip>'
+    "sDom": '<"top pager"ilpf>tr<"bottom pager"ip>',
+    "aLengthMenu": [[10, 20, 50, 100, -1], [10, 20, 50, 100, window.MSG_DT_ALL || "All"]],
+    "iDisplayLength": 20
 };
 
 
@@ -115,7 +117,7 @@ jQuery.fn.dataTableExt.oApi.fnAddFilters = function ( oSettings, sClass, iDelay 
     var table = this;
     this.fnSetFilteringDelay(iDelay);
     var filterTimerId = null;
-    $("input."+sClass).keyup(function(event) {
+    $(table).find("input."+sClass).keyup(function(event) {
       if (blacklist_keys.indexOf(event.keyCode) != -1) {
         return this;
       }else if ( event.keyCode == '13' ) {
@@ -156,46 +158,6 @@ function dt_add_rangedate_filter(begindate_id, enddate_id, dateCol) {
             return false;
         }
     );
-}
-
-//Sorting for dates (uk format)
-function dt_add_type_uk_date() {
-  jQuery.fn.dataTableExt.aTypes.unshift(
-    function ( sData )
-    {
-      if (sData.match(/(0[1-9]|[12][0-9]|3[01])\/(0[1-9]|1[012])\/(19|20|21)\d\d/))
-      {
-        return 'uk_date';
-      }
-      return null;
-    }
-  );
-
-  jQuery.fn.dataTableExt.oSort['uk_date-asc']  = function(a,b) {
-    var re = /(\d{2}\/\d{2}\/\d{4})/;
-    a.match(re);
-    var ukDatea = RegExp.$1.split("/");
-    b.match(re);
-    var ukDateb = RegExp.$1.split("/");
-
-    var x = (ukDatea[2] + ukDatea[1] + ukDatea[0]) * 1;
-    var y = (ukDateb[2] + ukDateb[1] + ukDateb[0]) * 1;
-
-    return ((x < y) ? -1 : ((x > y) ?  1 : 0));
-  };
-
-  jQuery.fn.dataTableExt.oSort['uk_date-desc'] = function(a,b) {
-    var re = /(\d{2}\/\d{2}\/\d{4})/;
-    a.match(re);
-    var ukDatea = RegExp.$1.split("/");
-    b.match(re);
-    var ukDateb = RegExp.$1.split("/");
-
-    var x = (ukDatea[2] + ukDatea[1] + ukDatea[0]) * 1;
-    var y = (ukDateb[2] + ukDateb[1] + ukDateb[0]) * 1;
-
-    return ((x < y) ? 1 : ((x > y) ?  -1 : 0));
-  };
 }
 
 // Sorting on html contains
@@ -270,14 +232,14 @@ function replace_html( original_node, type ) {
             replace_html_date( original_node, id, format );
             break;
         default:
-            alert("_(This node can't be replaced)");
+            alert(_("This node can't be replaced"));
     }
 }
 
 // Replace a node with a "From [date] To [date]" element
 // Used on tfoot > td
 function replace_html_date( original_node, id, format ) {
-    var node = $('<span style="white-space:nowrap">' + _("From") + '<input type="text" id="' + id + 'from" readonly="readonly" placeholder=\'' + _("Pick date") + '\' size="7" /><a title="Delete this filter" style="cursor:pointer" onclick=\'$("#' + id + 'from").val("").change();\' >&times;</a></span><br/><span style="white-space:nowrap">' + _("To") + '<input type="text" id="' + id + 'to" readonly="readonly" placeholder=\'' + _("Pick date") + '\' size="7" /><a title="Delete this filter" style="cursor:pointer" onclick=\'$("#' + id + 'to").val("").change();\' >&times;</a></span>');
+    var node = $('<span style="white-space:nowrap">' + _("From") + '<input type="text" id="' + id + 'from" readonly="readonly" placeholder=\'' + _("Pick date") + '\' size="7" /><a title="' + _("Delete this filter") + '" style="cursor:pointer" onclick=\'$("#' + id + 'from").val("").change();\' >&times;</a></span><br/><span style="white-space:nowrap">' + _("To") + '<input type="text" id="' + id + 'to" readonly="readonly" placeholder=\'' + _("Pick date") + '\' size="7" /><a title="' + _("Delete this filter") + '" style="cursor:pointer" onclick=\'$("#' + id + 'to").val("").change();\' >&times;</a></span>');
     $(original_node).replaceWith(node);
     var script = document.createElement( 'script' );
     script.type = 'text/javascript';
@@ -471,3 +433,177 @@ jQuery.extend( jQuery.fn.dataTableExt.oSort, {
 } );
 
 }());
+
+/* Plugin to allow sorting on data stored in a span's title attribute
+ *
+ * Ex: <td><span title="[% ISO_date %]">[% formatted_date %]</span></td>
+ *
+ * In DataTables config:
+ *     "aoColumns": [
+ *        { "sType": "title-string" },
+ *      ]
+ * http://datatables.net/plug-ins/sorting#hidden_title_string
+ */
+jQuery.extend( jQuery.fn.dataTableExt.oSort, {
+    "title-string-pre": function ( a ) {
+        return a.match(/title="(.*?)"/)[1].toLowerCase();
+    },
+
+    "title-string-asc": function ( a, b ) {
+        return ((a < b) ? -1 : ((a > b) ? 1 : 0));
+    },
+
+    "title-string-desc": function ( a, b ) {
+        return ((a < b) ? 1 : ((a > b) ? -1 : 0));
+    }
+} );
+
+/* Plugin to allow sorting on numeric data stored in a span's title attribute
+ *
+ * Ex: <td><span title="[% decimal_number_that_JS_parseFloat_accepts %]">
+ *              [% formatted currency %]
+ *     </span></td>
+ *
+ * In DataTables config:
+ *     "aoColumns": [
+ *        { "sType": "title-numeric" },
+ *      ]
+ * http://datatables.net/plug-ins/sorting#hidden_title
+ */
+jQuery.extend( jQuery.fn.dataTableExt.oSort, {
+    "title-numeric-pre": function ( a ) {
+        var x = a.match(/title="*(-?[0-9\.]+)/)[1];
+        return parseFloat( x );
+    },
+
+    "title-numeric-asc": function ( a, b ) {
+        return ((a < b) ? -1 : ((a > b) ? 1 : 0));
+    },
+
+    "title-numeric-desc": function ( a, b ) {
+        return ((a < b) ? 1 : ((a > b) ? -1 : 0));
+    }
+} );
+
+(function() {
+
+    /* Plugin to allow text sorting to ignore articles
+     *
+     * In DataTables config:
+     *     "aoColumns": [
+     *        { "sType": "anti-the" },
+     *      ]
+     * Based on the plugin found here:
+     * http://datatables.net/plug-ins/sorting#anti_the
+     * Modified to exclude HTML tags from sorting
+     * Extended to accept a string of space-separated articles
+     * from a configuration file (in English, "a," "an," and "the")
+     */
+
+    if(CONFIG_EXCLUDE_ARTICLES_FROM_SORT){
+        var articles = CONFIG_EXCLUDE_ARTICLES_FROM_SORT.split(" ");
+        var rpattern = "";
+        for(i=0;i<articles.length;i++){
+            rpattern += "^" + articles[i] + " ";
+            if(i < articles.length - 1){ rpattern += "|"; }
+        }
+        var re = new RegExp(rpattern, "i");
+    }
+
+    jQuery.extend( jQuery.fn.dataTableExt.oSort, {
+        "anti-the-pre": function ( a ) {
+            var x = String(a).replace( /<[\s\S]*?>/g, "" );
+            var y = x.trim();
+            var z = y.replace(re, "").toLowerCase();
+            return z;
+        },
+
+        "anti-the-asc": function ( a, b ) {
+            return ((a < b) ? -1 : ((a > b) ? 1 : 0));
+        },
+
+        "anti-the-desc": function ( a, b ) {
+            return ((a < b) ? 1 : ((a > b) ? -1 : 0));
+        }
+    });
+
+}());
+
+// Remove string between NSB NSB characters
+$.fn.dataTableExt.oSort['nsb-nse-asc'] = function(a,b) {
+    var pattern = new RegExp("\x88.*\x89");
+    a = a.replace(pattern, "");
+    b = b.replace(pattern, "");
+    return (a > b) ? 1 : ((a < b) ? -1 : 0);
+}
+$.fn.dataTableExt.oSort['nsb-nse-desc'] = function(a,b) {
+    var pattern = new RegExp("\x88.*\x89");
+    a = a.replace(pattern, "");
+    b = b.replace(pattern, "");
+    return (b > a) ? 1 : ((b < a) ? -1 : 0);
+}
+
+/* Define two custom functions (asc and desc) for basket callnumber sorting */
+jQuery.fn.dataTableExt.oSort['callnumbers-asc']  = function(x,y) {
+        var x_array = x.split("<div>");
+        var y_array = y.split("<div>");
+
+        /* Pop the first elements, they are empty strings */
+        x_array.shift();
+        y_array.shift();
+
+        x_array = jQuery.map( x_array, function( a ) {
+            return parse_callnumber( a );
+        });
+        y_array = jQuery.map( y_array, function( a ) {
+            return parse_callnumber( a );
+        });
+
+        x_array.sort();
+        y_array.sort();
+
+        x = x_array.shift();
+        y = y_array.shift();
+
+        if ( !x ) { x = ""; }
+        if ( !y ) { y = ""; }
+
+        return ((x < y) ? -1 : ((x > y) ?  1 : 0));
+};
+
+jQuery.fn.dataTableExt.oSort['callnumbers-desc'] = function(x,y) {
+        var x_array = x.split("<div>");
+        var y_array = y.split("<div>");
+
+        /* Pop the first elements, they are empty strings */
+        x_array.shift();
+        y_array.shift();
+
+        x_array = jQuery.map( x_array, function( a ) {
+            return parse_callnumber( a );
+        });
+        y_array = jQuery.map( y_array, function( a ) {
+            return parse_callnumber( a );
+        });
+
+        x_array.sort();
+        y_array.sort();
+
+        x = x_array.pop();
+        y = y_array.pop();
+
+        if ( !x ) { x = ""; }
+        if ( !y ) { y = ""; }
+
+        return ((x < y) ?  1 : ((x > y) ? -1 : 0));
+};
+
+function parse_callnumber ( html ) {
+    var array = html.split('<span class="callnumber">');
+    if ( array[1] ) {
+        array = array[1].split('</span>');
+        return array[0];
+    } else {
+        return "";
+    }
+}

@@ -1,8 +1,6 @@
-[% IF ( opaccredits ) %]
-    <div class="ft">
-        [% opaccredits %]
-    </div>
-[% END %]
+<div class="ft">
+    [% opaccredits %]
+</div>
 </div>
 
 <div class="clear"></div>
@@ -12,6 +10,13 @@
 </div>
 </div>
 </div>
+
+[%# Sticking the div for the top bar here; since the
+    top bar is positioned absolutely in this theme, it
+    it makes the positioning of the rest of the elements
+    easier to keep it out of the doc3 div.
+%]
+[% INCLUDE 'top-bar.inc' %]
 
 <div id="main_footer">
     <div class="colleft">
@@ -47,7 +52,7 @@
                     [% IF ( sublanguages_loo.sublanguage_current ) %]
                         <li> [% sublanguages_loo.native_description %] [% sublanguages_loo.script_description %] [% sublanguages_loo.region_description %] [% sublanguages_loo.variant_description %] ([% sublanguages_loo.rfc4646_subtag %])</li>
                     [% ELSE %]
-                    <li><a href="/cgi-bin/koha/changelanguage.pl?language=[% sublanguages_loo.rfc4646_subtag %]"> [% sublanguages_loo.native_description %] [% sublanguages_loo.script_description %] [% sublanguages_loo.region_description %] [% sublanguages_loo.variant_description %] ([% sublanguages_loo.rfc4646_subtag %])</a></li>
+                    <li><a href="/cgi-bin/koha/opac-changelanguage.pl?language=[% sublanguages_loo.rfc4646_subtag %]"> [% sublanguages_loo.native_description %] [% sublanguages_loo.script_description %] [% sublanguages_loo.region_description %] [% sublanguages_loo.variant_description %] ([% sublanguages_loo.rfc4646_subtag %])</a></li>
             [% END %]
                     [% END %]
 
@@ -59,7 +64,7 @@
                     [% IF ( languages_loo.current ) %]
                         <li style="float:left;">[% IF ( languages_loo.native_description ) %][% languages_loo.native_description %][% ELSE %][% languages_loo.rfc4646_subtag %][% END %]</li>
                     [% ELSE %]
-                        <li style="float:left;"><a href="/cgi-bin/koha/changelanguage.pl?language=[% languages_loo.rfc4646_subtag %]">[% IF ( languages_loo.native_description ) %][% languages_loo.native_description %][% ELSE %][% languages_loo.rfc4646_subtag %][% END %]</a></li>
+                        <li style="float:left;"><a href="/cgi-bin/koha/opac-changelanguage.pl?language=[% languages_loo.rfc4646_subtag %]">[% IF ( languages_loo.native_description ) %][% languages_loo.native_description %][% ELSE %][% languages_loo.rfc4646_subtag %][% END %]</a></li>
                     [% END %]
             [% END %]
                 [% END %]
@@ -75,17 +80,57 @@
 
 
 <script type="text/javascript" src="/opac-tmpl/lib/jquery/plugins/jquery.jqtransform_select.js"></script>
+<script id="region-opacuserjs" type="text/javascript">
+    [% opacuserjs %]
+</script>
 <script type="text/javascript">
 $(function() {
     //find all form with class jqtransform and apply the plugin
     $("form#searchform").jqTransform();
 });
-
-[% IF ( opacuserjs ) %][% opacuserjs %][% END %]
-
 </script>
 
 <!-- /ADD JQUERY PLUGIN JQTRANSFORM - LIBÉO -->
+
+[% IF persona %]
+<script src="https://login.persona.org/include.js"></script>
+<script type="text/javascript" language="javascript">
+
+navigator.id.watch({
+    loggedInUser: [% IF emailaddress && loggedinpersona %]'[% emailaddress %]'[% ELSE %]null[% END %],
+    onlogin: function (assertion) {
+        $.post('/cgi-bin/koha/svc/login',
+        { assertion: assertion },
+        function (data) {
+            window.location = '/cgi-bin/koha/opac-user.pl';
+        }
+        )
+        .fail(function() {
+            var errstr = _("Could not login, perhaps your Persona email does not match your Koha one");
+            alert(errstr);
+        });
+    },
+    onlogout: function () {
+        window.location = '/cgi-bin/koha/opac-main.pl?logout.x=1';
+    }
+});
+
+var signinLink = document.getElementById('browserid');
+
+if (signinLink) {
+    signinLink.onclick = function(evt) {
+        // Requests a signed identity assertion from the user.
+        navigator.id.request({
+            siteName: "[% LibraryName | html %]",
+            returnTo: '/cgi-bin/koha/opac-user.pl',
+            oncancel: function() { alert('user refuses to share identity.'); }
+        });
+    };
+}
+
+</script>
+[% END %]
+
 
 </body>
 </html>

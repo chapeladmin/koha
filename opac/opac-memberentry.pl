@@ -26,6 +26,7 @@ use C4::Output;
 use C4::Members;
 use Koha::Borrower::Modifications;
 use C4::Branch qw(GetBranchesLoop);
+use C4::Scrubber;
 
 my $cgi = new CGI;
 my $dbh = C4::Context->dbh;
@@ -59,8 +60,10 @@ $template->param(
     action            => $action,
     hidden            => GetHiddenFields(),
     mandatory         => GetMandatoryFields($action),
-    member_titles     => GetTitles(),
+    member_titles     => GetTitles() || undef,
     branches          => GetBranchesLoop(),
+    usef1             => C4::Context->preference('f1Authentications'),
+    f1staging         => C4::Context->preference('f1Staging'),
     OPACPatronDetails => C4::Context->preference('OPACPatronDetails'),
 );
 
@@ -195,8 +198,19 @@ elsif ( $action eq 'update' ) {
     }
 }
 elsif ( $action eq 'edit' ) {    #Display logged in borrower's data
+    my $borrower = GetMember( borrowernumber => $borrowernumber );
     $template->param(
-        borrower => GetMember( borrowernumber => $borrowernumber ), );
+        borrower => $borrower, );
+
+    if (C4::Context->preference('OPACpatronimages')) {
+        my ($image, $dberror) = GetPatronImage($borrower->{borrowernumber});
+        if ($image) {
+            $template->param(
+                display_patron_image => 1
+            );
+        }
+    }
+
 }
 
 my $captcha = random_string("CCCCC");
@@ -265,12 +279,13 @@ sub CheckMandatoryFields {
 sub ParseCgiForBorrower {
     my ($cgi) = @_;
 
+    my $scrubber = C4::Scrubber->new();
     my %borrower;
 
     foreach ( $cgi->param ) {
         if ( $_ =~ '^borrower_' ) {
             my ($key) = substr( $_, 9 );
-            $borrower{$key} = $cgi->param($_);
+            $borrower{$key} = $scrubber->scrub( $cgi->param($_) );
         }
     }
 

@@ -21,7 +21,8 @@ use C4::Koha;
 use C4::Members;
 use C4::Reserves;
 use C4::Branch qw(GetBranchName);
-use Digest::MD5 qw(md5_base64);
+use C4::Items qw( GetBarcodeFromItemnumber GetItemnumbersForBiblio);
+use C4::Auth qw(checkpw_hash);
 
 our $VERSION = 3.07.00.049;
 
@@ -39,7 +40,7 @@ sub new {
     }
     $kp = GetMemberDetails($kp->{borrowernumber});
     $debug and warn "new Patron (GetMemberDetails): " . Dumper($kp);
-    my $pw        = $kp->{password};  ### FIXME - md5hash -- deal with .
+    my $pw        = $kp->{password};
     my $flags     = $kp->{flags};     # or warn "Warning: No flags from patron object for '$patron_id'";
     my $debarred  = defined($kp->{flags}->{DBARRED});
     $debug and warn sprintf("Debarred = %s : ", ($debarred||'undef')) . Dumper(%{$kp->{flags}});
@@ -91,8 +92,8 @@ sub new {
         screen_msg      => 'Greetings from Koha. ' . $kp->{opacnote},
         print_line      => '',
         items           => [],
-        hold_items      => $flags->{WAITING}{itemlist},
-        overdue_items   => $flags->{ODUES}{itemlist},
+        hold_items      => $flags->{WAITING}->{itemlist},
+        overdue_items   => $flags->{ODUES}->{itemlist},
         fine_items      => [],
         recall_items    => [],
         unavail_holds   => [],
@@ -114,8 +115,7 @@ sub new {
     }
 
     # FIXME: populate fine_items recall_items
-#   $ilspatron{hold_items}    = (GetReservesFromBorrowernumber($kp->{borrowernumber},'F'));
-    $ilspatron{unavail_holds} = [(GetReservesFromBorrowernumber($kp->{borrowernumber}))];
+    $ilspatron{unavail_holds} = _get_outstanding_holds($kp->{borrowernumber});
     $ilspatron{items} = GetPendingIssues($kp->{borrowernumber});
     $self = \%ilspatron;
     $debug and warn Dumper($self);
@@ -189,11 +189,13 @@ sub AUTOLOAD {
 
 sub check_password {
     my ($self, $pwd) = @_;
-    my $md5pwd = $self->{password};
+    defined $pwd or return 0;                  # you gotta give me something (at least ''), or no deal
+
+    my $hashed_pwd = $self->{password};
+    defined $hashed_pwd or return $pwd eq '';  # if the record has a NULL password, accept '' as match
+
     # warn sprintf "check_password for %s: '%s' vs. '%s'",($self->{name}||''),($self->{password}||''),($pwd||'');
-    (defined $pwd   ) or return 0;        # you gotta give me something (at least ''), or no deal
-    (defined $md5pwd) or return($pwd eq '');    # if the record has a NULL password, accept '' as match
-    return (md5_base64($pwd) eq $md5pwd);
+    return checkpw_hash($pwd, $hashed_pwd);
 }
 
 # A few special cases, not in AUTOLOADed %fields
@@ -248,12 +250,25 @@ sub x_items {
     my $self      = shift;
     my $array_var = shift or return;
     my ($start, $end) = @_;
-    $self->{$array_var} or return [];
-    $start = 1 unless defined($start);
-    $end   = scalar @{$self->{$array_var}} unless defined($end);
-    # syslog("LOG_DEBUG", "$array_var: start = %d, end = %d; items(%s)", $start, $end, join(', ', @{$self->{items}}));
 
-    return [@{$self->{$array_var}}[$start-1 .. $end-1]];
+    my $item_list = [];
+    if ($self->{$array_var}) {
+        if ($start && $start > 1) {
+            --$start;
+        }
+        else {
+            $start = 0;
+        }
+        if ( $end && $end < @{$self->{$array_var}} ) {
+        }
+        else {
+            $end = @{$self->{$array_var}};
+            --$end;
+        }
+        @{$item_list} = @{$self->{$array_var}}[ $start .. $end ];
+
+    }
+    return $item_list;
 }
 
 #
@@ -261,7 +276,11 @@ sub x_items {
 #
 sub hold_items {
     my $self = shift;
-    return $self->x_items('hold_items', @_);
+    my $item_arr = $self->x_items('hold_items', @_);
+    foreach my $item (@{$item_arr}) {
+        $item->{barcode} = GetBarcodeFromItemnumber($item->{itemnumber});
+    }
+    return $item_arr;
 }
 
 sub overdue_items {
@@ -321,9 +340,16 @@ sub excessive_fees {
     my $self = shift;
     return ($self->fee_amount and $self->fee_amount > $self->fee_limit);
 }
+
 sub excessive_fines {
     my $self = shift;
     return $self->excessive_fees;   # excessive_fines is the same thing as excessive_fees for Koha
+}
+
+sub holds_blocked_by_excessive_fees {
+    my $self = shift;
+    return ( $self->fee_amount
+          && $self->fee_amount > C4::Context->preference("maxoutstanding") );
 }
     
 sub library_name {
@@ -363,6 +389,24 @@ sub _get_address {
         }
     }
     return $address;
+}
+
+sub _get_outstanding_holds {
+    my $borrowernumber = shift;
+    my @hold_array = grep { !defined $_->{found} || $_->{found} ne 'W'} GetReservesFromBorrowernumber($borrowernumber);
+    foreach my $h (@hold_array) {
+        my $item;
+        if ($h->{itemnumber}) {
+            $item = $h->{itemnumber};
+        }
+        else {
+            # We need to return a barcode for the biblio so the client
+            # can request the biblio info
+            $item = ( GetItemnumbersForBiblio($h->{biblionumber}) )->[0];
+        }
+        $h->{barcode} = GetBarcodeFromItemnumber($item);
+    }
+    return \@hold_array;
 }
 
 1;

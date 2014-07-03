@@ -2,9 +2,7 @@
 <title>Koha &rsaquo; Acquisitions &rsaquo; [% IF ( booksellername ) %]Orders with uncertain prices for vendor [% booksellername %][% ELSE %]Orders with uncertain prices[% END %]</title>
 <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
 //<![CDATA[
  $(document).ready(function() {
@@ -15,6 +13,7 @@
         "sPaginationType": "four_button"
     } ) );
  });
+var MSG_INVALIDPRICE = _("ERROR: Price is not a valid number, please check the price and try again!");
  //]]>
 </script>
 <script type="text/javascript" src="[% themelang %]/js/acq.js"></script>

@@ -101,8 +101,8 @@ if ($borrowernumber) {
 
 
 # Computes full borrower address
-my (undef, $roadttype_hashref) = &GetRoadTypes();
-my $address = $borrower->{'streetnumber'}.' '.$roadttype_hashref->{$borrower->{'streettype'}}.' '.$borrower->{'address'};
+my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $borrower->{streettype} );
+my $address = $borrower->{'streetnumber'} . " $roadtype " . $borrower->{'address'};
 
 $template->param(
 
@@ -125,9 +125,10 @@ $template->param(
     country           => $borrower->{'country'},
     phone             => $borrower->{'phone'} || $borrower->{'mobile'},
     cardnumber        => $borrower->{'cardnumber'},
+    RoutingSerials => C4::Context->preference('RoutingSerials'),
 );
 
-my ($picture, $dberror) = GetPatronImage($borrower->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($borrower->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 output_html_with_http_headers $query, $cookie, $template->output;

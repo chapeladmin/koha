@@ -25,10 +25,12 @@ use strict;
 
 use C4::Context;
 use C4::Branch qw(GetBranchesCount);
+use Koha::DateUtils qw(dt_from_string);
 use Memoize;
-use DateTime;
 use DateTime::Format::MySQL;
+use Business::ISBN;
 use autouse 'Data::Dumper' => qw(Dumper);
+use DBI qw(:sql_types);
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK $DEBUG);
 
@@ -41,7 +43,6 @@ BEGIN {
 		&subfield_is_koha_internal_p
 		&GetPrinters &GetPrinter
 		&GetItemTypes &getitemtypeinfo
-		&GetCcodes
 		&GetSupportName &GetSupportList
 		&get_itemtypeinfos_of
 		&getframeworks &getframeworkinfo
@@ -57,17 +58,23 @@ BEGIN {
 		&getitemtypeimagelocation
 		&GetAuthorisedValues
 		&GetAuthorisedValueCategories
+                &IsAuthorisedValueCategory
 		&GetKohaAuthorisedValues
 		&GetKohaAuthorisedValuesFromField
     &GetKohaAuthorisedValueLib
     &GetAuthorisedValueByCode
     &GetKohaImageurlFromAuthorisedValues
 		&GetAuthValCode
+        &AddAuthorisedValue
 		&GetNormalizedUPC
 		&GetNormalizedISBN
 		&GetNormalizedEAN
 		&GetNormalizedOCLCNumber
         &xml_escape
+
+        &GetVariationsOfISBN
+        &GetVariationsOfISBNs
+        &NormalizeISBN
 
 		$DEBUG
 	);
@@ -172,22 +179,22 @@ build a HTML select with the following code :
 
 =head3 in TEMPLATE
 
-    <form action='<!-- TMPL_VAR name="script_name" -->' method=post>
-        <select name="itemtype">
-            <option value="">Default</option>
-        <!-- TMPL_LOOP name="itemtypeloop" -->
-            <option value="<!-- TMPL_VAR name="itemtype" -->" <!-- TMPL_IF name="selected" -->selected<!-- /TMPL_IF -->> <!--TMPL_IF Name="imageurl"--><img alt="<!-- TMPL_VAR name="description" -->" src="<!--TMPL_VAR Name="imageurl"-->><!--TMPL_ELSE-->"<!-- TMPL_VAR name="description" --><!--/TMPL_IF--></option>
-        <!-- /TMPL_LOOP -->
-        </select>
-        <input type=text name=searchfield value="<!-- TMPL_VAR name="searchfield" -->">
-        <input type="submit" value="OK" class="button">
-    </form>
+    <select name="itemtype" id="itemtype">
+        <option value=""></option>
+        [% FOREACH itemtypeloo IN itemtypeloop %]
+             [% IF ( itemtypeloo.selected ) %]
+                <option value="[% itemtypeloo.itemtype %]" selected="selected">[% itemtypeloo.description %]</option>
+            [% ELSE %]
+                <option value="[% itemtypeloo.itemtype %]">[% itemtypeloo.description %]</option>
+            [% END %]
+       [% END %]
+    </select>
 
 =cut
 
 sub GetSupportList{
 	my $advanced_search_types = C4::Context->preference("AdvancedSearchTypes");
-	if (!$advanced_search_types or $advanced_search_types eq 'itemtypes') {  
+    if (!$advanced_search_types or $advanced_search_types =~ /itemtypes/) {
 		my $query = qq|
 			SELECT *
 			FROM   itemtypes
@@ -204,9 +211,14 @@ sub GetSupportList{
 }
 =head2 GetItemTypes
 
-  $itemtypes = &GetItemTypes();
+  $itemtypes = &GetItemTypes( style => $style );
 
 Returns information about existing itemtypes.
+
+Params:
+    style: either 'array' or 'hash', defaults to 'hash'.
+           'array' returns an arrayref,
+           'hash' return a hashref with the itemtype value as the key
 
 build a HTML select with the following code :
 
@@ -240,6 +252,8 @@ build a HTML select with the following code :
 =cut
 
 sub GetItemTypes {
+    my ( %params ) = @_;
+    my $style = defined( $params{'style'} ) ? $params{'style'} : 'hash';
 
     # returns a reference to a hash of references to itemtypes...
     my %itemtypes;
@@ -250,10 +264,15 @@ sub GetItemTypes {
     |;
     my $sth = $dbh->prepare($query);
     $sth->execute;
-    while ( my $IT = $sth->fetchrow_hashref ) {
-        $itemtypes{ $IT->{'itemtype'} } = $IT;
+
+    if ( $style eq 'hash' ) {
+        while ( my $IT = $sth->fetchrow_hashref ) {
+            $itemtypes{ $IT->{'itemtype'} } = $IT;
+        }
+        return ( \%itemtypes );
+    } else {
+        return $sth->fetchall_arrayref({});
     }
-    return ( \%itemtypes );
 }
 
 sub get_itemtypeinfos_of {
@@ -270,27 +289,6 @@ SELECT itemtype,
 END_SQL
 
     return get_infos_of( $query, 'itemtype', undef, \@itemtypes );
-}
-
-# this is temporary until we separate collection codes and item types
-sub GetCcodes {
-    my $count = 0;
-    my @results;
-    my $dbh = C4::Context->dbh;
-    my $sth =
-      $dbh->prepare(
-        "SELECT * FROM authorised_values ORDER BY authorised_value");
-    $sth->execute;
-    while ( my $data = $sth->fetchrow_hashref ) {
-        if ( $data->{category} eq "CCODE" ) {
-            $count++;
-            $results[$count] = $data;
-
-            #warn "data: $data";
-        }
-    }
-    $sth->finish;
-    return ( $count, @results );
 }
 
 =head2 getauthtypes
@@ -708,7 +706,7 @@ sub getFacets {
                 idx   => 'au',
                 label => 'Authors',
                 tags  => [ qw/ 700ab 701ab 702ab / ],
-                sep   => ', ',
+                sep   => C4::Context->preference("UNIMARCAuthorsFacetsSeparator"),
             },
             {
                 idx   => 'se',
@@ -716,23 +714,43 @@ sub getFacets {
                 tags  => [ qw/ 225a / ],
                 sep   => ', ',
             },
+            {
+                idx  => 'location',
+                label => 'Location',
+                tags        => [ qw/ 995e / ],
+            }
             ];
 
-            my $library_facet;
-            unless ( C4::Context->preference("singleBranchMode") || GetBranchesCount() == 1 ) {
-                $library_facet = {
-                    idx  => 'branch',
-                    label => 'Libraries',
-                    tags        => [ qw/ 995b / ],
-                };
-            } else {
-                $library_facet = {
-                    idx  => 'location',
-                    label => 'Location',
-                    tags        => [ qw/ 995c / ],
-                };
+            unless ( C4::Context->preference("singleBranchMode")
+                || GetBranchesCount() == 1 )
+            {
+                my $DisplayLibraryFacets = C4::Context->preference('DisplayLibraryFacets');
+                if (   $DisplayLibraryFacets eq 'both'
+                    || $DisplayLibraryFacets eq 'holding' )
+                {
+                    push(
+                        @$facets,
+                        {
+                            idx   => 'holdingbranch',
+                            label => 'HoldingLibrary',
+                            tags  => [qw / 995b /],
+                        }
+                    );
+                }
+
+                if (   $DisplayLibraryFacets eq 'both'
+                    || $DisplayLibraryFacets eq 'home' )
+                {
+                push(
+                    @$facets,
+                    {
+                        idx   => 'homebranch',
+                        label => 'HomeLibrary',
+                        tags  => [qw / 995a /],
+                    }
+                );
+                }
             }
-            push( @$facets, $library_facet );
     }
     else {
         $facets = [
@@ -778,23 +796,43 @@ sub getFacets {
                 tags  => [ qw/ 952y 942c / ],
                 sep   => ', ',
             },
+            {
+                idx => 'location',
+                label => 'Location',
+                tags => [ qw / 952c / ],
+            },
             ];
 
-            my $library_facet;
-            unless ( C4::Context->preference("singleBranchMode") || GetBranchesCount() == 1 ) {
-                $library_facet = {
-                    idx  => 'branch',
-                    label => 'Libraries',
-                    tags        => [ qw / 952b / ],
-                };
-            } else {
-                $library_facet = {
-                    idx => 'location',
-                    label => 'Location',
-                    tags => [ qw / 952c / ],
-                };
+            unless ( C4::Context->preference("singleBranchMode")
+                || GetBranchesCount() == 1 )
+            {
+                my $DisplayLibraryFacets = C4::Context->preference('DisplayLibraryFacets');
+                if (   $DisplayLibraryFacets eq 'both'
+                    || $DisplayLibraryFacets eq 'holding' )
+                {
+                    push(
+                        @$facets,
+                        {
+                            idx   => 'holdingbranch',
+                            label => 'HoldingLibrary',
+                            tags  => [qw / 952b /],
+                        }
+                    );
+                }
+
+                if (   $DisplayLibraryFacets eq 'both'
+                    || $DisplayLibraryFacets eq 'home' )
+                {
+                push(
+                    @$facets,
+                    {
+                        idx   => 'homebranch',
+                        label => 'HomeLibrary',
+                        tags  => [qw / 952a /],
+                    }
+                );
+                }
             }
-            push( @$facets, $library_facet );
     }
     return $facets;
 }
@@ -1062,7 +1100,11 @@ sub GetAuthorisedValues {
     if(@where_strings > 0) {
         $query .= " WHERE " . join(" AND ", @where_strings);
     }
-    $query .= " GROUP BY lib ORDER BY category, lib, lib_opac";
+    $query .= " GROUP BY lib";
+    $query .= ' ORDER BY category, ' . (
+                $opac ? 'COALESCE(lib_opac, lib)'
+                      : 'lib, lib_opac'
+              );
 
     my $sth = $dbh->prepare($query);
 
@@ -1104,9 +1146,31 @@ sub GetAuthorisedValueCategories {
     return \@results;
 }
 
+=head2 IsAuthorisedValueCategory
+
+    $is_auth_val_category = IsAuthorisedValueCategory($category);
+
+Returns whether a given category name is a valid one
+
+=cut
+
+sub IsAuthorisedValueCategory {
+    my $category = shift;
+    my $query = '
+        SELECT category
+        FROM authorised_values
+        WHERE BINARY category=?
+        LIMIT 1
+    ';
+    my $sth = C4::Context->dbh->prepare($query);
+    $sth->execute($category);
+    $sth->fetchrow ? return 1
+                   : return 0;
+}
+
 =head2 GetAuthorisedValueByCode
 
-$authhorised_value = GetAuthorisedValueByCode( $category, $authvalcode );
+$authorised_value = GetAuthorisedValueByCode( $category, $authvalcode, $opac );
 
 Return the lib attribute from authorised_values from the row identified
 by the passed category and code
@@ -1224,6 +1288,26 @@ sub GetKohaAuthorisedValueLib {
   my $data = $sth->fetchrow_hashref;
   $value = ($opac && $$data{'lib_opac'}) ? $$data{'lib_opac'} : $$data{'lib'};
   return $value;
+}
+
+=head2 AddAuthorisedValue
+
+    AddAuthorisedValue($category, $authorised_value, $lib, $lib_opac, $imageurl);
+
+Create a new authorised value.
+
+=cut
+
+sub AddAuthorisedValue {
+    my ($category, $authorised_value, $lib, $lib_opac, $imageurl) = @_;
+
+    my $dbh = C4::Context->dbh;
+    my $query = qq{
+        INSERT INTO authorised_values (category, authorised_value, lib, lib_opac, imageurl)
+        VALUES (?,?,?,?,?)
+    };
+    my $sth = $dbh->prepare($query);
+    $sth->execute($category, $authorised_value, $lib, $lib_opac, $imageurl);
 }
 
 =head2 display_marc_indicators
@@ -1355,6 +1439,44 @@ sub GetNormalizedOCLCNumber {
     }
 }
 
+sub GetAuthvalueDropbox {
+    my ( $authcat, $default ) = @_;
+    my $branch_limit = C4::Context->userenv ? C4::Context->userenv->{"branch"} : "";
+    my $dbh = C4::Context->dbh;
+
+    my $query = qq{
+        SELECT *
+        FROM authorised_values
+    };
+    $query .= qq{
+          LEFT JOIN authorised_values_branches ON ( id = av_id )
+    } if $branch_limit;
+    $query .= qq{
+        WHERE category = ?
+    };
+    $query .= " AND ( branchcode = ? OR branchcode IS NULL )" if $branch_limit;
+    $query .= " GROUP BY lib ORDER BY category, lib, lib_opac";
+    my $sth = $dbh->prepare($query);
+    $sth->execute( $authcat, $branch_limit ? $branch_limit : () );
+
+
+    my $option_list = [];
+    my @authorised_values = ( q{} );
+    while (my $av = $sth->fetchrow_hashref) {
+        push @{$option_list}, {
+            value => $av->{authorised_value},
+            label => $av->{lib},
+            default => ($default eq $av->{authorised_value}),
+        };
+    }
+
+    if ( @{$option_list} ) {
+        return $option_list;
+    }
+    return;
+}
+
+
 =head2 GetDailyQuote($opts)
 
 Takes a hashref of options
@@ -1405,24 +1527,23 @@ sub GetDailyQuote {
         $sth = C4::Context->dbh->prepare('SELECT count(*) FROM quotes;');
         $sth->execute;
         my $range = ($sth->fetchrow_array)[0];
-        if ($range > 1) {
-            # chose a random id within that range if there is more than one quote
-            my $id = int(rand($range));
-            # grab it
-            $query = 'SELECT * FROM quotes WHERE id = ?;';
-            $sth = C4::Context->dbh->prepare($query);
-            $sth->execute($id);
-        }
-        else {
-            $query = 'SELECT * FROM quotes;';
-            $sth = C4::Context->dbh->prepare($query);
-            $sth->execute();
-        }
+        # chose a random id within that range if there is more than one quote
+        my $offset = int(rand($range));
+        # grab it
+        $query = 'SELECT * FROM quotes ORDER BY id LIMIT 1 OFFSET ?';
+        $sth = C4::Context->dbh->prepare($query);
+        # see http://www.perlmonks.org/?node_id=837422 for why
+        # we're being verbose and using bind_param
+        $sth->bind_param(1, $offset, SQL_INTEGER);
+        $sth->execute();
         $quote = $sth->fetchrow_hashref();
         # update the timestamp for that quote
         $query = 'UPDATE quotes SET timestamp = ? WHERE id = ?';
         $sth = C4::Context->dbh->prepare($query);
-        $sth->execute(DateTime::Format::MySQL->format_datetime(DateTime->now), $quote->{'id'});
+        $sth->execute(
+            DateTime::Format::MySQL->format_datetime( dt_from_string() ),
+            $quote->{'id'}
+        );
     }
     return $quote;
 }
@@ -1436,15 +1557,114 @@ sub _normalize_match_point {
 }
 
 sub _isbn_cleanup {
-    require Business::ISBN;
-    my $isbn = Business::ISBN->new( $_[0] );
-    if ( $isbn ) {
-        $isbn = $isbn->as_isbn10 if $isbn->type eq 'ISBN13';
-        if (defined $isbn) {
-            return $isbn->as_string([]);
+    my ($isbn) = @_;
+    return NormalizeISBN(
+        {
+            isbn          => $isbn,
+            format        => 'ISBN-10',
+            strip_hyphens => 1,
         }
+    ) if $isbn;
+}
+
+=head2 NormalizedISBN
+
+  my $isbns = NormalizedISBN({
+    isbn => $isbn,
+    strip_hyphens => [0,1],
+    format => ['ISBN-10', 'ISBN-13']
+  });
+
+  Returns an isbn validated by Business::ISBN.
+  Optionally strips hyphens and/or forces the isbn
+  to be of the specified format.
+
+  If the string cannot be validated as an isbn,
+  it returns nothing.
+
+=cut
+
+sub NormalizeISBN {
+    my ($params) = @_;
+
+    my $string        = $params->{isbn};
+    my $strip_hyphens = $params->{strip_hyphens};
+    my $format        = $params->{format};
+
+    return unless $string;
+
+    my $isbn = Business::ISBN->new($string);
+
+    if ( $isbn && $isbn->is_valid() ) {
+
+        if ( $format eq 'ISBN-10' ) {
+            $isbn = $isbn->as_isbn10();
+        }
+        elsif ( $format eq 'ISBN-13' ) {
+            $isbn = $isbn->as_isbn13();
+        }
+
+        if ($strip_hyphens) {
+            $string = $isbn->as_string( [] );
+        } else {
+            $string = $isbn->as_string();
+        }
+
+        return $string;
     }
-    return;
+}
+
+=head2 GetVariationsOfISBN
+
+  my @isbns = GetVariationsOfISBN( $isbn );
+
+  Returns a list of varations of the given isbn in
+  both ISBN-10 and ISBN-13 formats, with and without
+  hyphens.
+
+  In a scalar context, the isbns are returned as a
+  string delimited by ' | '.
+
+=cut
+
+sub GetVariationsOfISBN {
+    my ($isbn) = @_;
+
+    return unless $isbn;
+
+    my @isbns;
+
+    push( @isbns, NormalizeISBN({ isbn => $isbn }) );
+    push( @isbns, NormalizeISBN({ isbn => $isbn, format => 'ISBN-10' }) );
+    push( @isbns, NormalizeISBN({ isbn => $isbn, format => 'ISBN-13' }) );
+    push( @isbns, NormalizeISBN({ isbn => $isbn, format => 'ISBN-10', strip_hyphens => 1 }) );
+    push( @isbns, NormalizeISBN({ isbn => $isbn, format => 'ISBN-13', strip_hyphens => 1 }) );
+
+    # Strip out any "empty" strings from the array
+    @isbns = grep { defined($_) && $_ =~ /\S/ } @isbns;
+
+    return wantarray ? @isbns : join( " | ", @isbns );
+}
+
+=head2 GetVariationsOfISBNs
+
+  my @isbns = GetVariationsOfISBNs( @isbns );
+
+  Returns a list of varations of the given isbns in
+  both ISBN-10 and ISBN-13 formats, with and without
+  hyphens.
+
+  In a scalar context, the isbns are returned as a
+  string delimited by ' | '.
+
+=cut
+
+sub GetVariationsOfISBNs {
+    my (@isbns) = @_;
+
+    @isbns = map { GetVariationsOfISBN( $_ ) } @isbns;
+
+    return wantarray ? @isbns : join( " | ", @isbns );
 }
 
 1;

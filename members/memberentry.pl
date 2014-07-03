@@ -41,6 +41,8 @@ use C4::Log;
 use C4::Letters;
 use C4::Branch; # GetBranches
 use C4::Form::MessagingPreferences;
+use Koha::Borrower::Debarments;
+use Koha::DateUtils;
 
 use vars qw($debug);
 
@@ -62,6 +64,7 @@ my ($template, $loggedinuser, $cookie)
            flagsrequired => {borrowers => 1},
            debug => ($debug) ? 1 : 0,
        });
+
 my $guarantorid    = $input->param('guarantorid');
 my $borrowernumber = $input->param('borrowernumber');
 my $actionType     = $input->param('actionType') || '';
@@ -89,6 +92,33 @@ my $check_categorytype=$input->param('check_categorytype');
 my $borrower_data;
 my $NoUpdateLogin;
 my $userenv = C4::Context->userenv;
+
+
+## Deal with debarments
+$template->param(
+    debarments => GetDebarments( { borrowernumber => $borrowernumber } ) );
+my @debarments_to_remove = $input->param('remove_debarment');
+foreach my $d ( @debarments_to_remove ) {
+    DelDebarment( $d );
+}
+if ( $input->param('add_debarment') ) {
+
+    my $expiration = $input->param('debarred_expiration');
+    $expiration =
+      $expiration
+      ? output_pref(
+        { 'dt' => dt_from_string($expiration), 'dateformat' => 'iso' } )
+      : undef;
+
+    AddDebarment(
+        {
+            borrowernumber => $borrowernumber,
+            type           => 'MANUAL',
+            comment        => $input->param('debarred_comment'),
+            expiration     => $expiration,
+        }
+    );
+}
 
 $template->param("uppercasesurnames" => C4::Context->preference('uppercasesurnames'));
 
@@ -142,16 +172,6 @@ if ( $op eq 'insert' || $op eq 'modify' || $op eq 'save' || $op eq 'duplicate' )
         }
     }
 
-    ## Manipulate debarred
-    if ( $newdata{debarred} ) {
-        $newdata{debarred} = $newdata{datedebarred} ? $newdata{datedebarred} : "9999-12-31";
-    } elsif ( exists( $newdata{debarred} ) && !( $newdata{debarred} ) ) {
-        undef( $newdata{debarred} );
-        undef( $newdata{debarredcomment} );
-    } elsif ( exists( $newdata{debarredcomment} ) && $newdata{debarredcomment} eq "" ) {
-        undef( $newdata{debarredcomment} );
-    }
-    
     my $dateobject = C4::Dates->new();
     my $syspref = $dateobject->regexp();		# same syspref format for all 3 dates
     my $iso     = $dateobject->regexp('iso');	#
@@ -184,7 +204,6 @@ if ( $op eq 'insert' || $op eq 'modify' || $op eq 'save' || $op eq 'duplicate' )
         qr/^nodouble$/,
         qr/^op$/,
         qr/^save$/,
-        qr/^select_roadtype$/,
         qr/^updtype$/,
         qr/^SMSnumber$/,
         qr/^setting_extended_patron_attributes$/,
@@ -254,7 +273,18 @@ $newdata{'country'} = $input->param('country') if defined($input->param('country
 
 #builds default userid
 if ( (defined $newdata{'userid'}) && ($newdata{'userid'} eq '')){
-    $newdata{'userid'} = Generate_Userid($borrowernumber, $newdata{'firstname'}, $newdata{'surname'});
+    if ( ( defined $newdata{'firstname'} ) && ( defined $newdata{'surname'} ) ) {
+        # Full page edit, firstname and surname input zones are present
+        $newdata{'userid'} = Generate_Userid( $borrowernumber, $newdata{'firstname'}, $newdata{'surname'} );
+    }
+    elsif ( ( defined $data{'firstname'} ) && ( defined $data{'surname'} ) ) {
+        # Partial page edit (access through "Details"/"Library details" tab), firstname and surname input zones are not used
+        # Still, if the userid field is erased, we can create a new userid with available firstname and surname
+        $newdata{'userid'} = Generate_Userid( $borrowernumber, $data{'firstname'}, $data{'surname'} );
+    }
+    else {
+        $newdata{'userid'} = $data{'userid'};
+    }
 }
   
 $debug and warn join "\t", map {"$_: $newdata{$_}"} qw(dateofbirth dateenrolled dateexpiry);
@@ -263,9 +293,14 @@ if ($op eq 'save' || $op eq 'insert'){
     # If the cardnumber is blank, treat it as null.
     $newdata{'cardnumber'} = undef if $newdata{'cardnumber'} =~ /^\s*$/;
 
-    if (checkcardnumber($newdata{cardnumber},$newdata{borrowernumber})){ 
-        push @errors, 'ERROR_cardnumber';
-    } 
+    if (my $error_code = checkcardnumber($newdata{cardnumber},$newdata{borrowernumber})){
+        push @errors, $error_code == 1
+            ? 'ERROR_cardnumber_already_exists'
+            : $error_code == 2
+                ? 'ERROR_cardnumber_length'
+                : ()
+    }
+
     if ($newdata{dateofbirth} && $dateofbirthmandatory) {
         my $age = GetAge($newdata{dateofbirth});
         my $borrowercategory=GetBorrowercategory($newdata{'categorycode'});   
@@ -281,8 +316,8 @@ if ($op eq 'save' || $op eq 'insert'){
         $newdata{'surname'} = uc($newdata{'surname'});
     }
 
-  if (C4::Context->preference("IndependantBranches")) {
-    if ($userenv && $userenv->{flags} % 2 != 1){
+  if (C4::Context->preference("IndependentBranches")) {
+    unless ( C4::Context->IsSuperLibrarian() ){
       $debug and print STDERR "  $newdata{'branchcode'} : ".$userenv->{flags}.":".$userenv->{branch};
       unless (!$newdata{'branchcode'} || $userenv->{branch} eq $newdata{'branchcode'}){
         push @errors, "ERROR_branch";
@@ -304,7 +339,7 @@ if ($op eq 'save' || $op eq 'insert'){
     foreach my $attr (@$extended_patron_attributes) {
         unless (C4::Members::Attributes::CheckUniqueness($attr->{code}, $attr->{value}, $borrowernumber)) {
             push @errors, "ERROR_extended_unique_id_failed";
-            $template->param(ERROR_extended_unique_id_failed => "$attr->{code}/$attr->{value}");
+            $template->param(ERROR_extended_unique_id_failed_value => "$attr->{code}/$attr->{value}");
         }
     }
   }
@@ -317,7 +352,13 @@ if ( ($op eq 'modify' || $op eq 'insert' || $op eq 'save'|| $op eq 'duplicate') 
     }
 }
 
-if ( ( defined $input->param('SMSnumber') ) && ( $input->param('SMSnumber') ne $newdata{'mobile'} ) ) {
+if (
+        defined $input->param('SMSnumber')
+    &&  (
+           $input->param('SMSnumber') eq ""
+        or $input->param('SMSnumber') ne $newdata{'mobile'}
+        )
+) {
     $newdata{smsalertnumber} = $input->param('SMSnumber');
 }
 
@@ -364,11 +405,6 @@ if ((!$nok) and $nodouble and ($op eq 'insert' or $op eq 'save')){
             }
         }
 
-		if ($data{'organisations'}){            
-			# need to add the members organisations
-			my @orgs=split(/\|/,$data{'organisations'});
-			add_member_orgs($borrowernumber,\@orgs);
-		}
         if (C4::Context->preference('ExtendedPatronAttributes') and $input->param('setting_extended_patron_attributes')) {
             C4::Members::Attributes::SetBorrowerAttributes($borrowernumber, $extended_patron_attributes);
         }
@@ -411,9 +447,9 @@ if ($nok or !$nodouble){
         $template->param( step_1 => 1,step_2 => 1,step_3 => 1, step_4 => 1, step_5 => 1, step_6 => 1);
     }  
 } 
-if (C4::Context->preference("IndependantBranches")) {
+if (C4::Context->preference("IndependentBranches")) {
     my $userenv = C4::Context->userenv;
-    if ($userenv->{flags} % 2 != 1 && $data{'branchcode'}){
+    if ( !C4::Context->IsSuperLibrarian() && $data{'branchcode'} ) {
         unless ($userenv->{branch} eq $data{'branchcode'}){
             print $input->redirect("/cgi-bin/koha/members/members-home.pl");
             exit;
@@ -512,17 +548,8 @@ if (@{$city_arrayref} ) {
     }
 }
   
-my $default_roadtype;
-$default_roadtype=$data{'streettype'} ;
-my($roadtypeid,$road_type)=GetRoadTypes();
-  $template->param( road_cgipopup => 1) if ($roadtypeid );
-my $roadpopup = CGI::popup_menu(-name=>'streettype',
-        -id => 'streettype',
-        -values=>$roadtypeid,
-        -labels=>$road_type,
-        -override => 1,
-        -default=>$default_roadtype
-        );  
+my $roadtypes = C4::Koha::GetAuthorisedValues( 'ROADTYPE', $data{streettype} );
+$template->param( roadtypes => $roadtypes);
 
 my $default_borrowertitle = '';
 unless ( $op eq 'duplicate' ) { $default_borrowertitle=$data{'title'} }
@@ -568,43 +595,22 @@ foreach (keys(%flags)) {
 	push @flagdata,\%row;
 }
 
-#get Branches
-my @branches;
-my @select_branch;
-my %select_branches;
+# get Branch Loop
+# in modify mod: userbranch value for GetBranchesLoop() comes from borrowers table
+# in add    mod: userbranch value come from branches table (ip correspondence)
 
-my $onlymine=(C4::Context->preference('IndependantBranches') && 
-              C4::Context->userenv && 
-              C4::Context->userenv->{flags} % 2 !=1  && 
-              C4::Context->userenv->{branch}?1:0);
-              
-my $branches=GetBranches($onlymine);
-my $default;
-my $CGIbranch;
-for my $branch (sort { $branches->{$a}->{branchname} cmp $branches->{$b}->{branchname} } keys %$branches) {
-    push @select_branch,$branch;
-    $select_branches{$branch} = $branches->{$branch}->{'branchname'};
-    $default = C4::Context->userenv->{'branch'} if (C4::Context->userenv && C4::Context->userenv->{'branch'});
+my $userbranch = '';
+if (C4::Context->userenv && C4::Context->userenv->{'branch'}) {
+    $userbranch = C4::Context->userenv->{'branch'};
 }
-if(scalar(@select_branch) > 0){
-# --------------------------------------------------------------------------------------------------------
-  #in modify mod :default value from $CGIbranch comes from borrowers table
-  #in add mod: default value come from branches table (ip correspendence)
+
 if (defined ($data{'branchcode'}) and ( $op eq 'modify' || ( $op eq 'add' && $category_type eq 'C' ) )) {
-    $default = $data{'branchcode'};
-}
-$CGIbranch = CGI::scrolling_list(-id    => 'branchcode',
-            -name   => 'branchcode',
-            -values => \@select_branch,
-            -labels => \%select_branches,
-            -size   => 1,
-            -override => 1,  
-            -multiple =>0,
-            -default => $default,
-        );
+    $userbranch = $data{'branchcode'};
 }
 
-if(!$CGIbranch){
+my $branchloop = GetBranchesLoop( $userbranch );
+
+if( !$branchloop ){
     $no_add = 1;
     $template->param(no_branches => 1);
 }
@@ -613,42 +619,10 @@ if($no_categories){
     $template->param(no_categories => 1);
 }
 $template->param(no_add => $no_add);
-my $CGIorganisations;
-my $member_of_institution;
-if (C4::Context->preference("memberofinstitution")){
-    my $organisations=get_institutions();
-    my @orgs;
-    my %org_labels;
-    foreach my $organisation (keys %$organisations) {
-        push @orgs,$organisation;
-        $org_labels{$organisation}=$organisations->{$organisation}->{'surname'};
-    }
-    $member_of_institution=1;
-
-    $CGIorganisations = CGI::scrolling_list( -id => 'organisations',
-        -name     => 'organisations',
-        -labels   => \%org_labels,
-        -values   => \@orgs,
-        -size     => 5,
-        -multiple => 'true'
-
-    );
-}
-
 # --------------------------------------------------------------------------------------------------------
 
-my $CGIsort = buildCGIsort("Bsort1","sort1",$data{'sort1'});
-if ($CGIsort) {
-    $template->param(CGIsort1 => $CGIsort);
-}
-$template->param( sort1 => $data{'sort1'});		# shouldn't this be in an "else" statement like the 2nd one?
-
-$CGIsort = buildCGIsort("Bsort2","sort2",$data{'sort2'});
-if ($CGIsort) {
-    $template->param(CGIsort2 => $CGIsort);
-} else {
-    $template->param( sort2 => $data{'sort2'});
-}
+$template->param( sort1 => $data{'sort1'});
+$template->param( sort2 => $data{'sort2'});
 
 if ($nok) {
     foreach my $error (@errors) {
@@ -667,13 +641,11 @@ if ( $op eq 'duplicate' ) {
     $data{'dateexpiry'} = GetExpiryDate( $data{'categorycode'}, $data{'dateenrolled'} );
 }
 if (C4::Context->preference('uppercasesurnames')) {
-	$data{'surname'}    =uc($data{'surname'}    );
-	$data{'contactname'}=uc($data{'contactname'});
+    $data{'surname'} &&= uc( $data{'surname'} );
+    $data{'contactname'} &&= uc( $data{'contactname'} );
 }
 
-$data{debarred} = C4::Overdues::CheckBorrowerDebarred($borrowernumber);
-$data{datedebarred} = $data{debarred} if ( $data{debarred} && $data{debarred} ne "9999-12-31" );
-foreach (qw(dateenrolled dateexpiry dateofbirth datedebarred)) {
+foreach (qw(dateenrolled dateexpiry dateofbirth)) {
 	$data{$_} = format_date($data{$_});	# back to syspref for display
 	$template->param( $_ => $data{$_});
 }
@@ -709,7 +681,7 @@ $template->param(
   check_member    => $check_member,#to know if the borrower already exist(=>1) or not (=>0) 
   "op$op"   => 1);
 
-$template->param(CGIbranch=>$CGIbranch) if ($CGIbranch);
+$template->param( branchloop => $branchloop ) if ( $branchloop );
 $template->param(
   nodouble  => $nodouble,
   borrowernumber  => $borrowernumber, #register number
@@ -717,18 +689,13 @@ $template->param(
   ethcatpopup => $ethcatpopup,
   relshiploop => \@relshipdata,
   city_loop => $city_arrayref,
-  roadpopup => $roadpopup,  
   borrotitlepopup => $borrotitlepopup,
   guarantorinfo   => $guarantorinfo,
   flagloop  => \@flagdata,
-  dateformat      => C4::Dates->new()->visual(),
-  C4::Context->preference('dateformat') => 1,
   check_categorytype =>$check_categorytype,#to recover the category type with checkcategorytype function
   category_type =>$category_type,
   modify          => $modify,
   nok     => $nok,#flag to konw if an error 
-  memberofinstution => $member_of_institution,
-  CGIorganisations => $CGIorganisations,
   NoUpdateLogin =>  $NoUpdateLogin
   );
 
@@ -739,7 +706,15 @@ if(defined($data{'contacttitle'})){
   $template->param("contacttitle_" . $data{'contacttitle'} => "SELECTED");
 }
 
-  
+
+my ( $min, $max ) = C4::Members::get_cardnumber_length();
+if ( defined $min ) {
+    $template->param(
+        minlength_cardnumber => $min,
+        maxlength_cardnumber => $max
+    );
+}
+
 output_html_with_http_headers $input, $cookie, $template->output;
 
 sub  parse_extended_patron_attributes {
@@ -796,7 +771,7 @@ sub patron_attributes_form {
         };
         if (exists $attr_hash{$attr_type->code()}) {
             foreach my $attr (@{ $attr_hash{$attr_type->code()} }) {
-                my $newentry = { map { $_ => $entry->{$_} } %$entry };
+                my $newentry = { %$entry };
                 $newentry->{value} = $attr->{value};
                 $newentry->{password} = $attr->{password};
                 $newentry->{use_dropdown} = 0;
@@ -810,7 +785,7 @@ sub patron_attributes_form {
             }
         } else {
             $i++;
-            my $newentry = { map { $_ => $entry->{$_} } %$entry };
+            my $newentry = { %$entry };
             if ($attr_type->authorised_value_category()) {
                 $newentry->{use_dropdown} = 1;
                 $newentry->{auth_val_loop} = GetAuthorisedValues($attr_type->authorised_value_category());

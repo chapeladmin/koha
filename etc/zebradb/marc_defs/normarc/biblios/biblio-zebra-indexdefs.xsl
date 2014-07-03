@@ -39,6 +39,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
       <xslo:apply-templates mode="index_heading_conditional"/>
       <xslo:apply-templates mode="index_match_heading"/>
       <xslo:apply-templates mode="index_subject_thesaurus"/>
+      <xslo:apply-templates mode="index_all"/>
     </z:record>
   </xslo:template>
   <xslo:template match="marc:leader">
@@ -616,8 +617,29 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
   </xslo:template>
   <xslo:template mode="index_subfields" match="marc:datafield[@tag='773']">
     <xslo:for-each select="marc:subfield">
+      <xslo:if test="contains('a', @code)">
+        <z:index name="Host-item:w">
+          <xslo:value-of select="."/>
+        </z:index>
+      </xslo:if>
+    </xslo:for-each>
+    <xslo:for-each select="marc:subfield">
+      <xslo:if test="contains('9', @code)">
+        <z:index name="Host-Item-Number:w">
+          <xslo:value-of select="."/>
+        </z:index>
+      </xslo:if>
+    </xslo:for-each>
+    <xslo:for-each select="marc:subfield">
       <xslo:if test="contains('t', @code)">
         <z:index name="Host-item:w">
+          <xslo:value-of select="."/>
+        </z:index>
+      </xslo:if>
+    </xslo:for-each>
+    <xslo:for-each select="marc:subfield">
+      <xslo:if test="contains('w', @code)">
+        <z:index name="Record-control-number:w">
           <xslo:value-of select="."/>
         </z:index>
       </xslo:if>
@@ -1102,7 +1124,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
     </z:index>
   </xslo:template>
   <xslo:template mode="index_data_field" match="marc:datafield[@tag='028']">
-    <z:index name="Number-music-publisher:w Identifier-standard:w">
+    <z:index name="Identifier-publisher-for-music:w Identifier-standard:w">
       <xslo:variable name="raw_heading">
         <xslo:for-each select="marc:subfield">
           <xslo:if test="position() &gt; 1">
@@ -1747,7 +1769,7 @@ definition file (probably something like {biblio,authority}-koha-indexdefs.xml) 
       <xslo:value-of select="normalize-space($raw_heading)"/>
     </z:index>
   </xslo:template>
-  <xslo:template match="*">
+  <xslo:template mode="index_all" match="text()">
     <z:index name="Any:w Any:p">
       <xslo:value-of select="."/>
     </z:index>

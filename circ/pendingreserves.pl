@@ -25,6 +25,10 @@
 
 use strict;
 #use warnings; FIXME - Bug 2505
+
+use constant TWO_DAYS => 2;
+use constant TWO_DAYS_AGO => -2;
+
 use C4::Context;
 use C4::Output;
 use CGI;
@@ -66,25 +70,23 @@ my $author;
 
 my ( $year, $month, $day ) = Today();
 my $todaysdate     = sprintf("%-04.4d-%-02.2d-%02.2d", $year, $month, $day);
-my $yesterdaysdate = sprintf("%-04.4d-%-02.2d-%02.2d", Add_Delta_YMD($year, $month, $day,   0, 0, -1));
-# changed from delivered range of 10 years-yesterday to 2 days ago-today
-# Find two days ago for the default shelf pull start and end dates, unless HoldsToPullStartDate sys pref is set.
-my $defaultstartdate = ( C4::Context->preference('HoldsToPullStartDate') ) ? "-".C4::Context->preference('HoldsToPullStartDate') : -2;
-my $pastdate       = sprintf("%-04.4d-%-02.2d-%02.2d", Add_Delta_YMD($year, $month, $day, 0, 0, $defaultstartdate));
-
-# Predefine the start and end dates if they are not already defined
 $startdate =~ s/^\s+//;
 $startdate =~ s/\s+$//;
 $enddate =~ s/^\s+//;
 $enddate =~ s/\s+$//;
-# Check if null, should string match, if so set start and end date to yesterday
+
 if (!defined($startdate) or $startdate eq "") {
+    # changed from delivered range of 10 years-yesterday to 2 days ago-today
+    # Find two days ago for the default shelf pull start date, unless HoldsToPullStartDate sys pref is set.
+    my $pastdate= sprintf("%-04.4d-%-02.2d-%02.2d", Add_Delta_YMD($year, $month, $day, 0, 0, -C4::Context->preference('HoldsToPullStartDate')||TWO_DAYS_AGO ));
     $startdate = format_date($pastdate);
 }
-if (!defined($enddate) or $enddate eq "") {
-    $enddate = format_date($todaysdate);
-}
 
+if (!defined($enddate) or $enddate eq "") {
+    #similarly: calculate end date with ConfirmFutureHolds (days)
+    my $d=sprintf("%-04.4d-%-02.2d-%02.2d", Add_Delta_YMD($year, $month, $day, 0, 0, C4::Context->preference('ConfirmFutureHolds')||0 ));
+    $enddate = format_date($d);
+}
 
 my @reservedata;
 if ( $run_report ) {
@@ -122,7 +124,6 @@ if ( $run_report ) {
             GROUP_CONCAT(DISTINCT items.copynumber
                     ORDER BY items.itemnumber SEPARATOR '<br/>') l_copynumber,
             items.itemnumber,
-            notes,
             notificationdate,
             reminderdate,
             max(priority) as priority,
@@ -145,13 +146,13 @@ if ( $run_report ) {
     AND issues.itemnumber IS NULL
     AND reserves.priority <> 0 
     AND reserves.suspend = 0
-    AND notforloan = 0 AND damaged = 0 AND itemlost = 0 AND wthdrawn = 0
+    AND notforloan = 0 AND damaged = 0 AND itemlost = 0 AND withdrawn = 0
     ";
     # GROUP BY reserves.biblionumber allows only items that are not checked out, else multiples occur when 
     #    multiple patrons have a hold on an item
 
 
-    if (C4::Context->preference('IndependantBranches')){
+    if (C4::Context->preference('IndependentBranches')){
         $strsth .= " AND items.holdingbranch=? ";
         push @query_params, C4::Context->userenv->{'branch'};
     }
@@ -164,7 +165,7 @@ if ( $run_report ) {
         push(
             @reservedata,
             {
-                reservedate     => format_date( $data->{l_reservedate} ),
+                reservedate     => $data->{l_reservedate},
                 priority        => $data->{priority},
                 name            => $data->{l_patron},
                 title           => $data->{title},
@@ -181,7 +182,6 @@ if ( $run_report ) {
                 itemcallnumber  => $data->{l_itemcallnumber},
                 enumchron       => $data->{l_enumchron},
                 copyno          => $data->{l_copynumber},
-                notes           => $data->{notes},
                 notificationdate=> $data->{notificationdate},
                 reminderdate    => $data->{reminderdate},
                 count           => $data->{icount},
@@ -196,13 +196,14 @@ if ( $run_report ) {
 }
 
 $template->param(
-    todaysdate          => format_date($todaysdate),
+    todaysdate          => $todaysdate,
     from                => $startdate,
     to                  => $enddate,
     run_report          => $run_report,
     reserveloop         => \@reservedata,
     "BiblioDefaultView".C4::Context->preference("BiblioDefaultView") => 1,
-    HoldsToPullStartDate        => (C4::Context->preference('HoldsToPullStartDate')?C4::Context->preference('HoldsToPullStartDate'):2),
+    HoldsToPullStartDate=> C4::Context->preference('HoldsToPullStartDate')||TWO_DAYS,
+    HoldsToPullEndDate  => C4::Context->preference('ConfirmFutureHolds')||0,
 );
 
 output_html_with_http_headers $input, $cookie, $template->output;

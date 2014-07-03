@@ -1,3 +1,4 @@
+[% USE Koha %]
 [% INCLUDE 'doc-head-open.inc' %]
 [% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %]
     catalog &rsaquo; Advanced search
@@ -56,15 +57,23 @@
         <p>
         [% IF ( expanded_options ) %]
             [% IF ( search_box.boolean ) %]
-            <select name="op">
-                <option value="and" selected="selected">and</option>
-                <option value="or">or</option>
-                <option value="not">not</option>
-            </select>
+                <select name="op">
+                    <option value="and" selected="selected">and</option>
+                    <option value="or">or</option>
+                    <option value="not">not</option>
+                </select>
             [% END %]
-        [% END %]
+        [% ELSE %]
+            <label for="search-field_[% loop.index %]">
+                [% IF loop.index == 0 %]
+                    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+                [% ELSE %]
+                    and
+                [% END %]
+            </label>
+            [% END %]
         [% IF ( expanded_options ) %][% left_content %][% END %] 
-        <select name="idx">
+        <select name="idx" id="search-field_[% loop.index %]">
             <option value="kw">Keyword</option>
             <option value="su,wrdl">Subject</option>
 [% IF ( expanded_options ) %]
@@ -108,7 +117,6 @@
             [% ELSE %]
             <option value="sn">Standard number</option>
             [% END %]
-            <option value="sn">Standard number</option>
             <option value="nb">&nbsp;&nbsp;&nbsp;&nbsp; ISBN</option>
             <option value="ns">&nbsp;&nbsp;&nbsp;&nbsp; ISSN</option>
             [% IF ( numbersphr) %]
@@ -124,7 +132,10 @@
         <input type="text" size="30" name="q" title="Enter search terms" value="" />
 [% IF ( expanded_options ) %]
         <!--   [% IF ( search_box.scan_index ) %]<input type="checkbox" name="scan" id="scan" value="1" /> Scan Indexes[% END %] -->
-        [% IF ( search_box.add_field ) %]<a href="JavaScript:add_field();" id="ButtonPlus" title="Add another field">[+]</a>[% END %]
+        [% IF ( !loop.first ) %]
+            <a class="ButtonPlus" name="ButtonPlus" title="Add another field" href="#">[+]</a>
+            <a class="ButtonLess" title="Remove field" href="#">[-]</a>
+        [% END %]
 [% END %]
         </p>
     [% END %]
@@ -335,12 +346,22 @@
 <script type="text/javascript" language="javascript">
     /* This function allows to display a new field to search.
     */
-    function add_field() {
-        var ButtonPlus = document.getElementById('ButtonPlus');
-        var line       = ButtonPlus.parentNode;
-        line.parentNode.appendChild(line.cloneNode(true));
-        line.removeChild(ButtonPlus);
-    }
+    $(document).on("click", '.ButtonPlus', function(e) {
+        e.preventDefault();
+        $('.ButtonLess').show();
+        var thisLine = $(this).parent();
+        var newLine = thisLine.clone();
+        newLine.find('input').val('');
+        thisLine.after(newLine);
+    });
+
+    $(document).on("click", '.ButtonLess', function(e) {
+        e.preventDefault();
+        if($(this).parent().siblings().length <= 3 ) {
+           $('.ButtonLess').hide();
+        }
+        $(this).parent().remove();
+    });
 </script>
 
 </div>

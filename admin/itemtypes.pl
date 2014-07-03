@@ -91,6 +91,9 @@ if ($op) {
 
 my $dbh = C4::Context->dbh;
 
+my $sip_media_type = $input->param('sip_media_type');
+undef($sip_media_type) if defined($sip_media_type) and $sip_media_type =~ /^\s*$/;
+
 ################## ADD_FORM ##################################
 # called by default. Used to create form to add or  modify a record
 if ( $op eq 'add_form' ) {
@@ -117,8 +120,11 @@ if ( $op eq 'add_form' ) {
         imageurl        => $data->{'imageurl'},
         template        => C4::Context->preference('template'),
         summary         => $data->{summary},
+        checkinmsg      => $data->{'checkinmsg'},
+        checkinmsgtype  => $data->{'checkinmsgtype'},
         imagesets       => $imagesets,
         remote_image    => $remote_image,
+        sip_media_type  => $data->{sip_media_type},
     );
 
     # END $OP eq ADD_FORM
@@ -141,6 +147,9 @@ elsif ( $op eq 'add_validate' ) {
                  , notforloan = ?
                  , imageurl = ?
                  , summary = ?
+                 , checkinmsg = ?
+                 , checkinmsgtype = ?
+                 , sip_media_type = ?
             WHERE itemtype = ?
         ';
         $sth = $dbh->prepare($query2);
@@ -156,15 +165,18 @@ elsif ( $op eq 'add_validate' ) {
                 )
             ),
             $input->param('summary'),
+            $input->param('checkinmsg'),
+            $input->param('checkinmsgtype'),
+            $sip_media_type,
             $input->param('itemtype')
         );
     }
     else {    # add a new itemtype & not modif an old
         my $query = "
             INSERT INTO itemtypes
-                (itemtype,description,rentalcharge, notforloan, imageurl,summary)
+                (itemtype,description,rentalcharge, notforloan, imageurl, summary, checkinmsg, checkinmsgtype, sip_media_type)
             VALUES
-                (?,?,?,?,?,?);
+                (?,?,?,?,?,?,?,?,?);
             ";
         my $sth = $dbh->prepare($query);
 		my $image = $input->param('image');
@@ -177,6 +189,9 @@ elsif ( $op eq 'add_validate' ) {
             $image eq 'remoteImage' ? $input->param('remoteImage') :
             $image,
             $input->param('summary'),
+            $input->param('checkinmsg'),
+            $input->param('checkinmsgtype'),
+            $sip_media_type,
         );
     }
 
@@ -192,7 +207,7 @@ elsif ( $op eq 'delete_confirm' ) {
     my $sth = $dbh->prepare('
         SELECT COUNT(*) AS total FROM (
             SELECT itemtype AS t FROM biblioitems
-            UNION
+            UNION ALL
             SELECT itype AS t FROM items
         ) AS tmp
         WHERE tmp.t=?

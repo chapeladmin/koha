@@ -1,19 +1,52 @@
 #!/usr/bin/perl
+
+# Copyright 2013 Equinox Software, Inc.
+# Copyright 2014 BibLibre
 #
-# This Koha test module is a stub!  
-# Add more tests here!!!
+# This file is part of Koha.
+#
+# Koha is free software; you can redistribute it and/or modify it under the
+# terms of the GNU General Public License as published by the Free Software
+# Foundation; either version 3 of the License, or (at your option) any later
+# version.
+#
+# Koha is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with Koha; if not, see <http://www.gnu.org/licenses>.
 
-use strict;
-use warnings;
-
-use Test::More tests => 4;
+use Modern::Perl;
+use Test::More tests => 3;
+use Test::MockModule;
+use CGI;
 
 BEGIN {
-        use_ok('C4::Languages');
+    use_ok('C4::Languages');
 }
 
-isnt(C4::Languages::_get_themes(), undef, 'testing _get_themes doesnt return undef');
+my @languages = (); # stores the list of active languages
+                    # for the syspref mock
 
-ok(C4::Languages::_get_language_dirs(), 'test getting _get_language_dirs');
+my $module_context = new Test::MockModule('C4::Context');
 
-is(C4::Languages::accept_language(),undef, 'test that accept_languages returns undef when nothing is entered');
+$module_context->mock(
+    preference => sub {
+        my ($self, $pref) = @_;
+        if ($pref =~ /language/) {
+            return join ',', @languages;
+        } else {
+            return 'XXX';
+        }
+  },
+);
+
+delete $ENV{HTTP_ACCEPT_LANGUAGE};
+
+my $query = CGI->new();
+@languages = ('de-DE', 'fr-FR');
+is(C4::Languages::getlanguage($query), 'de-DE', 'default to first language specified in syspref (bug 10560)');
+
+@languages = ();
+is(C4::Languages::getlanguage($query), 'en', 'default to English if no language specified in syspref (bug 10560)');

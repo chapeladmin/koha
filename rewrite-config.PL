@@ -43,7 +43,7 @@ guesses worked out by the script.
 The following configuration keywords are available:
 
 PREFIX,
-BASE_DIR, CGI_DIR, LOG_DIR, INSTALL_BASE,
+BASE_DIR, CGI_DIR, LOG_DIR, PLUGINS_DIR, INSTALL_BASE,
 DB_TYPE, DB_HOST, DB_PORT, DB_NAME, DB_PASS, DB_USER, WEBMASTER_EMAIL, WEBSERVER_DOMAIN,
 WEBSERVER_HOST, WEBSERVER_IP, WEBSERVER_PORT, WEBSERVER_PORT_LIBRARIAN, ZEBRA_PASS, ZEBRA_USER
 
@@ -82,6 +82,7 @@ $prefix = $ENV{'INSTALL_BASE'} || "/usr";
 %configuration = (
   "__KOHA_INSTALLED_VERSION__" => "no_version_found",
   "__LOG_DIR__" => "/var/log",
+  "__PLUGINS_DIR__" => "/var/lib/koha/plugins",
   "__DB_TYPE__" => "mysql",
   "__DB_NAME__" => "koha",
   "__DB_HOST__" => $myhost,
@@ -121,7 +122,9 @@ $prefix = $ENV{'INSTALL_BASE'} || "/usr";
   '__ZEBRA_RUN_DIR__' => "$prefix/var/run/zebradb",
   '__ZEBRA_MARC_FORMAT__' => 'marc21',
   '__ZEBRA_LANGUAGE__' => 'en',
+  '__ZEBRA_TOKENIZER__' => 'chr',
   '__ZEBRA_TOKENIZER_STMT__' => 'charmap word-phrase-utf.chr',
+  '__ZEBRA_PTOKENIZER_STMT__' => 'charmap word-phrase-utf.chr',
   '__ZEBRA_AUTH_CFG__' => 'zebra-authorities.cfg',
   '__ZEBRA_BIB_CFG__' => 'zebra-biblios.cfg',
   '__AUTH_RETRIEVAL_CFG__' => 'retrieval-info-auth-grs1.xml',
@@ -132,7 +135,6 @@ $prefix = $ENV{'INSTALL_BASE'} || "/usr";
   "__PAZPAR2_PORT__" => '11002',
   "__INSTALL_MODE__" => 'standard',
   "__INSTALL_BASE__" => '/usr/share/koha',
-  "__INSTALL_ZEBRA__" => 'yes',
   "__INSTALL_SRU__" => 'yes',
   "__INSTALL_PAZPAR2__" => 'no',
   "__PAZPAR2_TOGGLE_XML_PRE__" => '<!--',

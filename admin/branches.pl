@@ -168,6 +168,8 @@ elsif ( $op eq 'addcategory_validate' ) {
     $template->param( else => 1 );
     # confirm settings change...
     my $params = $input->Vars;
+    $params->{'show_in_pulldown'} = ( $params->{'show_in_pulldown'} eq 'on' ) ? 1 : 0;
+
     unless ( $params->{'categorycode'} && $params->{'categoryname'} ) {
         default("MESSAGE4",$template);
     }
@@ -232,14 +234,31 @@ sub editbranchform {
     my $data;
     my $oldprinter = "";
 
+
+    # make the checkboxes.....
+    my $catinfo = GetBranchCategories();
+
     if ($branchcode) {
         $data = GetBranchInfo($branchcode);
         $data = $data->[0];
+        if ( exists $data->{categories} ) {
+            # Set the selected flag for the categories of this branch
+            $catinfo = [
+                map {
+                    my $catcode = $_->{categorycode};
+                    if ( grep {/$catcode/} @{$data->{categories}} ){
+                        $_->{selected} = 1;
+                    }
+                    $_;
+                } @{$catinfo}
+            ];
+        }
 
         # get the old printer of the branch
         $oldprinter = $data->{'branchprinter'} || '';
         _branch_to_template($data, $innertemplate);
     }
+    $innertemplate->param( categoryloop => $catinfo );
 
     foreach my $thisprinter ( keys %$printers ) {
         push @printerloop, {
@@ -250,29 +269,6 @@ sub editbranchform {
     }
 
     $innertemplate->param( printerloop => \@printerloop );
-    # make the checkboxes.....
-    #
-    # We export a "categoryloop" array to the template, each element of which
-    # contains separate 'categoryname', 'categorycode', 'codedescription', and
-    # 'checked' fields. The $checked field is either empty or 1'
-
-    my $catinfo = GetBranchCategory();
-    my @categoryloop = ();
-    foreach my $cat (@$catinfo) {
-        my $checked;
-        my $tmp     = quotemeta( $cat->{'categorycode'} );
-        if ( grep { /^$tmp$/ } @{ $data->{'categories'} } ) {
-            $checked = 1;
-        }
-        push @categoryloop, {
-            categoryname    => $cat->{'categoryname'},
-            categorycode    => $cat->{'categorycode'},
-            categorytype    => $cat->{'categorytype'},
-            codedescription => $cat->{'codedescription'},
-            checked         => $checked,
-        };
-    }
-    $innertemplate->param( categoryloop => \@categoryloop );
 
     for my $obsolete ( 'categoryname', 'categorycode', 'codedescription' ) {
         $innertemplate->param(
@@ -289,11 +285,11 @@ sub editcatform {
     my $data;
 	if ($categorycode) {
         my $data = GetBranchCategory($categorycode);
-        $data = $data->[0];
         $innertemplate->param(
             categorycode    => $data->{'categorycode'},
             categoryname    => $data->{'categoryname'},
             codedescription => $data->{'codedescription'},
+            show_in_pulldown => $data->{'show_in_pulldown'},
 		);
     }
 	for my $ctype (GetCategoryTypes()) {
@@ -357,7 +353,7 @@ sub branchinfotable {
         my $no_categories_p = 1;
         my @categories;
         foreach my $cat ( @{ $branch->{'categories'} } ) {
-            my ($catinfo) = @{ GetBranchCategory($cat) };
+            my $catinfo = GetBranchCategory($cat);
             push @categories, { 'categoryname' => $catinfo->{'categoryname'} };
             $no_categories_p = 0;
         }
@@ -372,8 +368,8 @@ sub branchinfotable {
     }
     my @branchcategories = ();
 	for my $ctype ( GetCategoryTypes() ) {
-    	my $catinfo = GetBranchCategories(undef,$ctype);
-    	my @categories;
+        my $catinfo = GetBranchCategories($ctype);
+        my @categories;
 		foreach my $cat (@$catinfo) {
             push @categories, {
                 categoryname    => $cat->{'categoryname'},

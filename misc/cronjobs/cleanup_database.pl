@@ -21,8 +21,11 @@ use strict;
 use warnings;
 
 use constant DEFAULT_ZEBRAQ_PURGEDAYS => 30;
+use constant DEFAULT_MAIL_PURGEDAYS => 30;
 use constant DEFAULT_IMPORT_PURGEDAYS => 60;
 use constant DEFAULT_LOGS_PURGEDAYS => 180;
+use constant DEFAULT_SEARCHHISTORY_PURGEDAYS => 30;
+use constant DEFAULT_SHARE_INVITATION_EXPIRY_DAYS => 14;
 
 BEGIN {
     # find Koha's Perl modules
@@ -34,11 +37,13 @@ BEGIN {
 use C4::Context;
 use C4::Dates;
 
+use C4::Search;
+
 use Getopt::Long;
 
 sub usage {
     print STDERR <<USAGE;
-Usage: $0 [-h|--help] [--sessions] [--sessdays DAYS] [-v|--verbose] [--zebraqueue DAYS] [-m|--mail] [--merged] [--import DAYS] [--logs DAYS]
+Usage: $0 [-h|--help] [--sessions] [--sessdays DAYS] [-v|--verbose] [--zebraqueue DAYS] [-m|--mail] [--merged] [--import DAYS] [--logs DAYS] [--searchhistory DAYS]
 
    -h --help          prints this help message, and exits, ignoring all
                       other options
@@ -49,42 +54,69 @@ Usage: $0 [-h|--help] [--sessions] [--sessdays DAYS] [-v|--verbose] [--zebraqueu
                       about the run.
    --zebraqueue DAYS  purge completed zebraqueue entries older than DAYS days.
                       Defaults to 30 days if no days specified.
-   -m --mail          purge the mail queue. 
+   -m --mail DAYS     purge items from the mail queue that are older than DAYS days.
+                      Defaults to 30 days if no days specified.
    --merged           purged completed entries from need_merge_authorities.
    --import DAYS      purge records from import tables older than DAYS days.
                       Defaults to 60 days if no days specified.
+   --z3950            purge records from import tables that are the result
+                      of Z39.50 searches
    --logs DAYS        purge entries from action_logs older than DAYS days.
                       Defaults to 180 days if no days specified.
+   --searchhistory DAYS  purge entries from search_history older than DAYS days.
+                         Defaults to 30 days if no days specified
+   --list-invites  DAYS  purge (unaccepted) list share invites older than DAYS
+                         days.  Defaults to 14 days if no days specified.
 USAGE
     exit $_[0];
 }
 
-my ( $help, $sessions, $sess_days, $verbose, $zebraqueue_days, $mail, $purge_merged, $pImport, $pLogs);
+my (
+    $help,            $sessions,       $sess_days,    $verbose,
+    $zebraqueue_days, $mail,           $purge_merged, $pImport,
+    $pLogs,           $pSearchhistory, $pZ3950,
+    $pListShareInvites,
+);
 
 GetOptions(
     'h|help'       => \$help,
     'sessions'     => \$sessions,
     'sessdays:i'   => \$sess_days,
     'v|verbose'    => \$verbose,
-    'm|mail'       => \$mail,
+    'm|mail:i'       => \$mail,
     'zebraqueue:i' => \$zebraqueue_days,
     'merged'       => \$purge_merged,
     'import:i'     => \$pImport,
+    'z3950'        => \$pZ3950,
     'logs:i'       => \$pLogs,
+    'searchhistory:i' => \$pSearchhistory,
+    'list-invites:i'  => \$pListShareInvites,
 ) || usage(1);
 
 $sessions=1 if $sess_days && $sess_days>0;
-# if --import, --logs or --zebraqueue were passed without number of days,
+# if --import, --logs, --zebraqueue or --searchhistory were passed without number of days,
 # use defaults
 $pImport= DEFAULT_IMPORT_PURGEDAYS if defined($pImport) && $pImport==0;
 $pLogs= DEFAULT_LOGS_PURGEDAYS if defined($pLogs) && $pLogs==0;
 $zebraqueue_days= DEFAULT_ZEBRAQ_PURGEDAYS if defined($zebraqueue_days) && $zebraqueue_days==0;
+$mail= DEFAULT_MAIL_PURGEDAYS if defined($mail) && $mail==0;
+$pSearchhistory= DEFAULT_SEARCHHISTORY_PURGEDAYS if defined($pSearchhistory) && $pSearchhistory==0;
+$pListShareInvites = DEFAULT_SHARE_INVITATION_EXPIRY_DAYS if defined($pListShareInvites) && $pListShareInvites == 0;
 
 if ($help) {
     usage(0);
 }
 
-if ( !( $sessions || $zebraqueue_days || $mail || $purge_merged || $pImport || $pLogs) ) {
+unless ( $sessions
+    || $zebraqueue_days
+    || $mail
+    || $purge_merged
+    || $pImport
+    || $pLogs
+    || $pSearchhistory
+    || $pZ3950
+    || $pListShareInvites )
+{
     print "You did not specify any cleanup work for the script to do.\n\n";
     usage(1);
 }
@@ -139,15 +171,14 @@ if ($zebraqueue_days) {
 }
 
 if ($mail) {
-    if ($verbose) {
-        $sth = $dbh->prepare("SELECT COUNT(*) FROM message_queue");
-        $sth->execute() or die $dbh->errstr;
-        my @count_arr = $sth->fetchrow_array;
-        print "Deleting $count_arr[0] entries from the mail queue.\n";
-    }
-    $sth = $dbh->prepare("TRUNCATE message_queue");
-    $sth->execute() or $dbh->errstr;
-    print "Done with purging the mail queue.\n" if ($verbose);
+    print "Mail queue purge triggered for $mail days.\n" if ($verbose);
+
+    $sth = $dbh->prepare("DELETE FROM message_queue WHERE time_queued < date_sub(curdate(), interval ? day)");
+    $sth->execute($mail) or die $dbh->errstr;
+    my $count = $sth->rows;
+    $sth->finish;
+
+    print "$count messages were deleted from the mail queue.\nDone with message_queue purge.\n" if ($verbose);
 }
 
 if($purge_merged) {
@@ -163,11 +194,34 @@ if($pImport) {
     print "Done with purging import tables.\n" if $verbose;
 }
 
+if($pZ3950) {
+    print "Purging Z39.50 records from import tables.\n" if $verbose;
+    PurgeZ3950();
+    print "Done with purging Z39.50 records from import tables.\n" if $verbose;
+}
+
 if($pLogs) {
     print "Purging records from action_logs.\n" if $verbose;
     $sth = $dbh->prepare("DELETE FROM action_logs WHERE timestamp < date_sub(curdate(), interval ? DAY)");
     $sth->execute($pLogs) or die $dbh->errstr;
     print "Done with purging action_logs.\n" if $verbose;
+}
+
+if($pSearchhistory) {
+    print "Purging records older than $pSearchhistory from search_history.\n" if $verbose;
+    PurgeSearchHistory($pSearchhistory);
+    print "Done with purging search_history.\n" if $verbose;
+}
+
+if ($pListShareInvites) {
+    print "Purging unaccepted list share invites older than $pListShareInvites days.\n" if $verbose;
+    $sth = $dbh->prepare("
+        DELETE FROM virtualshelfshares
+        WHERE invitekey IS NOT NULL
+        AND (sharedate + INTERVAL ? DAY) < NOW()
+    ");
+    $sth->execute($pListShareInvites);
+    print "Done with purging unaccepted list share invites.\n" if $verbose;
 }
 
 exit(0);
@@ -207,7 +261,7 @@ sub PurgeImportTables {
 
     # Now purge import_batches
     # Timestamp cannot be used here without care, because records are added
-    # continuously to batches without updating timestamp (z3950 search).
+    # continuously to batches without updating timestamp (Z39.50 search).
     # So we only delete older empty batches.
     # This delete will therefore not have a cascading effect.
     $sth = $dbh->prepare("DELETE ba
@@ -216,4 +270,12 @@ sub PurgeImportTables {
  WHERE re.import_record_id IS NULL AND
  ba.upload_timestamp < date_sub(curdate(), interval ? DAY)");
     $sth->execute($pImport) or die $dbh->errstr;
+}
+
+
+sub PurgeZ3950 {
+    $sth = $dbh->prepare(q{
+        DELETE FROM import_batches WHERE batch_type = 'z3950'
+    });
+    $sth->execute() or die $dbh->errstr;
 }

@@ -36,14 +36,19 @@ use C4::Context;
 use C4::Output;
 use C4::Serials;
 
+use Koha::DateUtils;
+
 my $query         = new CGI;
 my $title         = $query->param('title_filter') || '';
 my $ISSN          = $query->param('ISSN_filter') || '';
 my $EAN           = $query->param('EAN_filter') || '';
+my $callnumber    = $query->param('callnumber_filter') || '';
 my $publisher     = $query->param('publisher_filter') || '';
 my $bookseller    = $query->param('bookseller_filter') || '';
 my $biblionumber  = $query->param('biblionumber') || '';
 my $branch        = $query->param('branch_filter') || '';
+my $location      = $query->param('location_filter') || '';
+my $expiration_date = $query->param('expiration_date_filter') || '';
 my $routing       = $query->param('routing') || C4::Context->preference("RoutingSerials");
 my $searched      = $query->param('searched') || 0;
 my @subscriptionids = $query ->param('subscriptionid');
@@ -51,7 +56,7 @@ my $op            = $query->param('op');
 
 my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     {
-        template_name   => "serials/serials-search.tmpl",
+        template_name   => "serials/serials-search.tt",
         query           => $query,
         type            => "intranet",
         authnotrequired => 0,
@@ -70,6 +75,7 @@ if ( $op and $op eq "close" ) {
     }
 }
 
+my $expiration_date_dt = $expiration_date ? dt_from_string( $expiration_date ) : undef;
 my @subscriptions;
 if ($searched){
     @subscriptions = SearchSubscriptions(
@@ -78,9 +84,12 @@ if ($searched){
             title        => $title,
             issn         => $ISSN,
             ean          => $EAN,
+            callnumber   => $callnumber,
             publisher    => $publisher,
             bookseller   => $bookseller,
             branch       => $branch,
+            location     => $location,
+            expiration_date => $expiration_date_dt,
         }
     );
 }
@@ -89,16 +98,17 @@ if ($searched){
 if ($routing) {
     for my $subscription ( @subscriptions) {
         $subscription->{routingedit} = check_routing( $subscription->{subscriptionid} );
-        $subscription->{branchname} = GetBranchName ( $subscription->{branchcode} );
     }
 }
 
 my (@openedsubscriptions, @closedsubscriptions);
 for my $sub ( @subscriptions ) {
     unless ( $sub->{closed} ) {
-        push @openedsubscriptions, $sub;
+        push @openedsubscriptions, $sub
+            unless $sub->{cannotdisplay};
     } else {
-        push @closedsubscriptions, $sub;
+        push @closedsubscriptions, $sub
+            unless $sub->{cannotdisplay};
     }
 }
 
@@ -106,13 +116,14 @@ my $branches = GetBranches();
 my @branches_loop;
 foreach (sort keys %$branches){
     my $selected = 0;
-    $selected = 1 if( $branch eq $_ );
+    $selected = 1 if( defined $branch and $branch eq $_ );
     push @branches_loop, {
         branchcode  => $_,
         branchname  => $branches->{$_}->{'branchname'},
         selected    => $selected,
     };
 }
+
 
 $template->param(
     openedsubscriptions => \@openedsubscriptions,
@@ -121,9 +132,12 @@ $template->param(
     title_filter  => $title,
     ISSN_filter   => $ISSN,
     EAN_filter    => $EAN,
+    callnumber_filter => $callnumber,
     publisher_filter => $publisher,
     bookseller_filter  => $bookseller,
     branch_filter => $branch,
+    locations     => C4::Koha::GetAuthorisedValues('LOC', $location),
+    expiration_date_filter => $expiration_date_dt,
     branches_loop => \@branches_loop,
     done_searched => $searched,
     routing       => $routing,

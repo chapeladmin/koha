@@ -36,7 +36,6 @@ use C4::ImportBatch;
 use C4::Matcher;
 use C4::BackgroundJob;
 use C4::Labels::Batch;
-use C4::Branch qw(get_branch_code_from_name);
 
 my $script_name = "/cgi-bin/koha/tools/manage-marc-import.pl";
 
@@ -241,7 +240,7 @@ sub commit_batch {
         $job = put_in_background($import_batch_id);
         $callback = progress_callback($job, $dbh);
     }
-    my ($num_added, $num_updated, $num_items_added, $num_items_errored, $num_ignored) = 
+    my ($num_added, $num_updated, $num_items_added, $num_items_replaced, $num_items_errored, $num_ignored) =
         BatchCommitRecords($import_batch_id, $framework, 50, $callback);
     $dbh->commit();
 
@@ -250,6 +249,7 @@ sub commit_batch {
         num_added => $num_added,
         num_updated => $num_updated,
         num_items_added => $num_items_added,
+        num_items_replaced => $num_items_replaced,
         num_items_errored => $num_items_errored,
         num_ignored => $num_ignored
     };
@@ -352,60 +352,20 @@ sub import_records_list {
     my ($template, $import_batch_id, $offset, $results_per_page) = @_;
 
     my $batch = GetImportBatch($import_batch_id);
-    my $records = GetImportRecordsRange($import_batch_id, $offset, $results_per_page);
-    my @list = ();
-    foreach my $record (@$records) {
-        my $citation = $record->{'title'} || $record->{'authorized_heading'};
-        $citation .= " $record->{'author'}" if $record->{'author'};
-        $citation .= " (" if $record->{'issn'} or $record->{'isbn'};
-        $citation .= $record->{'isbn'} if $record->{'isbn'};
-        $citation .= ", " if $record->{'issn'} and $record->{'isbn'};
-        $citation .= $record->{'issn'} if $record->{'issn'};
-        $citation .= ")" if $record->{'issn'} or $record->{'isbn'};
-
-        my $match = GetImportRecordMatches($record->{'import_record_id'}, 1);
-        my $match_citation = '';
-        if ($#$match > -1) {
-            if ($match->[0]->{'record_type'} eq 'biblio') {
-                $match_citation .= $match->[0]->{'title'} if defined($match->[0]->{'title'});
-                $match_citation .= ' ' . $match->[0]->{'author'} if defined($match->[0]->{'author'});
-            } elsif ($match->[0]->{'record_type'} eq 'auth') {
-                $match_citation .= $match->[0]->{'authorized_heading'} if defined($match->[0]->{'authorized_heading'});
-            }
-        }
-
-        push @list,
-          { import_record_id         => $record->{'import_record_id'},
-            final_match_id           => $record->{'matched_biblionumber'} || $record->{'matched_authid'},
-            citation                 => $citation,
-            status                   => $record->{'status'},
-            record_sequence          => $record->{'record_sequence'},
-            overlay_status           => $record->{'overlay_status'},
-            # Sorry about the match_id being from the "biblionumber" field;
-            # as it turns out, any match id will go in biblionumber
-            match_id                 => $#$match > -1 ? $match->[0]->{'biblionumber'} : 0,
-            match_citation           => $match_citation,
-            match_score              => $#$match > -1 ? $match->[0]->{'score'} : 0,
-            record_type              => $record->{'record_type'},
-          };
-    }
-    my $num_records = $batch->{'num_records'};
-    $template->param(record_list => \@list);
-    add_page_numbers($template, $offset, $results_per_page, $num_records);
-    $template->param(offset => $offset);
-    $template->param(range_top => $offset + $results_per_page - 1);
-    $template->param(num_results => $num_records);
-    $template->param(results_per_page => $results_per_page);
     $template->param(import_batch_id => $import_batch_id);
+
     my $overlay_action = GetImportBatchOverlayAction($import_batch_id);
     $template->param("overlay_action_${overlay_action}" => 1);
     $template->param(overlay_action => $overlay_action);
+
     my $nomatch_action = GetImportBatchNoMatchAction($import_batch_id);
     $template->param("nomatch_action_${nomatch_action}" => 1);
     $template->param(nomatch_action => $nomatch_action);
+
     my $item_action = GetImportBatchItemAction($import_batch_id);
     $template->param("item_action_${item_action}" => 1);
     $template->param(item_action => $item_action);
+
     batch_info($template, $batch);
     
 }

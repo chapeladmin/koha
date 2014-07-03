@@ -2,30 +2,38 @@
 <title>Koha &rsaquo; Circulation &rsaquo; Hold ratios</title>
 [% INCLUDE 'doc-head-close.inc' %]
 [% INCLUDE 'calendar.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
 <script type="text/javascript">
 //<![CDATA[
-$.tablesorter.addParser({
-    id: 'articles', 
-    is: function(s) {return false;  }, 
-    format: function(s) { return s.toLowerCase().replace(/^(the|an|a) /,''); }, 
-    type: 'text' 
-});
-	 $(document).ready(function() {
-	 	$("th a").hide();
-	 	$(".ratiolimit").click(function () {
+     $(document).ready(function() {
+        $(".ratiolimit").click(function () {
             $("#ratio").val($(this).html());
         });
-	 	$(".ratiolimit").hover(
+        $(".ratiolimit").hover(
             function () { $(this).toggleClass("ulined") },
             function () { $(this).toggleClass("ulined") }
         );
-		$.tablesorter.defaults.widgets = ['zebra']; 
-		$("#holdst:has(tbody tr)").tablesorter({    // only add sort if the table has a body and rows
-			sortList: [[0,1]],
-			headers: { 1: { sorter: 'articles' }}
-        });
-	 });
+        $("#holdst").dataTable($.extend(true, {}, dataTablesDefaults, {
+            "aaSorting": [ [0,'desc'], [3,'asc'] ],
+            "aoColumnDefs": [
+                { "aTargets": [ 8 ], "sType": "natural" },
+                { "aTargets": [ 3 ], "sType": "anti-the" }
+            ],
+            "aoColumns": [
+                null,
+                null,
+                null,
+                { "sType": "anti-the" },
+                null,
+                null,
+                null,
+                null,
+                null
+            ],
+            "sPaginationType": "four_button"
+        }));
+     });
 //]]>
 </script>
 <style type="text/css">
@@ -41,59 +49,47 @@ $.tablesorter.addParser({
 <div id="breadcrumbs"><a href="/cgi-bin/koha/mainpage.pl">Home</a> &rsaquo; <a href="/cgi-bin/koha/circ/circulation-home.pl">Circulation</a> &rsaquo; Hold ratios</div>
 
 <div id="doc3" class="yui-t2">
-   
    <div id="bd">
-	<div id="yui-main">
-	<div class="yui-b">
+    <div id="yui-main">
+    <div class="yui-b">
 <h1>Hold ratios to calculate items needed</h1>
    <h3>Calculated on [% todaysdate %]. From [% from %]
-	to [% to %]</h3>
+    to [% to %]</h3>
 <p>These items have a hold ratio &ge; [% ratio %].</p>
 <div class="sql">[% sql %]</div>
 
 [% IF ( reserveloop ) %]
     <table id="holdst">
-<thead>    <tr>
-        <th>Holds
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=reservecount&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Items
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=itemcount&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Hold ratio</th>
-        <th>Title
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=biblio&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Holding libraries
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=branch&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Location
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=location&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Itype
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=itype&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Call numbers
-        <a href="/cgi-bin/koha/circ/reserveratios.pl?ratio=[% ratio %]&amp;order=callnumber&amp;from=[% from %]&amp;to=[% to %]">Sort</a>
-        </th>
-        <th>Items needed
-        </th>
-    </tr></thead>
-    
-    <tbody>[% FOREACH reserveloo IN reserveloop %]
+      <thead>
         <tr>
-           	<td><p>[% reserveloo.reservecount %]</p></td>
-           	<td><p>[% reserveloo.itemcount %]</p></td>
-           	<td><p class="ratiolimit">[% reserveloo.thisratio %]</p></td>
+          <th>Holds</th>
+          <th>Items</th>
+          <th>Hold ratio</th>
+          <th>Title</th>
+          <th>Holding libraries</th>
+          <th>Location</th>
+          <th>Itype</th>
+          <th>Call numbers</th>
+          <th>Items needed</th>
+        </tr>
+      </thead>
+      <tbody>
+      [% FOREACH reserveloo IN reserveloop %]
+        <tr>
+            <td><p>[% reserveloo.reservecount %]</p></td>
+            <td><p>[% reserveloo.itemcount %]</p></td>
+            <td><p class="ratiolimit">[% reserveloo.thisratio %]</p></td>
             <td> [% INCLUDE 'biblio-default-view.inc' biblionumber = reserveloo.biblionumber %][% reserveloo.title |html %] [% IF ( reserveloo.subtitle ) %][% FOREACH subtitl IN reserveloo.subtitle %][% subtitl.subfield %][% END %][% END %]</a>[% IF ( reserveloo.author ) %] by [% reserveloo.author %][% END %]
             </td>
             <td><p>[% reserveloo.listbranch %]</p></td>
             <td><p>[% reserveloo.location %]</p></td>
             <td><p>[% reserveloo.itype %]</p></td>
             <td><p>[% reserveloo.listcall %]</p></td>
-            <td>[% IF ( reserveloo.thisratio_atleast1 ) %]<p><b>[% reserveloo.ratiocalc %] to order</b></p>[% END %]</td>
+            <td>[% IF ( reserveloo.thisratio_atleast1 ) %]<p>[% IF ( CAN_user_acquisition && basketno && booksellerid ) %]<!-- [% reserveloo.ratiocalc %] --><a href="/cgi-bin/koha/acqui/neworderempty.pl?biblionumber=[% reserveloo.biblionumber %]&amp;booksellerid=[% booksellerid %]&amp;basketno=[% basketno %]&amp;rr_quantity_to_order=[% reserveloo.ratiocalc %]">[% END %]<b>[% reserveloo.ratiocalc %] to order</b>[% IF ( CAN_user_acquisition && basketno && booksellerid ) %]</a>[% END %]
+            [% IF ( reserveloo.pendingorders ) %]<br><b>[% reserveloo.pendingorders %] pending</b>[% END %]</p>[% END %]</td>
         </tr>
-    [% END %]</tbody>
+      [% END %]
+      </tbody>
     </table>
     [% ELSE %]
         <b>No items found.</b>
@@ -122,6 +118,10 @@ $.tablesorter.addParser({
 
 <fieldset class="action"><input type="submit" value="Go" class="submit"/></fieldset>
 </fieldset>
+[% IF ( CAN_user_acquisition && basketno && booksellerid ) %]
+<input type="hidden" name="booksellerid" value="[% booksellerid %]" />
+<input type="hidden" name="basketno" value="[% basketno %]" />
+[% END %]
 </form>
 
 </div>

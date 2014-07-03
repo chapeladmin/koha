@@ -12,10 +12,8 @@
 </title>
 [% INCLUDE 'doc-head-close.inc' %]
 <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-[% INCLUDE 'datatables-strings.inc' %]
-<script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
-<script type="text/javascript" src="[% themelang %]/js/tinymce/jscripts/tiny_mce/tiny_mce.js"></script>
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript" src="[% interface %]/lib/tiny_mce/tiny_mce.js"></script>
 <script type="text/javascript">
 //<![CDATA[
     $(document).ready(function() {
@@ -24,7 +22,6 @@
                 { "aTargets": [ -1, -2 ], "bSortable": false, "bSearchable": false },
             ],
             "iDisplayLength": 10,
-            "aLengthMenu": [[10, 20, 50, 100, -1], [10, 20, 50, 100, "All"]],
             "sPaginationType": "four_button"
         }));
     });
@@ -32,17 +29,15 @@ tinyMCE.init({
     mode : "textareas",
     theme : "advanced",
     content_css : "[% themelang %]/css/tinymce.css",
-    plugins : "table,save,advhr,advlink,iespell,contextmenu",
+    plugins : "table,save,advhr,advlink,contextmenu",
     theme_advanced_buttons1 : "save,|,bold,italic,|,cut,copy,paste,|,justifyleft,justifycenter,justifyright,justifyfull,|,formatselect,|,link,unlink,anchor,cleanup,help,code,advhr,",
     theme_advanced_buttons2 : "tablecontrols,|,bullist,numlist,|,outdent,indent,|,undo,redo,|,removeformat,|,visualaid,|,sub,sup,|,charmap",
-    theme_advanced_buttons3 : "",
+    // theme_advanced_buttons3 : "",
     theme_advanced_toolbar_location : "top",
     theme_advanced_toolbar_align : "left",
     theme_advanced_path_location : "bottom",
     theme_advanced_resizing : true,
-    apply_source_formatting : true,
-    height : "300",
-    width : "700"
+    apply_source_formatting : true
 });
 //]]>
 </script>
@@ -81,7 +76,7 @@ tinyMCE.init({
 [% IF ( add ) %]
     [% IF ( ERROR1 ) %]<div class="dialog message">Library with that code already exists &mdash; Please enter a unique code</div>[% END %]
   <h3>[% IF ( heading_branches_add_branch_p ) %]New library[% ELSE %]Modify library[% END %]</h3>
-    <form action="[% action %]" name="Aform" method="post">
+    <form action="[% action %]" id="Aform" name="Aform" class="validated" method="post">
 	<fieldset class="rows">
         <input type="hidden" name="op" value="add_validate" />
         [% IF ( heading_branches_add_branch_p ) %]
@@ -91,25 +86,25 @@ tinyMCE.init({
         [% END %]
         <ol><li>
             [% IF ( heading_branches_add_branch_p ) %]
-            <label for="branchcode">Library code</label>
-                <input type="text" name="branchcode" id="branchcode" size="10" maxlength="10" value="[% branchcode |html %]" />
+            <label for="branchcode" class="required">Library code: </label>
+                <input type="text" name="branchcode" id="branchcode" size="10" maxlength="10" value="[% branchcode |html %]" class="required" required="required" /> <span class="required">Required</span>
             [% ELSE %]
-			<label for="branchcode">Library code</label>
+            <span class="label">Library code: </span>
                 <input type="hidden" name="branchcode" value="[% branchcode |html %]" />
                 [% branchcode %]
             [% END %]
         </li>
         <li>
-            <label for="branchname">Name</label>
-            <input type="text" name="branchname" id="branchname" size="80" value="[% branch_name |html %]" />&nbsp;
+            <label for="branchname" class="required">Name: </label>
+            <input type="text" name="branchname" id="branchname" size="80" value="[% branch_name |html %]" class="required" required="required" /> <span class="required">Required</span>
         </li>
 	</ol>
 	</fieldset>
 	[% IF ( categoryloop ) %]<fieldset class="rows"><legend>Group(s):</legend>
         <ol>
 		[% FOREACH categoryloo IN categoryloop %]
-            <li><label for="[% categoryloo.categorycode %]">[% categoryloo.categoryname %]</label>
-                [% IF ( categoryloo.checked ) %]
+            <li><label for="[% categoryloo.categorycode %]">[% categoryloo.categoryname %]: </label>
+                [% IF categoryloo.selected %]
                     <input type="checkbox" id="[% categoryloo.categorycode %]" name="[% categoryloo.categorycode %]" checked="checked" />
                 [% ELSE %]
                     <input type="checkbox" id="[% categoryloo.categorycode %]" name="[% categoryloo.categorycode %]" />
@@ -121,21 +116,21 @@ tinyMCE.init({
 </fieldset>[% END %]
 	<fieldset class="rows">
 	<ol>
-        <li><label for="branchaddress1">Address line 1</label><input type="text" name="branchaddress1" id="branchaddress1" value="[% branchaddress1 |html %]" /></li>
-        <li><label for="branchaddress2">Address line 2</label><input type="text" name="branchaddress2" id="branchaddress2" value="[% branchaddress2 |html %]" /></li>
-        <li><label for="branchaddress3">Address line 3</label><input type="text" name="branchaddress3" id="branchaddress3" value="[% branchaddress3 |html %]" /></li>
-        <li><label for="branchcity">City</label><input type="text" name="branchcity" id="branchcity" value="[% branchcity |html %]" /></li>
-        <li><label for="branchstate">State</label><input type="text" name="branchstate" id="branchstate" value="[% branchstate |html %]" /></li>
-        <li><label for="branchzip">Zip/Postal code</label><input type="text" name="branchzip" id="branchzip" value="[% branchzip |html %]" /></li>
-        <li><label for="branchcountry">Country</label><input type="text" name="branchcountry" id="branchcountry" value="[% branchcountry |html %]" /></li>
-        <li><label for="branchphone">Phone</label><input type="text" name="branchphone" id="branchphone" value="[% branchphone |html %]" /></li>
-        <li><label for="branchfax">Fax</label><input type="text" name="branchfax" id="branchfax" value="[% branchfax |html %]" /></li>
-        <li><label for="branchemail">Email</label><input type="text" name="branchemail" id="branchemail" value="[% branchemail |html %]" /></li>
-        <li><label for="branchurl">URL</label><input type="text" name="branchurl" id="branchurl" value="[% branchurl |html %]" /></li>
-        <li><label for="opac_info">OPAC info</label><textarea name="opac_info" id="opac_info">[% opac_info |html %]</textarea></li>
-        <li><label for="branchip">IP</label><input type="text" name="branchip" id="branchip" value="[% branchip |html %]" /> <span class="hint">Can be entered as a single IP, or a subnet such as 192.168.1.*</span></li>
+        <li><label for="branchaddress1">Address line 1: </label><input type="text" name="branchaddress1" id="branchaddress1" size="60" value="[% branchaddress1 |html %]" /></li>
+        <li><label for="branchaddress2">Address line 2: </label><input type="text" name="branchaddress2" id="branchaddress2" size="60" value="[% branchaddress2 |html %]" /></li>
+        <li><label for="branchaddress3">Address line 3: </label><input type="text" name="branchaddress3" id="branchaddress3" size="60" value="[% branchaddress3 |html %]" /></li>
+        <li><label for="branchcity">City: </label><input type="text" name="branchcity" id="branchcity" size="60" value="[% branchcity |html %]" /></li>
+        <li><label for="branchstate">State: </label><input type="text" name="branchstate" id="branchstate" size="60" value="[% branchstate |html %]" /></li>
+        <li><label for="branchzip">Zip/Postal code: </label><input type="text" name="branchzip" id="branchzip"  size="25" maxlength="25" value="[% branchzip |html %]" /></li>
+        <li><label for="branchcountry">Country: </label><input type="text" name="branchcountry" id="branchcountry" size="60" value="[% branchcountry |html %]" /></li>
+        <li><label for="branchphone">Phone: </label><input type="text" name="branchphone" id="branchphone" size="60" value="[% branchphone |html %]" /></li>
+        <li><label for="branchfax">Fax: </label><input type="text" name="branchfax" id="branchfax" size="60" value="[% branchfax |html %]" /></li>
+        <li><label for="branchemail">Email: </label><input type="text" name="branchemail" id="branchemail" class="email"  size="80" value="[% branchemail |html %]" /></li>
+        <li><label for="branchurl">URL: </label><input type="text" name="branchurl" id="branchurl"  size="80" value="[% branchurl |html %]" class="url" /></li>
+        <li><label for="opac_info">OPAC info: </label><textarea name="opac_info" id="opac_info">[% opac_info |html %]</textarea></li>
+        <li><label for="branchip">IP: </label><input type="text" name="branchip" id="branchip"  size="15" maxlength="15" value="[% branchip |html %]" /> <span class="hint">Can be entered as a single IP, or a subnet such as 192.168.1.*</span></li>
 		<!--
-        <li><label for="branchprinter">Library Printer</label>
+        <li><label for="branchprinter">Library Printer: </label>
             <select id="branchprinter" name="branchprinter">
                 <option value="">None</option>
             [% FOREACH printerloo IN printerloop %]
@@ -147,7 +142,7 @@ tinyMCE.init({
                 [% END %]
             </select></li>
 			-->
-        <li><label for="branchnotes">Notes</label><input type="text" name="branchnotes" id="branchnotes" value="[% branchnotes |html %]" /></li>
+        <li><label for="branchnotes">Notes: </label><input type="text" name="branchnotes" id="branchnotes" size="80" value="[% branchnotes |html %]" /></li>
         </ol>
         </fieldset>
         <fieldset class="action"><input type="submit" value="Submit" /> <a class="cancel" href="/cgi-bin/koha/admin/branches.pl">Cancel</a></fieldset>
@@ -335,6 +330,14 @@ tinyMCE.init({
             [% END %]
             </select>
 		</li>
+        <li>
+            <label for="show_in_pulldown">Show in search pulldown: </label>
+            [% IF ( show_in_pulldown ) %]
+                <input type="checkbox" name="show_in_pulldown" id="show_in_pulldown" checked="checked"/>
+            [% ELSE %]
+                <input type="checkbox" name="show_in_pulldown" id="show_in_pulldown" />
+            [% END %]
+        </li>
 		</ol>
     </fieldset>
 	<fieldset class="action"><input type="submit" value="Update" /></fieldset>

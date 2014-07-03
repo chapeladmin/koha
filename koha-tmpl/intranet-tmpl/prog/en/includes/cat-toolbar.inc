@@ -18,7 +18,7 @@
 	function GetZ3950Terms(){
 		var strQuery="&frameworkcode=";
 		[% FOREACH z3950_search_param IN z3950_search_params %]
-			strQuery += "&" + "[% z3950_search_param.name |html %]" + "=" + "[% z3950_search_param.encvalue |html %]";
+            strQuery += "&" + "[% z3950_search_param.name |uri %]" + "=" + "[% z3950_search_param.value |uri %]";
 		[% END %]
 		return strQuery;
 	}
@@ -31,16 +31,31 @@
     function confirm_deletion() {
         var count = [% count %];
         var holdcount = [% holdcount %];
-
+        var countorders = [% countorders %];
+        var countdeletedorders = [% countdeletedorders %];
         var is_confirmed;
 	if (count > 0){
-            is_confirmed = alert( count + " " +_("item(s) are attached to this record.\nYou must delete all items before deleting this record.") );
-        } else if ( holdcount > 0 ) {
-            is_confirmed = confirm( holdcount + " " + _("holds(s) for this record \n Are you sure you want to delete this record?."));
+            is_confirmed = alert( _("%s item(s) are attached to this record. You must delete all items before deleting this record.").format(count) );
+         }
+        else if (countorders > 0){
+            [% IF ( CAN_user_acquisition_order_manage ) %]
+                is_confirmed = confirm( _("Warning: This record is used in %s order(s). Deleting it could cause serious issues on acquisition module. Are you sure you want to delete this record?").format(countorders) );
+            [% ELSE %]
+                is_confirmed = alert( _("%s order(s) are using this record. You need order managing permissions to delete this record.").format(countorders) );
+            [% END %]
+        }
+        else if (countdeletedorders > 0){
+             [% IF ( CAN_user_acquisition_order_manage ) %]
+                 is_confirmed = confirm( _("%s deleted order(s) are using this record. Are you sure you want to delete this record?").format(countdeletedorders) );
+             [% ELSE %]
+                 is_confirmed = alert( _("%s deleted order(s) are using this record. You need order managing permissions to delete this record.").format(countdeletedorders) );
+             [% END %]
+        }
+        else if ( holdcount > 0 ) {
+            is_confirmed = confirm( _("%s holds(s) for this record. Are you sure you want to delete this record?").format(holdcount) );
         } else {
             is_confirmed = confirm(_("Are you sure you want to delete this record?"));
         }
-
         if (is_confirmed) {
             if ( count > 0 || holdcount > 0 ){
                 return false;
@@ -59,17 +74,20 @@
         var holdcount = [% holdcount %];
 
         if ( holdcount > 0 ) {
-            alert( holdcount + " " + _("holds(s) for this record \n You must delete all holds before deleting all items.") );
+            alert( _("%s hold(s) on this record. You must delete all holds before deleting all items.").format(holdcount) );
         } else if ( count > 0 ) {
-            if( confirm( _("Are you sure you want to delete the") + " " + count + " " + _("attached items?") ) ) {
+            if( confirm( _("Are you sure you want to delete the %s attached items?").format(count) ) ) {
                 window.location="/cgi-bin/koha/cataloguing/additem.pl?op=delallitems&amp;biblionumber=[% biblionumber %]";
             } else {
                 return false;
             }
         } else {
-            alert(_("This record has no items."));
+            alertNoItems();
             return false;
         }
+    }
+    function alertNoItems(){
+        alert(_("This record has no items."));
     }
 [% END %]
 	 $(document).ready(function() {
@@ -100,6 +118,13 @@
             return false;
         });
         $("#export").remove(); // Hide embedded export form if JS menus available
+        $("#deletebiblio").tooltip();
+        $("#batchedit-disabled,#batchdelete-disabled,#deleteallitems-disabled")
+            .on("click",function(e){
+                e.preventDefault();
+                alertNoItems();
+            })
+            .tooltip();
 	 });
 	//]]>
 	</script>
@@ -134,6 +159,7 @@ CAN_user_serials_create_subscription ) %]
     </div>
 [% END %]
 
+[% IF ( CAN_user_editcatalogue_edit_catalogue || CAN_user_editcatalogue_edit_items || CAN_user_tools_items_batchmod || CAN_user_tools_items_batchdel ) %]
     <div class="btn-group">
     <button class="btn btn-small dropdown-toggle" data-toggle="dropdown"><i class="icon-pencil"></i> Edit <span class="caret"></span></button>
         <ul class="dropdown-menu">
@@ -145,9 +171,21 @@ CAN_user_serials_create_subscription ) %]
             <li><a id="edititems" href="/cgi-bin/koha/cataloguing/additem.pl?biblionumber=[% biblionumber %]">Edit items</a></li>
             [% END %]
 
-            [% IF ( CAN_user_tools_items_batchmod ) %]<li><a href="/cgi-bin/koha/tools/batchMod.pl?op=show&amp;biblionumber=[% biblionumber %]&amp;src=CATALOGUING">Edit items in batch</a></li>[% END %]
+            [% IF ( CAN_user_tools_items_batchmod ) %]
+                [% IF ( count ) %]
+                    <li><a id="batchedit" href="/cgi-bin/koha/tools/batchMod.pl?op=show&amp;biblionumber=[% biblionumber %]&amp;src=CATALOGUING">Edit items in batch</a></li>
+                [% ELSE %]
+                    <li class="disabled"><a id="batchedit-disabled" href="#" data-toggle="tooltip" data-placement="left" title="This record has no items">Edit items in batch</a></li>
+                [% END %]
+            [% END %]
 
-            [% IF ( CAN_user_tools_items_batchdel ) %]<li><a href="/cgi-bin/koha/tools/batchMod.pl?del=1&amp;op=show&amp;biblionumber=[% biblionumber %]&amp;src=CATALOGUING">Delete items in a batch</a></li>[% END %]
+            [% IF ( CAN_user_tools_items_batchdel ) %]
+                [% IF ( count ) %]
+                    <li><a id="batchdelete" href="/cgi-bin/koha/tools/batchMod.pl?del=1&amp;op=show&amp;biblionumber=[% biblionumber %]&amp;src=CATALOGUING">Delete items in a batch</a></li>
+                [% ELSE %]
+                    <li class="disabled"><a id="batchdelete-disabled" href="#" data-toggle="tooltip" data-placement="left" title="This record has no items">Delete items in a batch</a></li>
+                [% END %]
+            [% END %]
 
             [% IF ( CAN_user_editcatalogue_edit_items ) %]<li><a href="/cgi-bin/koha/cataloguing/moveitem.pl?biblionumber=[% biblionumber %]">Attach item</a></li>[% END %]
 
@@ -158,28 +196,36 @@ CAN_user_serials_create_subscription ) %]
             <li><a id="duplicatebiblio" href="/cgi-bin/koha/cataloguing/addbiblio.pl?biblionumber=[% biblionumber %]&amp;frameworkcode=[% current_framework %]&amp;op=duplicate">Edit as new (duplicate)</a></li>
             <li><a href="#" id="z3950copy">Replace record via Z39.50</a></li>
 
-            [% IF ( count ) %]<li class="disabled">[% ELSE %]<li>[% END %]
-            <a id="deletebiblio" href="/cgi-bin/koha/cataloguing/addbiblio.pl?op=delete&amp;biblionumber=[% biblionumber %]">Delete record</a></li>
+                [% IF ( count ) %]
+                    <li class="disabled"><a id="deletebiblio" data-toggle="tooltip" data-placement="left" title="[% count %] item(s) are attached to this record. You must delete all items before deleting this record." href="#">Delete record</a></li>
+                [% ELSE %]
+                    <li><a id="deletebiblio" href="/cgi-bin/koha/cataloguing/addbiblio.pl?op=delete&amp;biblionumber=[% biblionumber %]">Delete record</a></li>
+                [% END %]
             [% END %]
 
             [% IF ( CAN_user_editcatalogue_edit_items ) %]
-            [% UNLESS ( count ) %]<li class="disabled">[% ELSE %]<li>[% END %]<li>
-            <a href="#" id="deleteallitems">Delete all items</a></li>
+                [% IF ( count ) %]
+                    <li><a href="#" id="deleteallitems">Delete all items</a></li>
+                [% ELSE %]
+                    <li class="disabled"><a href="#" id="deleteallitems-disabled" data-toggle="tooltip" data-placement="left" title="This record has no items">Delete all items</a></li>
+                [% END %]
             [% END %]
 
     </ul>
     </div>
+[% END %]
 
     <div class="btn-group">
     <button class="btn btn-small dropdown-toggle" data-toggle="dropdown"><i class="icon-download-alt"></i> Save <span class="caret"></span></button>
     <ul class="dropdown-menu">
-        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=mods&amp;op=export&amp;bib=[% biblionumber %]">MODS (XML)</a></li>
-        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=dc&amp;op=export&amp;bib=[% biblionumber %]
-">Dublic Core (XML)</a></li>
+        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=bibtex&amp;op=export&amp;bib=[% biblionumber %]">BIBTEX</a></li>
+        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=dc&amp;op=export&amp;bib=[% biblionumber %]">Dublin Core (XML)</a></li>
         <li><a href="/cgi-bin/koha/catalogue/export.pl?format=marcxml&amp;op=export&amp;bib=[% biblionumber %]">MARCXML</a></li>
         <li><a href="/cgi-bin/koha/catalogue/export.pl?format=marc8&amp;op=export&amp;bib=[% biblionumber %]">MARC (non-Unicode/MARC-8)</a></li>
-        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=utf8&amp;op=export&amp;bib=[% biblionumber %]">MARC (Unicode/UTF-8</a></li>
+        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=utf8&amp;op=export&amp;bib=[% biblionumber %]">MARC (Unicode/UTF-8)</a></li>
         <li><a href="/cgi-bin/koha/catalogue/export.pl?format=marcstd&amp;op=export&amp;bib=[% biblionumber %]">MARC (Unicode/UTF-8, Standard)</a></li>
+        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=mods&amp;op=export&amp;bib=[% biblionumber %]">MODS (XML)</a></li>
+        <li><a href="/cgi-bin/koha/catalogue/export.pl?format=ris&amp;op=export&amp;bib=[% biblionumber %]">RIS</a></li>
     </ul>
     </div>
 
@@ -188,11 +234,11 @@ CAN_user_serials_create_subscription ) %]
     <button class="btn btn-small dropdown-toggle" data-toggle="dropdown">Add to <span class="caret"></span></button>
     <ul class="dropdown-menu">
         <li><a href="#" id="addtocart">Cart</a></li>
-        <li><a id="addtoshelf" href="/cgi-bin/koha/virtualshelves/addbybiblionumber.pl?biblionumber=[% biblionumber %]">List</a></li>
+        <li><a href="#" id="addtoshelf">List</a></li>
     </ul>
     </div>
 [% ELSIF ( virtualshelves ) %]
-    <div class="btn-group"><a id="addtoshelf" class="btn btn-small" href="/cgi-bin/koha/virtualshelves/addbybiblionumber.pl?biblionumber=[% biblionumber %]"><i class="icon-list"></i> Add to list</a> </div>
+    <div class="btn-group"><a id="addtoshelf" class="btn btn-small"><i class="icon-list"></i> Add to list</a> </div>
 [% ELSIF ( intranetbookbag ) %]
     <div class="btn-group"><a id="addtocart" class="btn btn-small"><i class="icon-shopping-cart"></i> Add to cart</a> </div>
 [% END %]
@@ -203,14 +249,15 @@ CAN_user_serials_create_subscription ) %]
     [% UNLESS ( norequests ) %]
         [% IF ( holdfor ) %]
             <div class="btn-group">
-            <button class="btn btn-small"><i class="icon-hold"></i> Place hold</button>
-            <button class="btn btn-small dropdown-toggle" data-toggle="dropdown">
-                <span class="caret"></span>
-            </button>
-            <ul class="dropdown-menu">
-                <li><a href="/cgi-bin/koha/reserve/request.pl?biblionumber=[% biblionumber %]">Place hold</a></li>
-                <li><a href="/cgi-bin/koha/reserve/request.pl?biblionumber=[% biblionumber %]&amp;findborrower=[% holdfor_cardnumber %]">Place hold for [% holdfor_firstname %] [% holdfor_surname %] ([% holdfor_cardnumber %])</a></li>
-            </ul>
+                <button class="btn btn-small dropdown-toggle" data-toggle="dropdown">
+                    <i class="icon-hold"></i>
+                    Place hold
+                    <span class="caret"></span>
+                </button>
+                <ul class="dropdown-menu">
+                    <li><a href="/cgi-bin/koha/reserve/request.pl?biblionumber=[% biblionumber %]">Place hold</a></li>
+                    <li><a href="/cgi-bin/koha/reserve/request.pl?biblionumber=[% biblionumber %]&amp;findborrower=[% holdfor_cardnumber %]">Place hold for [% holdfor_firstname %] [% holdfor_surname %] ([% holdfor_cardnumber %])</a></li>
+                </ul>
             </div>
         [% ELSE %]
             <div class="btn-group"><a id="placehold" class="btn btn-small" href="/cgi-bin/koha/reserve/request.pl?biblionumber=[% biblionumber %]"><i class="icon-hold"></i> Place hold</a></div>

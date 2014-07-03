@@ -97,16 +97,26 @@ function hideAllColumns(){
 
   $(document).ready(function() {
     hideColumns();
-    $("#itemst").tablesorter({
-      widgets : ['zebra'],
-      headers: {0:{sorter: false}}
-    });
+    $("#itemst").dataTable($.extend(true, {}, dataTablesDefaults, {
+        "sDom": 't',
+        "aoColumnDefs": [
+            { "aTargets": [ 0 ], "bSortable": false, "bSearchable": false },
+            { "sType": "anti-the", "aTargets" : [ "anti-the" ] }
+        ],
+        "bPaginate": false,
+    }));
     $("#selectallbutton").click(function(){
       $("#itemst").checkCheckboxes();
       return false;
     });
     $("#clearallbutton").click(function(){
       $("#itemst").unCheckCheckboxes();
+      return false;
+    });
+    $("#clearonloanbutton").click(function(){
+      $("#itemst input[name='itemnumber'][data-is-onloan='1']").each(function(){
+        $(this).attr('checked', false);
+      });
       return false;
     });
     $("#selections input").change(function(e){

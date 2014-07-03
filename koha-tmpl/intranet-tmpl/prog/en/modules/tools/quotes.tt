@@ -1,13 +1,11 @@
     [% INCLUDE 'doc-head-open.inc' %]
     <title>Koha &rsaquo; Tools &rsaquo; Quote editor</title>
     [% INCLUDE 'doc-head-close.inc' %]
-    <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
     <link rel="stylesheet" type="text/css" href="[% themelang %]/css/quotes.css" />
-    <script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-    <script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/dataTables.fnReloadAjax.js"></script>
-    [% INCLUDE 'datatables-strings.inc' %]
-    <script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
-    <script type="text/javascript" src="[% themelang %]/js/jquery.jeditable.mini.js"></script>
+    <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+    [% INCLUDE 'datatables.inc' %]
+    <script type="text/javascript" src="[% interface %]/lib/jquery/plugins/dataTables.fnReloadAjax.js"></script>
+    <script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.jeditable.mini.js"></script>
     <script type="text/javascript">
     //<![CDATA[
     var MSG_ID_HELP = _("Click on the quote's id to select or deselect the quote. Multiple quotes may be selected.");
@@ -22,6 +20,7 @@
                     "bProcessing"       : true,
                     "bPaginate"         : true,
                     "sPaginationType"   : "full_numbers",
+                    "sDom": '<"top pager"iflp>rt<"bottom pager"flp><"clear">',
                     "sAjaxSource"       : "/cgi-bin/koha/tools/quotes/quotes_ajax.pl",
                     "aoColumns"         : [
                                             { "sWidth": "3%"  },
@@ -117,6 +116,7 @@
                                     var aRow = oTable.fnUpdate(
                                         newQuote,
                                         node,
+                                        undefined,
                                         false,
                                         false
                                     );
@@ -161,7 +161,7 @@
             if (!idsToDelete) {
                 alert(_("Please select a quote(s) by clicking the quote id(s) you desire to delete."));
             }
-            else if (confirm(_("Are you sure you wish to delete quote(s) ")+idsToDelete+"?")) {
+            else if (confirm(_("Are you sure you wish to delete quote(s) %s?").format(idsToDelete))) {
                 oTable.$('.selected').each(function(){
                         var quoteID = $(this).attr('id');
                             $.ajax({

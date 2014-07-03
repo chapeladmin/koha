@@ -149,7 +149,8 @@ for ( my $tabloop = 0 ; $tabloop <= 10 ; $tabloop++ ) {
         $subfield_data{marc_tag}      = '000';
         push( @subfields_data, \%subfield_data );
         my %tag_data;
-        $tag_data{tag} = '000 -' . $tagslib->{'000'}->{lib};
+        $tag_data{tag} = '000';
+        $tag_data{tag_desc} = $tagslib->{'000'}->{lib};
         my @tmp = @subfields_data;
         $tag_data{subfield} = \@tmp;
         push( @loop_data, \%tag_data );
@@ -236,12 +237,9 @@ for ( my $tabloop = 0 ; $tabloop <= 10 ; $tabloop++ ) {
                     $tag_data{tag} = $tagslib->{ $fields[$x_i]->tag() }->{lib};
                 }
                 else {
-                    $tag_data{tag} =
-                        $fields[$x_i]->tag() 
-                      . ' '
-                      . C4::Koha::display_marc_indicators($fields[$x_i])
-                      . ' - '
-                      . $tagslib->{ $fields[$x_i]->tag() }->{lib};
+                    $tag_data{tag} = $fields[$x_i]->tag();
+            $tag_data{tag_ind} = C4::Koha::display_marc_indicators($fields[$x_i]);
+            $tag_data{tag_desc} = $tagslib->{ $fields[$x_i]->tag() }->{lib};
                 }
             }
             my @tmp = @subfields_data;
@@ -333,9 +331,39 @@ $template->param (
 	marcview => 1,
 	z3950_search_params		=> C4::Search::z3950_search_args($biblio),
 	C4::Search::enabled_staff_search_views,
+    searchid            => $query->param('searchid'),
 );
 
-my ( $holdcount, $holds ) = C4::Reserves::GetReservesFromBiblionumber($biblionumber,1);
-$template->param( holdcount => $holdcount, holds => $holds );
+my @allorders_using_biblio = GetOrdersByBiblionumber ($biblionumber);
+my @deletedorders_using_biblio;
+my @orders_using_biblio;
+my @baskets_orders;
+my @baskets_deletedorders;
+
+foreach my $myorder (@allorders_using_biblio) {
+    my $basket = $myorder->{'basketno'};
+    if ((defined $myorder->{'datecancellationprinted'}) and  ($myorder->{'datecancellationprinted'} ne '0000-00-00') ){
+        push @deletedorders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_deletedorders)){
+            push @baskets_deletedorders,$myorder->{'basketno'};
+        }
+    }
+    else {
+        push @orders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_orders)){
+            push @baskets_orders,$myorder->{'basketno'};
+            }
+    }
+}
+
+my $count_orders_using_biblio = scalar @orders_using_biblio ;
+$template->param (countorders => $count_orders_using_biblio);
+
+my $count_deletedorders_using_biblio = scalar @deletedorders_using_biblio ;
+$template->param (countdeletedorders => $count_deletedorders_using_biblio);
+
+my $holds = C4::Reserves::GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
+my $holdcount = scalar( @$holds );
+$template->param( holdcount => scalar ( @$holds ) );
 
 output_html_with_http_headers $query, $cookie, $template->output;

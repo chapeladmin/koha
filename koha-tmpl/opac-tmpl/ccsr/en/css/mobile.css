@@ -10,7 +10,6 @@ body#opac-main #login,
 body#opac-main #login~div,
 body#opac-main #opacnav,
 body#opac-main #opacmainuserblock,
-body#opac-main #news,
 body#results #facetcontainer,
 body#opac-detail #ulactioncontainer>:not(#action),
 body#opac-detail #ulactioncontainer #action a:not(.reserve),
@@ -107,6 +106,11 @@ body#opac-main #container #ctn_lt{
 
 body#opac-main #opacmainuserblockmobile {
     display: block;
+}
+
+#news.container {
+    display: block;
+    margin: 0em;
 }
 
 
@@ -494,7 +498,7 @@ body#opac-holds #bibitemloop>tbody>tr:not(.copiesrow) td.expiration_date:before 
 body#opac-holds #bibitemloop>tbody>tr:not(.copiesrow) td.place_on_type:before {content: "Place On : ";}
 body#opac-holds #bibitemloop>tbody>tr:not(.copiesrow) td.branch:before {content: "Pickup Location : ";}
 
-body#opac-holds #bibitemloop table td.copy:before {content: "Copy : ";}
+body#opac-holds #bibitemloop table td.copynumber:before {content: "Copy Number : ";}
 body#opac-holds #bibitemloop table td.itype:before {content: "Item Type : ";}
 body#opac-holds #bibitemloop table td.barcode:before {content: "Barcode : ";}
 body#opac-holds #bibitemloop table td.homebranch:before {content: "Home Library : ";}

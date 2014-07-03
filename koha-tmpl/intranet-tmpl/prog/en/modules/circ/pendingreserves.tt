@@ -1,21 +1,41 @@
+[% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Circulation &rsaquo; Holds to pull</title>
 [% INCLUDE 'doc-head-close.inc' %]
 [% INCLUDE 'calendar.inc' %]
 <!-- Plugin datatables -->
 <link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.dataTables.min.js"></script>
-<script type="text/javascript" src="[% themelang %]/js/datatables.js"></script>
-<script type="text/JavaScript" language="JavaScript">
+[% INCLUDE 'datatables.inc' %]
+<script type="text/JavaScript">
 //<![CDATA[
 $(document).ready(function() {
-  [% IF (dateformat == 'metric') %]
-      dt_add_type_uk_date();
-  [% END %]
   var holdst = $("#holdst").dataTable($.extend(true, {}, dataTablesDefaults, {
+    "aoColumnDefs": [
+        { "sType": "anti-the", "aTargets" : [ "anti-the" ] },
+        { "sType": "title-string", "aTargets" : [ "title-string" ] },
+        { "sType": "string", "aTargets": [ "string-sort" ] } //Target columns that use <br> separators and pull-down menus.
+    ]
   }));
   holdst.fnAddFilters("filter");
+  [%# add separateData function to cleanse jQuery select lists by breaking apart strings glued with BR tags and then de-duplicating any repeated library codes %]
+  function separateData ( ColumnData ){
+    var cD = ColumnData;
+    var new_array = new Array();
+    for ( j=0 ; j<cD.length ; j++ ) {
+        var split_array = cD[j].split(/<br>/gi);
+        for ( k=0 ; k<split_array.length ; k++ ){
+            var check_array = $.inArray(split_array[k], new_array);
+            if (check_array == -1) {
+                new_array.push(split_array[k]);
+            }
+        }
+    }
+    new_array.sort();
+    return new_array;
+  }
+  [%# add SeparateData function into createSelect function, so that it does the createSelect on clean data %]
   function createSelect( data ) {
+      data = separateData(data);
       var r='<select style="width:99%"><option value="">None</option>', i, len=data.length;
       for ( i=0 ; i<len ; i++ ) {
           r += '<option value="'+data[i]+'">'+data[i]+'</option>';
@@ -25,7 +45,11 @@ $(document).ready(function() {
   $("#homebranchfilter").each( function () {
       $(this).html( createSelect( holdst.fnGetColumnData(4) ) );
       $('select', this).change( function () {
-          holdst.fnFilter( $(this).val(), 4 );
+          var filter_value = $(this).val();
+          if(filter_value){
+                filter_value = "(^|>)"+filter_value+"($|<)";
+          }
+          holdst.fnFilter( filter_value, 4, true );
       } );
   } );
   $("#itypefilter").each( function () {
@@ -59,7 +83,7 @@ $(document).ready(function() {
 
 <h2>Holds to pull[% IF ( run_report ) %] placed between [% from %] and [% to %][% END %]</h2>
 [% IF ( run_report ) %]
-<h3>Reported on [% todaysdate %]</h3>
+<h3>Reported on [% todaysdate | $KohaDates %]</h3>
 <p>The following holds have not been filled. Please retrieve them and check them in.</p>
 <div class="searchresults">
     [% IF ( reserveloop ) %]
@@ -69,14 +93,14 @@ $(document).ready(function() {
         <th>Pull this many items</th>
         <th>Items available</th>
         <th>Patrons with holds</th>
-        <th>Title</th>
-        <th>Libraries</th>
+        <th class="anti-the">Title</th>
+        <th class="string-sort">Libraries</th>
         <th>Available call numbers</th>
-        <th>Available copy No</th>
+        <th>Available copy numbers</th>
         <th>Available enumeration</th>
-        <th>Available itypes</th>
-        <th>Available locations</th>
-        <th>Earliest hold date</th>
+        <th class="string-sort">Available itypes</th>
+        <th class="string-sort">Available locations</th>
+        <th class="title-string">Earliest hold date</th>
         </tr>
     </thead>
     <tbody>
@@ -88,10 +112,9 @@ $(document).ready(function() {
             <td>[% reserveloo.rcount %]</td>
             <td>
             <p>
-        [% INCLUDE 'biblio-default-view.inc' biblionumber = reserveloo.biblionumber %]
-                    [% reserveloo.title |html %]
-                </a> [% IF ( reserveloo.author ) %]<p> by [% reserveloo.author %]</p>[% END %]
-            </p>
+                [% INCLUDE 'biblio-default-view.inc' biblionumber = reserveloo.biblionumber %]
+                [% reserveloo.title |html %]</a></p>
+                [% IF ( reserveloo.author ) %]<p> by [% reserveloo.author %]</p>[% END %]
             </td>
         [% ELSE %]
             <td>"</td>
@@ -105,9 +128,8 @@ $(document).ready(function() {
         <td><p>[% reserveloo.enumchron %]</p></td>
         <td>[% reserveloo.itype %]</td>
         <td>[% reserveloo.location %]</td>
-        <td width="15%">
-            <p>[% reserveloo.reservedate %]</p>
-            <p>in [% reserveloo.branch %]</p>
+        <td>
+            <span title="[% reserveloo.reservedate %]">[% reserveloo.reservedate | $KohaDates %] in [% reserveloo.branch %]</span>
             [% IF ( reserveloo.statusw ) %]<p>Waiting</p>[% END %][% IF ( reserveloo.statusf ) %]<p>Fullfilled</p>[% END %]
         </td>
         </tr>
@@ -156,7 +178,7 @@ $(document).ready(function() {
 <input type="text" size="10" id="to" name="to" value="[% to %]" class="datepickerto" />
 </li>
 </ol>
-<p><i>(Inclusive, default is [% HoldsToPullStartDate %] days ago to today, set other date ranges as needed. )</i></p>
+<p><i>(Inclusive, default is [% HoldsToPullStartDate %] days ago to [% IF ( HoldsToPullEndDate ) %][% HoldsToPullEndDate %] days ahead[% ELSE %]today[% END %], set other date ranges as needed. )</i></p>
 <fieldset class="action"><input type="submit" name="run_report" value="Submit" class="submit"/></fieldset>
 </fieldset>
 </form>

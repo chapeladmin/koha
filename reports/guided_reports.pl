@@ -17,18 +17,19 @@
 # with Koha; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-use strict;
-use warnings;
-
-use CGI;
-use Text::CSV;
+use Modern::Perl;
+use CGI qw/-utf8/;
+use Text::CSV::Encoded;
 use URI::Escape;
+use File::Temp;
+use File::Basename qw( dirname );
 use C4::Reports::Guided;
 use C4::Auth qw/:DEFAULT get_session/;
 use C4::Output;
 use C4::Dates qw/format_date/;
 use C4::Debug;
 use C4::Branch; # XXX subfield_is_koha_internal_p
+use C4::Koha qw/IsAuthorisedValueCategory/;
 
 =head1 NAME
 
@@ -109,11 +110,18 @@ elsif ( $phase eq 'Build new' ) {
     );
 }
 
+elsif ( $phase eq 'Delete Multiple') {
+    my @ids = $input->param('ids');
+    delete_report( @ids );
+    print $input->redirect("/cgi-bin/koha/reports/guided_reports.pl?phase=Use%20saved");
+    exit;
+}
+
 elsif ( $phase eq 'Delete Saved') {
 	
 	# delete a report from the saved reports list
-	my $id = $input->param('reports');
-	delete_report($id);
+    my $ids = $input->param('reports');
+    delete_report($ids);
     print $input->redirect("/cgi-bin/koha/reports/guided_reports.pl?phase=Use%20saved");
 	exit;
 }		
@@ -132,7 +140,6 @@ elsif ( $phase eq 'Show SQL'){
 }
 
 elsif ( $phase eq 'Edit SQL'){
-	
     my $id = $input->param('reports');
     my $report = get_saved_report($id);
     my $group = $report->{report_group};
@@ -160,6 +167,7 @@ elsif ( $phase eq 'Update SQL'){
     my $cache_expiry = $input->param('cache_expiry');
     my $cache_expiry_units = $input->param('cache_expiry_units');
     my $public = $input->param('public');
+    my $save_anyway = $input->param('save_anyway');
 
     my @errors;
 
@@ -178,32 +186,60 @@ elsif ( $phase eq 'Update SQL'){
       push @errors, {cache_expiry => $cache_expiry};
     }
 
+    create_non_existing_group_and_subgroup($input, $group, $subgroup);
+
     if ($sql =~ /;?\W?(UPDATE|DELETE|DROP|INSERT|SHOW|CREATE)\W/i) {
         push @errors, {sqlerr => $1};
     }
     elsif ($sql !~ /^(SELECT)/i) {
         push @errors, {queryerr => 1};
     }
+
     if (@errors) {
         $template->param(
             'errors'    => \@errors,
             'sql'       => $sql,
         );
     } else {
-        update_sql( $id, {
-                sql => $sql,
-                name => $reportname,
-                group => $group,
-                subgroup => $subgroup,
-                notes => $notes,
-                cache_expiry => $cache_expiry,
-                public => $public,
-        } );
-        $template->param(
-            'save_successful'       => 1,
-            'reportname'            => $reportname,
-            'id'                    => $id,
-        );
+
+        # Check defined SQL parameters for authorised value validity
+        my $problematic_authvals = ValidateSQLParameters($sql);
+
+        if ( scalar @$problematic_authvals > 0 && not $save_anyway ) {
+            # There's at least one problematic parameter, report to the
+            # GUI and provide all user input for further actions
+            $template->param(
+                'id' => $id,
+                'sql' => $sql,
+                'reportname' => $reportname,
+                'group' => $group,
+                'subgroup' => $subgroup,
+                'notes' => $notes,
+                'cache_expiry' => $cache_expiry,
+                'cache_expiry_units' => $cache_expiry_units,
+                'public' => $public,
+                'problematic_authvals' => $problematic_authvals,
+                'warn_authval_problem' => 1,
+                'phase_update' => 1
+            );
+
+        } else {
+            # No params problem found or asked to save anyway
+            update_sql( $id, {
+                    sql => $sql,
+                    name => $reportname,
+                    group => $group,
+                    subgroup => $subgroup,
+                    notes => $notes,
+                    cache_expiry => $cache_expiry,
+                    public => $public,
+                } );
+            $template->param(
+                'save_successful'       => 1,
+                'reportname'            => $reportname,
+                'id'                    => $id,
+            );
+        }
     }
 }
 
@@ -466,6 +502,7 @@ elsif ( $phase eq 'Save Report' ) {
     my $cache_expiry = $input->param('cache_expiry');
     my $cache_expiry_units = $input->param('cache_expiry_units');
     my $public = $input->param('public');
+    my $save_anyway = $input->param('save_anyway');
 
 
     # if we have the units, then we came from creating a report from SQL and thus need to handle converting units
@@ -482,6 +519,9 @@ elsif ( $phase eq 'Save Report' ) {
     if( $cache_expiry && $cache_expiry >= 2592000 ){
       push @errors, {cache_expiry => $cache_expiry};
     }
+
+    create_non_existing_group_and_subgroup($input, $group, $subgroup);
+
     ## FIXME this is AFTER entering a name to save the report under
     if ($sql =~ /;?\W?(UPDATE|DELETE|DROP|INSERT|SHOW|CREATE)\W/i) {
         push @errors, {sqlerr => $1};
@@ -489,6 +529,7 @@ elsif ( $phase eq 'Save Report' ) {
     elsif ($sql !~ /^(SELECT)/i) {
         push @errors, {queryerr => "No SELECT"};
     }
+
     if (@errors) {
         $template->param(
             'errors'    => \@errors,
@@ -499,25 +540,48 @@ elsif ( $phase eq 'Save Report' ) {
             'cache_expiry' => $cache_expiry,
             'public'    => $public,
         );
-    }
-    else {
-        my $id = save_report( {
-                borrowernumber => $borrowernumber,
-                sql            => $sql,
-                name           => $name,
-                area           => $area,
-                group          => $group,
-                subgroup       => $subgroup,
-                type           => $type,
-                notes          => $notes,
-                cache_expiry   => $cache_expiry,
-                public         => $public,
-            } );
-        $template->param(
-            'save_successful' => 1,
-            'reportname'      => $name,
-            'id'              => $id,
-        );
+    } else {
+        # Check defined SQL parameters for authorised value validity
+        my $problematic_authvals = ValidateSQLParameters($sql);
+
+        if ( scalar @$problematic_authvals > 0 && not $save_anyway ) {
+            # There's at least one problematic parameter, report to the
+            # GUI and provide all user input for further actions
+            $template->param(
+                'area' => $area,
+                'group' =>  $group,
+                'subgroup' => $subgroup,
+                'sql' => $sql,
+                'reportname' => $name,
+                'type' => $type,
+                'notes' => $notes,
+                'cache_expiry' => $cache_expiry,
+                'cache_expiry_units' => $cache_expiry_units,
+                'public' => $public,
+                'problematic_authvals' => $problematic_authvals,
+                'warn_authval_problem' => 1,
+                'phase_save' => 1
+            );
+        } else {
+            # No params problem found or asked to save anyway
+            my $id = save_report( {
+                    borrowernumber => $borrowernumber,
+                    sql            => $sql,
+                    name           => $name,
+                    area           => $area,
+                    group          => $group,
+                    subgroup       => $subgroup,
+                    type           => $type,
+                    notes          => $notes,
+                    cache_expiry   => $cache_expiry,
+                    public         => $public,
+                } );
+            $template->param(
+                'save_successful' => 1,
+                'reportname'      => $name,
+                'id'              => $id,
+            );
+        }
     }
 }
 
@@ -549,14 +613,19 @@ elsif ($phase eq 'Run this report'){
             # split on ??. Each odd (2,4,6,...) entry should be a parameter to fill
             my @split = split /<<|>>/,$sql;
             my @tmpl_parameters;
+            my @authval_errors;
             for(my $i=0;$i<($#split/2);$i++) {
                 my ($text,$authorised_value) = split /\|/,$split[$i*2+1];
                 my $input;
                 my $labelid;
-                if ($authorised_value eq "date") {
-                   $input = 'date';
-                }
-                elsif ($authorised_value) {
+                if ( not defined $authorised_value ) {
+                    # no authorised value input, provide a text box
+                    $input = "text";
+                } elsif ( $authorised_value eq "date" ) {
+                    # require a date, provide a date picker
+                    $input = 'date';
+                } else {
+                    # defined $authorised_value, and not 'date'
                     my $dbh=C4::Context->dbh;
                     my @authorised_values;
                     my %authorised_lib;
@@ -597,15 +666,30 @@ elsif ($phase eq 'Run this report'){
                         #---- "true" authorised value
                     }
                     else {
-                        my $authorised_values_sth = $dbh->prepare("SELECT authorised_value,lib FROM authorised_values WHERE category=? ORDER BY lib");
+                        if ( IsAuthorisedValueCategory($authorised_value) ) {
+                            my $query = '
+                            SELECT authorised_value,lib
+                            FROM authorised_values
+                            WHERE category=?
+                            ORDER BY lib
+                            ';
+                            my $authorised_values_sth = $dbh->prepare($query);
+                            $authorised_values_sth->execute( $authorised_value);
 
-                        $authorised_values_sth->execute( $authorised_value);
-
-                        while ( my ( $value, $lib ) = $authorised_values_sth->fetchrow_array ) {
-                            push @authorised_values, $value;
-                            $authorised_lib{$value} = $lib;
-                            # For item location, we show the code and the libelle
-                            $authorised_lib{$value} = $lib;
+                            while ( my ( $value, $lib ) = $authorised_values_sth->fetchrow_array ) {
+                                push @authorised_values, $value;
+                                $authorised_lib{$value} = $lib;
+                                # For item location, we show the code and the libelle
+                                $authorised_lib{$value} = $lib;
+                            }
+                        } else {
+                            # not exists $authorised_value_categories{$authorised_value})
+                            push @authval_errors, {'entry' => $text,
+                                                   'auth_val' => $authorised_value };
+                            # tell the template there's an error
+                            $template->param( auth_val_error => 1 );
+                            # skip scrolling list creation and params push
+                            next;
                         }
                     }
                     $labelid = $text;
@@ -621,14 +705,14 @@ elsif ($phase eq 'Run this report'){
                         -multiple => 0,
                         -tabindex => 1,
                     );
-                } else {
-                    $input = "text";
                 }
+
                 push @tmpl_parameters, {'entry' => $text, 'input' => $input, 'labelid' => $labelid };
             }
             $template->param('sql'         => $sql,
                             'name'         => $name,
                             'sql_params'   => \@tmpl_parameters,
+                            'auth_val_errors'  => \@authval_errors,
                             'enter_params' => 1,
                             'reports'      => $report_id,
                             );
@@ -649,9 +733,8 @@ elsif ($phase eq 'Run this report'){
             unless ($sth) {
                 die "execute_query failed to return sth for report $report_id: $sql";
             } else {
-                my $headref = $sth->{NAME} || [];
-                my @headers = map { +{ cell => $_ } } @$headref;
-                $template->param(header_row => \@headers);
+                my $headers= header_cell_loop($sth);
+                $template->param(header_row => $headers);
                 while (my $row = $sth->fetchrow_arrayref()) {
                     my @cells = map { +{ cell => $_ } } @$row;
                     push @rows, { cells => \@cells };
@@ -670,9 +753,10 @@ elsif ($phase eq 'Run this report'){
                 'execute' => 1,
                 'name'    => $name,
                 'notes'   => $notes,
-                'errors'  => $errors,
+                'errors'  => defined($errors) ? [ $errors ] : undef,
                 'pagination_bar'  => pagination_bar($url, $totpages, $input->param('page')),
                 'unlimited_total' => $total,
+                'sql_params'      => \@sql_params,
             );
         }
     }
@@ -682,37 +766,84 @@ elsif ($phase eq 'Run this report'){
 }
 
 elsif ($phase eq 'Export'){
-    binmode STDOUT, ':encoding(UTF-8)';
 
 	# export results to tab separated text or CSV
 	my $sql    = $input->param('sql');  # FIXME: use sql from saved report ID#, not new user-supplied SQL!
     my $format = $input->param('format');
 	my ($sth, $q_errors) = execute_query($sql);
     unless ($q_errors and @$q_errors) {
-        print $input->header(       -type => 'application/octet-stream',
-                                    -attachment=>"reportresults.$format"
-                            );
+        my ( $type, $content );
         if ($format eq 'tab') {
-            print join("\t", header_cell_values($sth)), "\n";
+            $type = 'application/octet-stream';
+            $content .= join("\t", header_cell_values($sth)) . "\n";
             while (my $row = $sth->fetchrow_arrayref()) {
-                print join("\t", @$row), "\n";
+                $content .= join("\t", @$row) . "\n";
             }
         } else {
-            my $csv = Text::CSV->new({binary => 1});
-            $csv or die "Text::CSV->new({binary => 1}) FAILED: " . Text::CSV->error_diag();
-            if ($csv->combine(header_cell_values($sth))) {
-                print $csv->string(), "\n";
-            } else {
-                push @$q_errors, { combine => 'HEADER ROW: ' . $csv->error_diag() } ;
-            }
-            while (my $row = $sth->fetchrow_arrayref()) {
-                if ($csv->combine(@$row)) {
-                    print $csv->string(), "\n"; 
+            my $delimiter = C4::Context->preference('delimiter') || ',';
+            if ( $format eq 'csv' ) {
+                $type = 'application/csv';
+                my $csv = Text::CSV::Encoded->new({ encoding_out => 'utf8', sep_char => $delimiter});
+                $csv or die "Text::CSV::Encoded->new({binary => 1}) FAILED: " . Text::CSV::Encoded->error_diag();
+                if ($csv->combine(header_cell_values($sth))) {
+                    $content .= $csv->string(). "\n";
                 } else {
-                    push @$q_errors, { combine => $csv->error_diag() } ;
+                    push @$q_errors, { combine => 'HEADER ROW: ' . $csv->error_diag() } ;
+                }
+                while (my $row = $sth->fetchrow_arrayref()) {
+                    if ($csv->combine(@$row)) {
+                        $content .= $csv->string() . "\n";
+                    } else {
+                        push @$q_errors, { combine => $csv->error_diag() } ;
+                    }
                 }
             }
+            elsif ( $format eq 'ods' ) {
+                $type = 'application/vnd.oasis.opendocument.spreadsheet';
+                my $ods_fh = File::Temp->new( UNLINK => 0 );
+                my $ods_filepath = $ods_fh->filename;
+
+                use OpenOffice::OODoc;
+                my $tmpdir = dirname $ods_filepath;
+                odfWorkingDirectory( $tmpdir );
+                my $container = odfContainer( $ods_filepath, create => 'spreadsheet' );
+                my $doc = odfDocument (
+                    container => $container,
+                    part      => 'content'
+                );
+                my $table = $doc->getTable(0);
+                my @headers = header_cell_values( $sth );
+                my $rows = $sth->fetchall_arrayref();
+                my ( $nb_rows, $nb_cols ) = ( scalar(@$rows), scalar(@{$rows->[0]}) );
+                $doc->expandTable( $table, $nb_rows, $nb_cols );
+
+                my $row = $doc->getRow( $table, 0 );
+                my $j = 0;
+                for my $header ( @headers ) {
+                    $doc->cellValue( $row, $j, $header );
+                    $j++;
+                }
+                for ( my $i = 1; $i < $nb_rows +1 ; $i++ ) {
+                    $row = $doc->getRow( $table, $i );
+                    for ( my $j = 0 ; $j < $nb_cols ; $j++ ) {
+                        # FIXME Bug 11944
+                        my $value = Encode::encode( 'UTF8', $rows->[$i - 1][$j] );
+                        $doc->cellValue( $row, $j, $value );
+                    }
+                }
+                $doc->save();
+                binmode(STDOUT);
+                open $ods_fh, '<', $ods_filepath;
+                $content .= $_ while <$ods_fh>;
+                unlink $ods_filepath;
+            }
         }
+        print $input->header(
+            -type => $type,
+            -attachment=>"reportresults.$format"
+        );
+        print $content;
+
         foreach my $err (@$q_errors, @errors) {
             print "# ERROR: " . (map {$_ . ": " . $err->{$_}} keys %$err) . "\n";
         }   # here we print all the non-fatal errors at the end.  Not super smooth, but better than nothing.
@@ -735,9 +866,9 @@ elsif ( $phase eq 'Create report from SQL' ) {
         $group = $input->param('report_group');
         $subgroup  = $input->param('report_subgroup');
         $template->param(
-            'sql'           => $input->param('sql'),
-            'reportname'    => $input->param('reportname'),
-            'notes'         => $input->param('notes'),
+            'sql'           => $input->param('sql') // '',
+            'reportname'    => $input->param('reportname') // '',
+            'notes'         => $input->param('notes') // '',
         );
     }
     $template->param(
@@ -768,7 +899,14 @@ elsif ($phase eq 'Save Compound'){
 # pass $sth, get back an array of names for the column headers
 sub header_cell_values {
     my $sth = shift or return ();
-    return @{$sth->{NAME}};
+    my @cols;
+    foreach my $c (@{$sth->{NAME}}) {
+        # TODO in Bug 11944
+        #FIXME apparently DBI still needs a utf8 fix for this?
+        utf8::decode($c);
+        push @cols, $c;
+    }
+    return @cols;
 }
 
 # pass $sth, get back a TMPL_LOOP-able set of names for the column headers
@@ -790,13 +928,17 @@ sub groups_with_subgroups {
 
     my $groups_with_subgroups = get_report_groups();
     my @g_sg;
-    while (my ($g_id, $v) = each %$groups_with_subgroups) {
+    my @sorted_keys = sort {
+        $groups_with_subgroups->{$a}->{name} cmp $groups_with_subgroups->{$b}->{name}
+    } keys %$groups_with_subgroups;
+    foreach my $g_id (@sorted_keys) {
+        my $v = $groups_with_subgroups->{$g_id};
         my @subgroups;
         if (my $sg = $v->{subgroups}) {
-            while (my ($sg_id, $n) = each %$sg) {
+            foreach my $sg_id (sort { $sg->{$a} cmp $sg->{$b} } keys %$sg) {
                 push @subgroups, {
                     id => $sg_id,
-                    name => $n,
+                    name => $sg->{$sg_id},
                     selected => ($group && $g_id eq $group && $subgroup && $sg_id eq $subgroup ),
                 };
             }
@@ -809,4 +951,22 @@ sub groups_with_subgroups {
         };
     }
     return \@g_sg;
+}
+
+sub create_non_existing_group_and_subgroup {
+    my ($input, $group, $subgroup) = @_;
+
+    if (defined $group and $group ne '') {
+        my $report_groups = C4::Reports::Guided::get_report_groups;
+        if (not exists $report_groups->{$group}) {
+            my $groupdesc = $input->param('groupdesc') // $group;
+            C4::Koha::AddAuthorisedValue('REPORT_GROUP', $group, $groupdesc);
+        }
+        if (defined $subgroup and $subgroup ne '') {
+            if (not exists $report_groups->{$group}->{subgroups}->{$subgroup}) {
+                my $subgroupdesc = $input->param('subgroupdesc') // $subgroup;
+                C4::Koha::AddAuthorisedValue('REPORT_SUBGROUP', $subgroup, $subgroupdesc, $group);
+            }
+        }
+    }
 }

@@ -30,7 +30,6 @@ use C4::Members;
 use C4::Members::AttributeTypes;
 use C4::Members::Attributes qw/GetBorrowerAttributeValue/;
 use C4::Output;
-use C4::Overdues qw/CheckBorrowerDebarred/;
 use C4::Biblio;
 use C4::Items;
 use C4::Letters;
@@ -69,6 +68,7 @@ my $show_priority;
 for ( C4::Context->preference("OPACShowHoldQueueDetails") ) {
     m/priority/ and $show_priority = 1;
 }
+
 my $patronupdate = $query->param('patronupdate');
 my $canrenew = 1;
 
@@ -80,7 +80,7 @@ my ($warning_year, $warning_month, $warning_day) = split /-/, $borr->{'dateexpir
 
 $borr->{'ethnicity'} = fixEthnicity( $borr->{'ethnicity'} );
 
-my $debar = CheckBorrowerDebarred($borrowernumber);
+my $debar = $borr->{'debarred'};
 my $userdebarred;
 
 if ($debar) {
@@ -105,7 +105,7 @@ if ( 5 >= $borr->{'amountoutstanding'} && $borr->{'amountoutstanding'} > 0 ) {
 my $no_renewal_amt = C4::Context->preference( 'OPACFineNoRenewals' );
 $no_renewal_amt ||= 0;
 
-if ( $borr->{amountoutstanding} > $no_renewal_amt ) {
+if (  C4::Context->preference( 'OpacRenewalAllowed' ) && $borr->{amountoutstanding} > $no_renewal_amt ) {
     $borr->{'flagged'} = 1;
     $canrenew = 0;
     $template->param(
@@ -125,19 +125,22 @@ my @bordat;
 $bordat[0] = $borr;
 
 # Warningdate is the date that the warning starts appearing
-if ( $borr->{dateexpiry} && Date_to_Days( $today_year, $today_month, $today_day ) > Date_to_Days( $warning_year, $warning_month, $warning_day ) ) {
-    $borr->{'warnexpired'} = 1;
-}
-elsif ( $borr->{dateexpiry} && C4::Context->preference('NotifyBorrowerDeparture') &&
-        Date_to_Days(Add_Delta_Days($warning_year, $warning_month, $warning_day,- C4::Context->preference('NotifyBorrowerDeparture'))) <
-        Date_to_Days( $today_year, $today_month, $today_day ) ) {
+if ( $borr->{'dateexpiry'} && C4::Context->preference('NotifyBorrowerDeparture') ) {
+    my $days_to_expiry = Date_to_Days( $warning_year, $warning_month, $warning_day ) - Date_to_Days( $today_year, $today_month, $today_day );
+    if ( $days_to_expiry < 0 ) {
+        #borrower card has expired, warn the borrower
+        $borr->{'warnexpired'} = $borr->{'dateexpiry'};
+    } elsif ( $days_to_expiry < C4::Context->preference('NotifyBorrowerDeparture') ) {
         # borrower card soon to expire, warn the borrower
         $borr->{'warndeparture'} = $borr->{dateexpiry};
         if (C4::Context->preference('ReturnBeforeExpiry')){
             $borr->{'returnbeforeexpiry'} = 1;
         }
+    }
 }
 
+# pass on any renew errors to the template for displaying
+my $renew_error = $query->param('renew_error');
 
 $template->param(   BORROWER_INFO     => \@bordat,
                     borrowernumber    => $borrowernumber,
@@ -145,6 +148,8 @@ $template->param(   BORROWER_INFO     => \@bordat,
                     OPACMySummaryHTML => (C4::Context->preference("OPACMySummaryHTML")) ? 1 : 0,
                     surname           => $borr->{surname},
                     showname          => $borr->{showname},
+                    RENEW_ERROR       => $renew_error,
+                    borrower          => $borr,
                 );
 
 #get issued items ....
@@ -158,7 +163,7 @@ my $issues = GetPendingIssues($borrowernumber);
 if ($issues){
     foreach my $issue ( sort { $b->{date_due}->datetime() cmp $a->{date_due}->datetime() } @{$issues} ) {
         # check for reserves
-        my ( $restype, $res, undef ) = CheckReserves( $issue->{'itemnumber'} );
+        my $restype = GetReserveStatus( $issue->{'itemnumber'} );
         if ( $restype ) {
             $issue->{'reserved'} = 1;
         }
@@ -176,15 +181,28 @@ if ($issues){
             }
         }
         $issue->{'charges'} = $charges;
-
+        $issue->{'subtitle'} = GetRecordValue('subtitle', GetMarcBiblio($issue->{'biblionumber'}), GetFrameworkCode($issue->{'biblionumber'}));
         # check if item is renewable
         my ($status,$renewerror) = CanBookBeRenewed( $borrowernumber, $issue->{'itemnumber'} );
         ($issue->{'renewcount'},$issue->{'renewsallowed'},$issue->{'renewsleft'}) = GetRenewCount($borrowernumber, $issue->{'itemnumber'});
         if($status && C4::Context->preference("OpacRenewalAllowed")){
             $issue->{'status'} = $status;
         }
-        $issue->{'too_many'} = 1 if $renewerror and $renewerror eq 'too_many';
-        $issue->{'on_reserve'} = 1 if $renewerror and $renewerror eq 'on_reserve';
+
+        if ($renewerror) {
+            $issue->{'too_many'}   = 1 if $renewerror eq 'too_many';
+            $issue->{'on_reserve'} = 1 if $renewerror eq 'on_reserve';
+
+            if ( $renewerror eq 'too_soon' ) {
+                $issue->{'too_soon'}         = 1;
+                $issue->{'soonestrenewdate'} = output_pref(
+                    C4::Circulation::GetSoonestRenewDate(
+                        $issue->{borrowernumber},
+                        $issue->{itemnumber}
+                    )
+                );
+            }
+        }
 
         if ( $issue->{'overdue'} ) {
             push @overdues, $issue;
@@ -256,11 +274,13 @@ foreach my $res (@reserves) {
     if ( $res->{'expirationdate'} eq '0000-00-00' ) {
       $res->{'expirationdate'} = '';
     }
-
+    $res->{'subtitle'} = GetRecordValue('subtitle', GetMarcBiblio($res->{'biblionumber'}), GetFrameworkCode($res->{'biblionumber'}));
     $res->{'waiting'} = 1 if $res->{'found'} eq 'W';
     $res->{'branch'} = $branches->{ $res->{'branchcode'} }->{'branchname'};
     my $biblioData = GetBiblioData($res->{'biblionumber'});
     $res->{'reserves_title'} = $biblioData->{'title'};
+    $res->{'author'} = $biblioData->{'author'};
+
     if ($show_priority) {
         $res->{'priority'} ||= '';
     }
@@ -364,6 +384,7 @@ $template->param(
 $template->param(
     SuspendHoldsOpac => C4::Context->preference('SuspendHoldsOpac'),
     AutoResumeSuspendedHolds => C4::Context->preference('AutoResumeSuspendedHolds'),
+    OpacHoldNotes => C4::Context->preference('OpacHoldNotes'),
 );
 
 output_html_with_http_headers $query, $cookie, $template->output;

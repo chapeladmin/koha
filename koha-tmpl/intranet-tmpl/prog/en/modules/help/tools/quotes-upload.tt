@@ -1,6 +1,6 @@
 [% INCLUDE 'help-top.inc' %]
 
-<h1>Quote of the Day Uploader</h1>
+<h1>Quote of the day uploader</h1>
 
 <p>The Quote of the Day (QOTD) uploader allows for uploading of bulk quotes into the pool of quotes which serve as the source of the Quote-Of-The-Day (QOTD) feature in OPAC.</p>
 
@@ -26,7 +26,7 @@
     <li><b>Delete Quote(s)</b></li>
     <ol>
         <li>This option allows for the deletion of one or more quotes at a time.</li>
-        <li>Select the quote(s) you desire to delete by clicking on the corrisponding quote id.</li>
+        <li>Select the quote(s) you desire to delete by clicking on the corresponding quote id.</li>
         <li>Once quote selection is finished, simply click the 'Delete quote(s)' key.</li>
         <li>You will be prompted to confirm the deletion.</li>
         <li>After confirming the deletion, the list will update and the quote(s) will no longer appear.</li>
@@ -40,6 +40,6 @@
     </ol>
 </ol>
 
-<p><strong>See the full documentation for the Quote of the Day Uploader in the <a href="http://manual.koha-community.org/3.10/en/additionaltools.html#importquote">manual</a> (online).</strong></p>
+<p><strong>See the full documentation for the Quote of the Day Uploader in the <a href="http://manual.koha-community.org/[% helpVersion %]/en/additionaltools.html#importquote">manual</a> (online).</strong></p>
 
 [% INCLUDE 'help-bottom.inc' %]

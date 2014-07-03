@@ -3,11 +3,14 @@
 //<![CDATA[
 
 $(document).ready(function(){
-
-    var searchButton = new YAHOO.widget.Button("search");
-    var cancelButton = new YAHOO.widget.Button("cancel");
-    var clearButton = new YAHOO.widget.Button("clear");
-    var newButton = new YAHOO.widget.Button("createnew");
+    $("#clear").on("click",function(e){
+        e.preventDefault();
+        finderjumpfull('blinddetail-biblio-search.pl?authid=0&index=[% index %]');
+    });
+    $("#createnew").on("click",function(e){
+        e.preventDefault();
+        finderjumpfull('authorities.pl?index=[% index %]&authtypecode=[% authtypecode %]');
+    });
     // marclist
     $( "#value_any" ).autocomplete({
         source: function(request, response) {
@@ -15,6 +18,7 @@ $(document).ready(function(){
                 url: "/cgi-bin/koha/authorities/ysearch.pl",
                 dataType: "json",
                 data: {
+                    authtypecode : "[% authtypecode %]",
                     term: request.term,
                     op: "do_search",
                     type: "intranet",
@@ -42,6 +46,7 @@ $(document).ready(function(){
                 url: "/cgi-bin/koha/authorities/ysearch.pl",
                 dataType: "json",
                 data: {
+                    authtypecode : "[% authtypecode %]",
                     term: request.term,
                     op: "do_search",
                     type: "intranet",
@@ -69,6 +74,7 @@ $(document).ready(function(){
                 url: "/cgi-bin/koha/authorities/ysearch.pl",
                 dataType: "json",
                 data: {
+                    authtypecode : "[% authtypecode %]",
                     term: request.term,
                     op: "do_search",
                     type: "intranet",
@@ -99,7 +105,10 @@ function finderjumpfull(page)
 //]]>
 </script>
 
-
+<div id="toolbar" class="btn-toolbar">
+    <div class="btn-group"><a href="#" id="clear" class="btn btn-small"><i class="icon-remove-sign"></i> Clear field</a></div>
+    <div class="btn-group"><a href="#" id="createnew" class="btn btn-small"><i class="icon-plus"></i> Create new authority</a></div>
+</div>
 <form name="f" method="get" action="auth_finder.pl">
             <input type="hidden" name="source" value="[% source %]" />
             <input type="hidden" name="op" value="do_search" />
@@ -107,69 +116,129 @@ function finderjumpfull(page)
             <input type="hidden" name="index" value="[% index %]" />
                 <fieldset class="rows"><legend>Search options</legend>
                 <ol><li>
-                    <span class="label">Authority type</span>
+                    <span class="label">Authority type: </span>
                     [% authtypecode %]
                     <input type="hidden" name="authtypecode" value="[% authtypecode %]" />
                 </li>
                 <li>
-                    <label for="mainmainentry">Main entry ($a only)</label>
+                    <label for="mainmainentry">Main entry ($a only): </label>
                     <input type="hidden" name="marclist" value="mainmainentry" />
                     <input type="hidden" name="and_or" value="and" />
                     <input type="hidden" name="excluding" value="" />
                     <select name="operator" id="mainmainentry">
+                        [% IF ( operator_mainstr == 'contains' ) %]
+                        <option value="contains" selected="selected">contains</option>
+                        [% ELSE %]
                         <option value="contains">contains</option>
+                        [% END %]
+                        [% IF ( operator_mainstr == 'start' ) %]
+                        <option value="start" selected="selected">starts with</option>
+                        [% ELSE %]
                         <option value="start">starts with</option>
+                        [% END %]
+                        [% IF ( operator_mainstr == 'is' ) %]
+                        <option value="is" selected="selected">is exactly</option>
+                        [% ELSE %]
                         <option value="is">is exactly</option>
+                        [% END %]
                     </select>
                     <input id="value_mainstr" style="width:400px;" type="text" name="value_mainstr" value="[% value_mainstr |html %]" />
                     <div id="yvaluecontainermainmainentry"></div>
                 </li>
 
                 <li>
-                    <label for="mainentry">Main entry</label>
+                    <label for="mainentry">Main entry: </label>
                     <input type="hidden" name="marclist" value="mainentry" />
                     <input type="hidden" name="and_or" value="and" />
                     <input type="hidden" name="excluding" value="" />
                     <select name="operator" id="mainentry">
+                        [% IF ( operator_main == 'contains' ) %]
+                        <option value="contains" selected="selected">contains</option>
+                        [% ELSE %]
                         <option value="contains">contains</option>
+                        [% END %]
+                        [% IF ( operator_main == 'start' ) %]
+                        <option value="start" selected="selected">starts with</option>
+                        [% ELSE %]
                         <option value="start">starts with</option>
+                        [% END %]
+                        [% IF ( operator_main == 'is' ) %]
+                        <option value="is" selected="selected">is exactly</option>
+                        [% ELSE %]
                         <option value="is">is exactly</option>
+                        [% END %]
                     </select>
                     <input id="value_main" style="width:400px;" type="text" name="value_main" value="[% value_main |html %]" />
                     <div id="yvaluecontainermainentry"></div>
                 </li>
 
                 <li>
-                    <label for="marclistanywhere">Anywhere</label>
+                    <label for="marclistanywhere">Anywhere: </label>
                     <input type="hidden" name="marclist" value="any" />
                     <input type="hidden" name="and_or" value="and" />
                     <input type="hidden" name="excluding" value="" />
                     <select name="operator" id="marclistanywhere">
+                        [% IF ( operator_any == 'contains' ) %]
+                        <option value="contains" selected="selected">contains</option>
+                        [% ELSE %]
                         <option value="contains">contains</option>
+                        [% END %]
+                        [% IF ( operator_any == 'start' ) %]
+                        <option value="start" selected="selected">starts with</option>
+                        [% ELSE %]
                         <option value="start">starts with</option>
+                        [% END %]
+                        [% IF ( operator_any == 'is' ) %]
+                        <option value="is" selected="selected">is exactly</option>
+                        [% ELSE %]
                         <option value="is">is exactly</option>
+                        [% END %]
                     </select>
                     <input id="value_any" style="width:400px;" type="text" name="value_any" value="[% value_any |html %]" />
                     <div id="yvaluecontainermarclist"></div>
                 </li>
                 <li>
-                    <label for="marclistheading">Heading match</label>
+                    <label for="marclistheading">Heading match: </label>
                     <input type="hidden" name="marclist" value="match" />
                     <input type="hidden" name="and_or" value="and" />
                     <input type="hidden" name="excluding" value="" />
                     <select name="operator" id="marclistheading">
+                        [% IF ( operator_match == 'contains' ) %]
+                        <option value="contains" selected="selected">contains</option>
+                        [% ELSE %]
                         <option value="contains">contains</option>
+                        [% END %]
+                        [% IF ( operator_match == 'start' ) %]
+                        <option value="start" selected="selected">starts with</option>
+                        [% ELSE %]
                         <option value="start">starts with</option>
+                        [% END %]
+                        [% IF ( operator_match == 'is' ) %]
+                        <option value="is" selected="selected">is exactly</option>
+                        [% ELSE %]
                         <option value="is">is exactly</option>
+                        [% END %]
                     </select>
                     <input type="text" name="value_match" value="[% value_match |html %]" />
                 </li>
         <li>
-        <label for="orderby">Sort by </label>
+        <label for="orderby">Sort by: </label>
         <select name="orderby" id="orderby">
-            <option value="">No order</option>
-            <option value="HeadingAsc" selected="selected">Heading ascendant</option>
-            <option value="HeadingDsc">Heading descendant</option>
+            [% IF ( orderby == 'HeadingAsc' ) %]
+            <option value="HeadingAsc" selected="selected">Heading A-Z</option>
+            [% ELSE %]
+            <option value="HeadingAsc">Heading A-Z</option>
+            [% END %]
+            [% IF ( orderby == 'HeadingDsc' ) %]
+            <option value="HeadingDsc" selected="selected">Heading Z-A</option>
+            [% ELSE %]
+            <option value="HeadingDsc">Heading Z-A</option>
+            [% END %]
+            [% IF ( orderby == '' && op ) %]
+            <option value="" selected="selected">None</option>
+            [% ELSE %]
+            <option value="">None</option>
+            [% END %]
         </select>
         </li></ol></fieldset>
         [% IF source == 'auth' %]
@@ -195,10 +264,6 @@ function finderjumpfull(page)
             </ol>
         </fieldset>
         [% END %]
-        <fieldset class="action"> <input type="submit" value="Start search" class="submit" id="search" /> <a id="cancel" class="cancel close" href="#">Cancel</a>
-        <span id="authfinderops">
-        <a href="javascript:finderjumpfull('blinddetail-biblio-search.pl?authid=0&amp;index=[% index %]')" id="clear" class="button">Clear field</a>
-        <a href="javascript:finderjumpfull('authorities.pl?index=[% index %]&authtypecode=[% authtypecode %]')" id="createnew" class="button">Create new</a>
-        </span>
+        <fieldset class="action"> <input type="submit" value="Search" class="submit" id="search" /> <a id="cancel" class="cancel close" href="#">Cancel</a>
         </fieldset>
 </form>

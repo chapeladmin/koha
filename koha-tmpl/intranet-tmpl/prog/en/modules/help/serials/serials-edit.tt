@@ -1,6 +1,6 @@
 [% INCLUDE 'help-top.inc' %]
 
-<h1>Recieving Serials</h1>
+<h1>Receiving Serials</h1>
 
 <p>Issues can be marked as received from several locations. To find a subscription, use the search box at the top of the Serials page to search for the serial you'd like to receive issues for</p>
 
@@ -24,6 +24,6 @@
 
 <p>Clicking this button will generate the next issue for you and mark the previously expected issue as 'Late' automatically. You can then check the 'Edit' box to the right of each issue and edit the status on multiple issues at once.</p>
 
-<p><strong>See the full documentation for Receiving a Serial in the <a href="http://manual.koha-community.org/3.10/en/receiveissues.html">manual</a> (online).</strong></p>
+<p><strong>See the full documentation for Receiving a Serial in the <a href="http://manual.koha-community.org/[% helpVersion %]/en/receiveissues.html">manual</a> (online).</strong></p>
 
 [% INCLUDE 'help-bottom.inc' %]

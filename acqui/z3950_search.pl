@@ -21,7 +21,7 @@
 
 use warnings;
 use strict;
-use CGI;
+use CGI qw/-utf8/;
 
 use C4::Auth;
 use C4::Output;
@@ -70,7 +70,6 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
         template_name   => "acqui/z3950_search.tmpl",
         query           => $input,
         type            => "intranet",
-        authnotrequired => 1,
         flagsrequired   => { acquisition => 'order_manage' },
     }
 );
@@ -93,7 +92,7 @@ $template->param(
 );
 
 if ( $op ne "do_search" ) {
-    my $sth = $dbh->prepare("select id,host,name,checked from z3950servers  order by host");
+    my $sth = $dbh->prepare("select id,host,name,checked from z3950servers where recordtype <> 'authority' order by host");
     $sth->execute();
     my $serverloop = $sth->fetchall_arrayref( {} );
     $template->param(
@@ -112,7 +111,6 @@ if (@id==0) {
 }
 
 my $pars= {
-        random => $input->param('random') || rand(1000000000),
         biblionumber => $biblionumber,
         page => $page,
         id => \@id,

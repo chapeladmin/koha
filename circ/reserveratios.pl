@@ -30,9 +30,9 @@ use C4::Auth;
 use C4::Dates qw/format_date format_date_in_iso/;
 use C4::Debug;
 use C4::Biblio qw/GetMarcBiblio GetRecordValue GetFrameworkCode/;
+use C4::Acquisition qw/GetOrdersByBiblionumber/;
 
 my $input = new CGI;
-my $order     = $input->param('order') || '';
 my $startdate = $input->param('from');
 my $enddate   = $input->param('to');
 my $ratio     = $input->param('ratio');
@@ -47,6 +47,12 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
         debug           => 1,
     }
 );
+
+my $booksellerid = $input->param('booksellerid') // '';
+my $basketno = $input->param('basketno') // '';
+if ($booksellerid && $basketno) {
+     $template->param( booksellerid => $booksellerid, basketno => $basketno );
+}
 
 my ( $year, $month, $day ) = Today();
 my $todaysdate     = sprintf("%-04.4d-%-02.2d-%02.2d", $year, $month, $day);
@@ -72,7 +78,7 @@ if ($ratio <= 0) {
 }
 
 my $dbh    = C4::Context->dbh;
-my ($sqlorderby, $sqldatewhere) = ("","");
+my $sqldatewhere = "";
 $debug and warn format_date_in_iso($startdate) . "\n" . format_date_in_iso($enddate);
 my @query_params = ();
 if ($startdate) {
@@ -84,23 +90,6 @@ if ($enddate) {
     push @query_params, format_date_in_iso($enddate);
 }
 
-if ($order eq "biblio") {
-	$sqlorderby = " ORDER BY biblio.title, holdingbranch, listcall, l_location ";
-} elsif ($order eq "callnumber") {
-    $sqlorderby = " ORDER BY listcall, holdingbranch, l_location ";
-} elsif ($order eq "itemcount") {
-    $sqlorderby = " ORDER BY itemcount, reservecount ";
-} elsif ($order eq "itype") {
-    $sqlorderby = " ORDER BY l_itype, holdingbranch, listcall ";
-} elsif ($order eq "location") {
-    $sqlorderby = " ORDER BY l_location, holdingbranch, listcall ";
-} elsif ($order eq "reservecount") {
-    $sqlorderby = " ORDER BY reservecount DESC ";
-} elsif ($order eq "branch") {
-    $sqlorderby = " ORDER BY holdingbranch, l_location, listcall ";
-} else {
-	$sqlorderby = " ORDER BY reservecount DESC ";
-}
 my $strsth =
 "SELECT reservedate,
         reserves.borrowernumber as borrowernumber,
@@ -117,7 +106,7 @@ my $strsth =
         		ORDER BY items.itemnumber SEPARATOR '<br/>') as l_location,
         GROUP_CONCAT(DISTINCT items.itype 
         		ORDER BY items.itemnumber SEPARATOR '<br/>') as l_itype,
-        notes,
+
         reserves.found,
         biblio.title,
         biblio.author,
@@ -126,17 +115,17 @@ my $strsth =
  FROM  reserves
  LEFT JOIN items ON items.biblionumber=reserves.biblionumber 
  LEFT JOIN biblio ON reserves.biblionumber=biblio.biblionumber
- WHERE 
-notforloan = 0 AND damaged = 0 AND itemlost = 0 AND wthdrawn = 0
+ WHERE
+ notforloan = 0 AND damaged = 0 AND itemlost = 0 AND withdrawn = 0
  $sqldatewhere
 ";
 
-if (C4::Context->preference('IndependantBranches')){
-	$strsth .= " AND items.holdingbranch=? ";
+if (C4::Context->preference('IndependentBranches')){
+    $strsth .= " AND items.holdingbranch=? ";
     push @query_params, C4::Context->userenv->{'branch'};
 }
 
-$strsth .= " GROUP BY reserves.biblionumber " . $sqlorderby;
+$strsth .= " GROUP BY reserves.biblionumber ORDER BY reservecount DESC";
 
 $template->param(sql => $strsth);
 my $sth = $dbh->prepare($strsth);
@@ -159,7 +148,6 @@ while ( my $data = $sth->fetchrow_hashref ) {
             title            => $data->{title},
             subtitle            => $data->{subtitle},
             author           => $data->{author},
-            notes            => $data->{notes},
             itemnum          => $data->{itemnumber},
             biblionumber     => $data->{biblionumber},
             holdingbranch    => $data->{holdingbranch},
@@ -178,6 +166,11 @@ while ( my $data = $sth->fetchrow_hashref ) {
     );
 }
 
+for my $rd ( @reservedata ) {
+    next unless $rd->{biblionumber};
+    $rd->{pendingorders} = CountPendingOrdersByBiblionumber( $rd->{biblionumber} );
+}
+
 $template->param(
     ratio_atleast1  => $ratio_atleast1,
     todaysdate      => format_date($todaysdate),
@@ -188,3 +181,19 @@ $template->param(
 );
 
 output_html_with_http_headers $input, $cookie, $template->output;
+
+sub CountPendingOrdersByBiblionumber {
+    my $biblionumber = shift;
+    my @orders = GetOrdersByBiblionumber( $biblionumber );
+    my $cnt = 0;
+    if (scalar(@orders)) {
+        for my $order ( @orders ) {
+            next if $order->{datecancellationprinted};
+            my $onum = $order->{quantity} // 0;
+            my $rnum = $order->{quantityreceived} // 0;
+            next if $rnum >= $onum;
+            $cnt += ($onum - $rnum);
+        }
+    }
+    return $cnt;
+}

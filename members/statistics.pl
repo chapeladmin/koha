@@ -13,9 +13,8 @@
 # A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
 #
 # You should have received a copy of the GNU General Public License along with
-# Koha; if not, write to the Free Software Foundation, Inc., 59 Temple Place,
-# Suite 330, Boston, MA  02111-1307 USA
-
+# Koha; if not, write to the Free Software Foundation, Inc.,
+# 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 =head1 members/statistics.pl
   Generate statistic issues for a member
@@ -92,7 +91,7 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
     );
 }
 
-my ($picture, $dberror) = GetPatronImage($borrower->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($borrower->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 $template->param(
@@ -104,6 +103,7 @@ $template->param(
     count_total_issues_returned => $count_total_issues_returned,
     count_total_precedent_state => $count_total_precedent_state,
     count_total_actual_state => $count_total_actual_state,
+    RoutingSerials => C4::Context->preference('RoutingSerials'),
 );
 
 output_html_with_http_headers $input, $cookie, $template->output;

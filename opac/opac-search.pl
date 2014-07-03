@@ -43,18 +43,20 @@ for ( $searchengine ) {
 
 use C4::Output;
 use C4::Auth qw(:DEFAULT get_session);
-use C4::Languages qw(getAllLanguages);
+use C4::Languages qw(getLanguages);
 use C4::Search;
+use C4::Search::History;
 use C4::Biblio;  # GetBiblioData
 use C4::Koha;
 use C4::Tags qw(get_tags);
 use C4::Branch; # GetBranches
 use C4::SocialData;
 use C4::Ratings;
+use C4::External::OverDrive;
 
 use POSIX qw(ceil floor strftime);
 use URI::Escape;
-use Storable qw(thaw freeze);
+use JSON qw/decode_json encode_json/;
 use Business::ISBN;
 
 my $DisplayMultiPlaceHold = C4::Context->preference("DisplayMultiPlaceHold");
@@ -62,6 +64,24 @@ my $DisplayMultiPlaceHold = C4::Context->preference("DisplayMultiPlaceHold");
 # FIXME: no_undef_params needs to be tested
 use CGI qw('-no_undef_params');
 my $cgi = new CGI;
+
+my $branch_group_limit = $cgi->param("branch_group_limit");
+if ( $branch_group_limit ) {
+    if ( $branch_group_limit =~ /^multibranchlimit-/ ) {
+        # For search groups we are going to convert this branch_group_limit CGI
+        # parameter into a multibranchlimit CGI parameter for the purposes of
+        # actually performing the query
+        $cgi->param(
+            -name => 'multibranchlimit',
+            -values => substr($branch_group_limit, 17)
+        );
+    } else {
+        $cgi->append(
+            -name => 'limit',
+            -values => [ $branch_group_limit ]
+        );
+    }
+}
 
 BEGIN {
     if (C4::Context->preference('BakerTaylorEnabled')) {
@@ -71,11 +91,11 @@ BEGIN {
 }
 
 my ($template,$borrowernumber,$cookie);
-my $lang = C4::Templates::getlanguage($cgi, 'opac');
 # decide which template to use
 my $template_name;
 my $template_type = 'basic';
 my @params = $cgi->param("limit");
+
 
 my $format = $cgi->param("format") || '';
 my $build_grouped_results = C4::Context->preference('OPACGroupResults');
@@ -100,6 +120,9 @@ else {
     authnotrequired => ( C4::Context->preference("OpacPublic") ? 1 : 0 ),
     }
 );
+
+my $lang = C4::Languages::getlanguage($cgi);
+
 if ($template_name eq 'opac-results.tmpl') {
    $template->param('COinSinOPACResults' => C4::Context->preference('COinSinOPACResults'));
 }
@@ -174,11 +197,11 @@ if (C4::Context->preference('TagsEnabled')) {
 
 my $branches = GetBranches();   # used later in *getRecords, probably should be internalized by those functions after caching in C4::Branch is established
 $template->param(
-    searchdomainloop => GetBranchCategories(undef,'searchdomain'),
+    searchdomainloop => GetBranchCategories('searchdomain'),
 );
 
 # load the language limits (for search)
-my $languages_limit_loop = getAllLanguages($lang);
+my $languages_limit_loop = getLanguages($lang, 1);
 $template->param(search_languages_loop => $languages_limit_loop,);
 
 # load the Type stuff
@@ -226,10 +249,6 @@ foreach my $advanced_srch_type (@advanced_search_types) {
     }
 }
 $template->param(advancedsearchesloop => \@advancedsearchesloop);
-
-# # load the itypes (Called item types in the template -- just authorized values for searching)
-# my ($itypecount,@itype_loop) = GetCcodes();
-# $template->param(itypeloop=>\@itype_loop,);
 
 # The following should only be loaded if we're bringing up the advanced search template
 if ( $template_type && $template_type eq 'advsearch' ) {
@@ -358,10 +377,12 @@ unless (@servers) {
 # operators include boolean and proximity operators and are used
 # to evaluate multiple operands
 my @operators = $cgi->param('op');
+@operators = map { uri_unescape($_) } @operators;
 
 # indexes are query qualifiers, like 'title', 'author', etc. They
 # can be single or multiple parameters separated by comma: kw,right-Truncation 
 my @indexes = $cgi->param('idx');
+@indexes = map { uri_unescape($_) } @indexes;
 
 # if a simple index (only one)  display the index used in the top search box
 if ($indexes[0] && !$indexes[1]) {
@@ -369,19 +390,27 @@ if ($indexes[0] && !$indexes[1]) {
 }
 # an operand can be a single term, a phrase, or a complete ccl query
 my @operands = $cgi->param('q');
+@operands = map { uri_unescape($_) } @operands;
 
 $template->{VARS}->{querystring} = join(' ', @operands);
 
 # if a simple search, display the value in the search box
 if ($operands[0] && !$operands[1]) {
-    $template->param(ms_value => $operands[0]);
+    my $ms_query = $operands[0];
+    $ms_query =~ s/ #\S+//;
+    $template->param(ms_value => $ms_query);
 }
 
 # limits are use to limit to results to a pre-defined category such as branch or language
 my @limits = $cgi->param('limit');
+my @nolimits = $cgi->param('nolimit');
+my %is_nolimit = map { $_ => 1 } @nolimits;
+@limits = grep { not $is_nolimit{$_} } @limits;
+@limits = map { uri_unescape($_) } @limits;
 
 if($params->{'multibranchlimit'}) {
-    push @limits, '('.join( " or ", map { "branch: $_ " } @{ GetBranchesInCategory( $params->{'multibranchlimit'} ) } ).')';
+    my $multibranch = '('.join( " or ", map { "branch: $_ " } @{ GetBranchesInCategory( $params->{'multibranchlimit'} ) } ).')';
+    push @limits, $multibranch if ($multibranch ne  '()');
 }
 
 my $available;
@@ -430,7 +459,7 @@ sub _input_cgi_parse {
     for my $this_cgi ( split('&',shift) ) {
         next unless $this_cgi;
         $this_cgi =~ /(.*?)=(.*)/;
-        push @elements, { input_name => $1, input_value => $2 };
+        push @elements, { input_name => $1, input_value => uri_unescape($2) };
     }
     return @elements;
 }
@@ -478,16 +507,11 @@ if ($tag) {
     my $taglist = get_tags({term=>$tag, approved=>1});
     $results_hashref->{biblioserver}->{hits} = scalar (@$taglist);
     my @biblist  = (map {GetBiblioData($_->{biblionumber})} @$taglist);
-    my @marclist = (map {$_->{marc}} @biblist );
+    my @marclist = (map { (C4::Context->config('zebra_bib_index_mode') eq 'dom')? $_->{marcxml}: $_->{marc}; } @biblist);
     $DEBUG and printf STDERR "taglist (%s biblionumber)\nmarclist (%s records)\n", scalar(@$taglist), scalar(@marclist);
     $results_hashref->{biblioserver}->{RECORDS} = \@marclist;
     # FIXME: tag search and standard search should work together, not exclusively
     # FIXME: No facets for tags search.
-}
-elsif (C4::Context->preference('NoZebra')) {
-    eval {
-        ($error, $results_hashref, $facets) = NZgetRecords($query,$simple_query,\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$query_type,$scan);
-    };
 } elsif ($build_grouped_results) {
     eval {
         ($error, $results_hashref, $facets) = C4::Search::pazGetRecords($query,$simple_query,\@sort_by,\@servers,$results_per_page,$offset,$expanded_facet,$branches,$query_type,$scan);
@@ -538,53 +562,52 @@ for (my $i=0;$i<@servers;$i++) {
             @newresults = searchResults('opac', $query_desc, $hits, $results_per_page, $offset, $scan,
                                         $results_hashref->{$server}->{"RECORDS"});
         }
+        $hits = 0 unless @newresults;
 
-        # must define a value for size if not present in DB
-        # in order to avoid problems generated by the default size value in TT
-        foreach my $line (@newresults) {
-            if ( not exists $line->{'size'} ) { $line->{'size'} = "" }
+        foreach my $res (@newresults) {
+
+            # must define a value for size if not present in DB
+            # in order to avoid problems generated by the default size value in TT
+            if ( not exists $res->{'size'} ) { $res->{'size'} = "" }
             # while we're checking each line, see if item is in the cart
-            if ( grep {$_ eq $line->{'biblionumber'}} @cart_list) {
-                $line->{'incart'} = 1;
+            if ( grep {$_ eq $res->{'biblionumber'}} @cart_list) {
+                $res->{'incart'} = 1;
             }
-        }
 
-
-        my $tag_quantity;
-        if (C4::Context->preference('TagsEnabled') and
-            $tag_quantity = C4::Context->preference('TagsShowOnList')) {
-            foreach (@newresults) {
-                my $bibnum = $_->{biblionumber} or next;
-                $_->{itemsissued} = CountItemsIssued( $bibnum );
-                $_ ->{'TagLoop'} = get_tags({biblionumber=>$bibnum, approved=>1, 'sort'=>'-weight',
-                                        limit=>$tag_quantity });
+            if (C4::Context->preference('COinSinOPACResults')) {
+                my $record = GetMarcBiblio($res->{'biblionumber'});
+                $res->{coins} = GetCOinSBiblio($record);
             }
-        }
-
-        if (C4::Context->preference('COinSinOPACResults')) {
-            foreach (@newresults) {
-                my $record = GetMarcBiblio($_->{'biblionumber'});
-                $_->{coins} = GetCOinSBiblio($record);
-                if ( C4::Context->preference( "Babeltheque" ) and $_->{normalized_isbn} ) {
-                    my $isbn = Business::ISBN->new( $_->{normalized_isbn} );
-                    next if not $isbn;
+            if ( C4::Context->preference( "Babeltheque" ) and $res->{normalized_isbn} ) {
+                if( my $isbn = Business::ISBN->new( $res->{normalized_isbn} ) ) {
                     $isbn = $isbn->as_isbn13->as_string;
                     $isbn =~ s/-//g;
                     my $social_datas = C4::SocialData::get_data( $isbn );
-                    next if not $social_datas;
-                    for my $key ( keys %$social_datas ) {
-                        $_->{$key} = $$social_datas{$key};
-                        if ( $key eq 'score_avg' ){
-                            $_->{score_int} = sprintf("%.0f", $$social_datas{score_avg} );
+                    if ( $social_datas ) {
+                        for my $key ( keys %$social_datas ) {
+                            $res->{$key} = $$social_datas{$key};
+                            if ( $key eq 'score_avg' ){
+                                $res->{score_int} = sprintf("%.0f", $$social_datas{score_avg} );
+                            }
                         }
                     }
                 }
             }
-        }
 
+            if (C4::Context->preference('TagsEnabled') and
+                C4::Context->preference('TagsShowOnList')) {
+                if ( my $bibnum = $res->{biblionumber} ) {
+                    $res->{itemsissued} = CountItemsIssued( $bibnum );
+                    $res->{'TagLoop'} = get_tags({
+                        biblionumber => $bibnum,
+                        approved => 1,
+                        sort => '-weight',
+                        limit => C4::Context->preference('TagsShowOnList')
+                    });
+                }
+            }
 
-        if ( C4::Context->preference('OpacStarRatings') eq 'all' ) {
-            foreach my $res (@newresults) {
+            if ( C4::Context->preference('OpacStarRatings') eq 'all' ) {
                 my $rating = GetRating( $res->{'biblionumber'}, $borrowernumber );
                 $res->{'rating_value'}  = $rating->{'rating_value'};
                 $res->{'rating_total'}  = $rating->{'rating_total'};
@@ -594,60 +617,41 @@ for (my $i=0;$i<@servers;$i++) {
         }
 
         if ($results_hashref->{$server}->{"hits"}){
-            $total = $total + $results_hashref->{$server}->{"hits"};
+            $total = $total + $hits;
         }
 
         # Opac search history
-        my $newsearchcookie;
         if (C4::Context->preference('EnableOpacSearchHistory')) {
-            my @recentSearches;
+            unless ( $offset ) {
+                my $path_info = $cgi->url(-path_info=>1);
+                my $query_cgi_history = $cgi->url(-query=>1);
+                $query_cgi_history =~ s/^$path_info\?//;
+                $query_cgi_history =~ s/;/&/g;
+                my $query_desc_history = join ", ", grep { defined $_ } $query_desc, $limit_desc;
 
-            # Getting the (maybe) already sent cookie
-            my $searchcookie = $cgi->cookie('KohaOpacRecentSearches');
-            if ($searchcookie){
-                $searchcookie = uri_unescape($searchcookie);
-                if (thaw($searchcookie)) {
-                    @recentSearches = @{thaw($searchcookie)};
+                unless ( $borrowernumber ) {
+                    my $new_searches = C4::Search::History::add_to_session({
+                            cgi => $cgi,
+                            query_desc => $query_desc_history,
+                            query_cgi => $query_cgi_history,
+                            total => $total,
+                            type => "biblio",
+                    });
+                } else {
+                    # To the session (the user is logged in)
+                    C4::Search::History::add({
+                        userid => $borrowernumber,
+                        sessionid => $cgi->cookie("CGISESSID"),
+                        query_desc => $query_desc_history,
+                        query_cgi => $query_cgi_history,
+                        total => $total,
+                        type => "biblio",
+                    });
                 }
             }
-
-            # Adding the new search if needed
-            my $path_info = $cgi->url(-path_info=>1);
-            my $query_cgi_history = $cgi->url(-query=>1);
-            $query_cgi_history =~ s/^$path_info\?//;
-            $query_cgi_history =~ s/;/&/g;
-            my $query_desc_history = "$query_desc, $limit_desc";
-
-            if (!$borrowernumber || $borrowernumber eq '') {
-                # To a cookie (the user is not logged in)
-                if (!$offset) {
-                    push @recentSearches, {
-                                "query_desc" => $query_desc_history || "unknown",
-                                "query_cgi"  => $query_cgi_history  || "unknown",
-                                "time"       => time(),
-                                "total"      => $total
-                              };
-                    $template->param(ShowOpacRecentSearchLink => 1);
-                }
-
-                shift @recentSearches if (@recentSearches > 15);
-                # Pushing the cookie back
-                $newsearchcookie = $cgi->cookie(
-                            -name => 'KohaOpacRecentSearches',
-                            # We uri_escape the whole freezed structure so we're sure we won't have any encoding problems
-                            -value => uri_escape(freeze(\@recentSearches)),
-                            -expires => ''
-                );
-                $cookie = [$cookie, $newsearchcookie];
-            }
-            else {
-                # To the session (the user is logged in)
-                if (!$offset) {
-                    AddSearchHistory($borrowernumber, $cgi->cookie("CGISESSID"), $query_desc_history, $query_cgi_history, $total);
-                    $template->param(ShowOpacRecentSearchLink => 1);
-                }
-            }
+            $template->param( EnableOpacSearchHistory => 1 );
         }
+
         ## If there's just one result, redirect to the detail page
         if ($total == 1 && $format ne 'rss2'
         && $format ne 'opensearchdescription' && $format ne 'atom') {
@@ -662,7 +666,7 @@ for (my $i=0;$i<@servers;$i++) {
             exit;
         }
         if ($hits) {
-            if (!C4::Context->preference('NoZebra') && !$build_grouped_results) {
+            if ( !$build_grouped_results ) {
                 # We build the encrypted list of first OPACnumSearchResults biblios to pass with the search criteria for paging on opac-detail
                 $pasarParams .= '&amp;listBiblios=';
                 my $j = 0;
@@ -698,6 +702,42 @@ for (my $i=0;$i<@servers;$i++) {
             $template->param(results_per_page =>  $results_per_page);
             my $hide = C4::Context->preference('OpacHiddenItems');
             $hide = ($hide =~ m/\S/) if $hide; # Just in case it has some spaces/new lines
+            my $branch = '';
+            if (C4::Context->userenv){
+                $branch = C4::Context->userenv->{branch};
+            }
+            if ( C4::Context->preference('HighlightOwnItemsOnOPAC') ) {
+                if (
+                    ( ( C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'PatronBranch' ) && $branch )
+                    ||
+                    C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'OpacURLBranch'
+                ) {
+                    my $branchname;
+                    if ( C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'PatronBranch' ) {
+                        $branchname = $branches->{$branch}->{'branchname'};
+                    }
+                    elsif (  C4::Context->preference('HighlightOwnItemsOnOPACWhich') eq 'OpacURLBranch' ) {
+                        $branchname = $branches->{ $ENV{'BRANCHCODE'} }->{'branchname'};
+                    }
+
+                    foreach my $res ( @newresults ) {
+                        my @new_loop;
+                        my @top_loop;
+                        my @old_loop = @{$res->{'available_items_loop'}};
+                        foreach my $item ( @old_loop ) {
+                            if ( $item->{'branchname'} eq $branchname ) {
+                                $item->{'this_branch'} = 1;
+                                push( @top_loop, $item );
+                            } else {
+                                push( @new_loop, $item );
+                            }
+                        }
+                        my @complete_loop = ( @top_loop, @new_loop );
+                        $res->{'available_items_loop'} = \@complete_loop;
+                    }
+                }
+            }
+
             $template->param(
                 SEARCH_RESULTS => \@newresults,
                 OPACItemsResultsDisplay => (C4::Context->preference("OPACItemsResultsDisplay")),
@@ -805,6 +845,16 @@ for (my $i=0;$i<@servers;$i++) {
 } #/end of the for loop
 #$template->param(FEDERATED_RESULTS => \@results_array);
 
+my @input_values = map { Encode::decode_utf8($_->{input_value}) } @limit_inputs;
+for my $facet ( @$facets ) {
+    for my $entry ( @{ $facet->{facets} } ) {
+        my $index = $entry->{type_link_value};
+        my $value = $entry->{facet_link_value};
+        $entry->{active} = grep { $_ eq qq{$index:$value} } @input_values;
+    }
+}
+
+
 $template->param(
             #classlist => $classlist,
             total => $total,
@@ -837,10 +887,17 @@ if (C4::Context->preference('GoogleIndicTransliteration')) {
         $template->param('GoogleIndicTransliteration' => 1);
 }
 
-$template->{VARS}->{DidYouMean} = C4::Context->preference('OPACdidyoumean') =~ m/enable/;
+$template->{VARS}->{DidYouMean} =
+  ( defined C4::Context->preference('OPACdidyoumean')
+      && C4::Context->preference('OPACdidyoumean') =~ m/enable/ );
 $template->{VARS}->{IDreamBooksReviews} = C4::Context->preference('IDreamBooksReviews');
 $template->{VARS}->{IDreamBooksReadometer} = C4::Context->preference('IDreamBooksReadometer');
 $template->{VARS}->{IDreamBooksResults} = C4::Context->preference('IDreamBooksResults');
+
+if ($offset == 0 && IsOverDriveEnabled()) {
+    $template->param(OverDriveEnabled => 1);
+    $template->param(OverDriveLibraryID => C4::Context->preference('OverDriveLibraryID'));
+}
 
     $template->param( borrowernumber    => $borrowernumber);
 output_with_http_headers $cgi, $cookie, $template->output, $content_type;

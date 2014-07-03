@@ -67,6 +67,9 @@ KOHA_CRON_PATH = /usr/share/koha/bin/cronjobs
 # Cancel expired holds
 0 1 * * *  __KOHA_USER__ $KOHA_CRON_PATH/holds/cancel_expired_holds.pl >/dev/null 2>&1
 
+# Auto unsuspend holds
+0 1 * * *  __KOHA_USER__ $KOHA_CRON_PATH/holds/auto_unsuspend_holds.pl > /dev/null 2>&1
+
 # Update popularity counts for biblio records
 0 2 * * *  __KOHA_USER__ $KOHA_CRON_PATH/update_totalissues.pl --commit=1000 --use-stats --incremental --interval=1d >/dev/null 2>&1
 
@@ -78,7 +81,7 @@ KOHA_CRON_PATH = /usr/share/koha/bin/cronjobs
 59 23 * * *  __KOHA_USER__ $KOHA_CRON_PATH/services_throttle.pl > /dev/null 2>&1
 
 # clean up databases nightly.  Be sure not to run this with --sessions during a time when the system is in use!
-16 1 * * * __KOHA_USER__ $KOHA_CRON_PATH/cleanup_database.pl --sessions --zebraqueue 10
+16 1 * * * __KOHA_USER__ $KOHA_CRON_PATH/cleanup_database.pl --sessions --zebraqueue 10 --list-invites
 
 # delete old purchase suggestions weekly. Replace XX with a number to define the age of suggestions to delete.
 @weekly	__KOHA_USER__  $KOHA_CRON_PATH/purge_suggestions.pl --days XX > /dev/null 2>&1

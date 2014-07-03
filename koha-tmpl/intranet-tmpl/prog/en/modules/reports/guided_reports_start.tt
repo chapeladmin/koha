@@ -1,3 +1,4 @@
+[% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Reports &rsaquo; Guided reports wizard
 [% IF ( saved1 ) %]&rsaquo; Saved Reports
@@ -19,31 +20,120 @@
 <style type="text/css">
     #sql { width: 90%; height: 9em;}
 </style>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.pager.js"></script>
+[% IF ( saved1 ) %]
+<link rel="stylesheet" type="text/css" href="[% themelang %]/css/datatables.css" />
+[% INCLUDE 'datatables.inc' %]
+[% END %]
 
 <script type="text/javascript">
 //<![CDATA[
 var group_subgroups = {};
-var no_subgroup_label = _( "(None)" );
+[% FOREACH group IN groups_with_subgroups %]
+    var gid = "[% group.id %]"
+    group_subgroups[gid] = new Array();
+    [% FOREACH subgroup IN group.subgroups %]
+        var sgid = "[% subgroup.id %]";
+        var sgname = "[% subgroup.name %]";
+        group_subgroups[gid].push([sgid, sgname]);
+    [% END %]
+[% END %]
+
 function load_group_subgroups () {
-    var group = $("#group").val();
+    var group = $("#group_select").val();
     var sg = $("#subgroup");
-    var has_subgroups = false;
-    $(sg).empty().append('<option value="">' + no_subgroup_label + '</option>');
+    $(sg).find('option[value!=""]').each(function() {
+        $(this).remove();
+    });
+    $(sg).hide();
     if (group) {
+        var select = $(sg).find('select')[0];
         $.each( group_subgroups[group], function(index, value) {
-                has_subgroups = true;
-            $('<option value="' + value[0] + '">' + value[1] + '</option>').appendTo(sg);
+            $('<option value="' + value[0] + '">' + value[1] + '</option>').appendTo(select);
         } );
-    }
-    if (has_subgroups) {
-        $(sg).show();
-    } else {
-        $(sg).hide();
+        $("#subgroup, #subgroup *").show();
     }
 }
+
 $(document).ready(function(){
+
+[% IF (saved1) %]
+    var rtable = $("#table_reports").dataTable($.extend(true, {}, dataTablesDefaults, {
+        'bAutoWidth': false,
+        'sDom': 't<"bottom pager"ilpf>',
+        'sPaginationType': 'four_button',
+        'aaSorting': [[ 1, "asc" ]],
+        'aoColumnDefs': [
+            { 'bSortable': false, 'bSearchable':false, 'aTargets': [0, -1] },
+            { 'bSearchable': false, 'aTargets': [3, 4] },
+            { "aTargets": [ 1, 2 ], "sType": "natural"  }
+        ],
+        "aoColumns": [
+            null,null,null,null,null,null,null,null,{ "sType": "title-string" },null,[% IF (usecache) %]null,[% END %]null,null
+        ],
+        'oLanguage': {
+            'sZeroRecords': _("No matching reports found")
+        }
+    }));
+
+    var rtabs = $("#tabs").tabs();
+    rtabs.bind("tabsshow", function(e, ui) {
+        $("#subgroup_filter option").each(function() {
+            if($(this).val().length > 0) {
+                $(this).remove();
+            }
+        });
+        rtable.fnFilter('', 4);
+        rtable.fnFilter('', 5);
+        rtable.fnSetColumnVis(4, true);
+        rtable.fnSetColumnVis(5, true);
+
+        var g_id = $(ui.tab).attr('id')
+        var g_name = $(ui.tab).text();
+        if (g_id && g_id.length > 0) {
+            rtable.fnFilter('^' + g_name + '$', 4, true, true, true, false);
+            rtable.fnSetColumnVis(4, false);
+            for(var i in group_subgroups[g_id]) {
+                $("#subgroup_filter").append(
+                    '<option value="' + group_subgroups[g_id][i][0] + '">'
+                    + group_subgroups[g_id][i][1] + '</option>'
+                );
+            }
+            $("#subgroup_filter_block").show();
+        } else {
+            $("#subgroup_filter_block").hide();
+        }
+    });
+    $("#subgroup_filter_block").hide();
+
+    $("#subgroup_filter").change(function() {
+        var selected = $(this).find('option:selected');
+        var sg_id = $(selected).val();
+        var sg_name = $(selected).text();
+        if (sg_id.length > 0) {
+            rtable.fnFilter('^' + sg_name + '$', 5, true, true, true, false);
+            rtable.fnSetColumnVis(5, false);
+        } else {
+            rtable.fnFilter('', 5);
+            rtable.fnSetColumnVis(5, true);
+        }
+    });
+
+    $("#reports_form").submit(function(){
+        var checkedItems = $("input[name=ids]:checked");
+        if ($(checkedItems).size() == 0) {
+            alert(_("You must select one or more reports to delete"));
+            return false;
+        }
+        $(checkedItems).parents('tr').addClass("warn");
+        if( confirm(_("Are you sure you want to delete the selected reports?")) ) {
+            return true;
+        } else {
+            $(checkedItems).parents('tr').removeClass("warn");
+            return false;
+        }
+    });
+[% END %]
+
 [% IF ( showsql ) %]
     $("#sql").focus(function() {
         $(this).select();
@@ -52,7 +142,7 @@ $(document).ready(function(){
 [% IF ( saved1 ) %]
     $(".confirmdelete").click(function(){
         $(this).parents('tr').attr("class","warn");
-        if(confirm("Are you sure you want to "+$(this).attr("title")+"?")){
+        if(confirm(_("Are you sure you want to delete this saved report?"))){
             return true;
         } else {
             $(this).parents('tr').attr("class","");
@@ -60,24 +150,56 @@ $(document).ready(function(){
         }
     });
 [% END %]
-  // call the tablesorter plugin
-  $("#table_reports").tablesorter({
-    widgets : ['zebra'],
-    sortList: [[1,0]],
-    headers: {
-        10: { sorter: false},
-        11: { sorter: false},
-        12: { sorter: false},
-        13: { sorter: false}
-    }
-  }).tablesorterPager({
-    container:     $("#pagertable_reports"),
-    positionFixed: false,
-    size:          20
-  });
   // redefine the datepicker's default because reports require ISO
   // http://jqueryui.com/demos/datepicker/#option-dateFormat
   $( ".datepicker" ).datepicker( "option", "dateFormat", "yy-mm-dd" );
+
+[% IF (create || editsql || save) %]
+    $("#select_group").change(function() {
+        if($(this).attr('checked')) {
+            $("#group_input").attr('disabled', 'disabled');
+            $("#groupdesc_input").attr('disabled', 'disabled');
+            $("#group_select").attr('disabled', false);
+            if ($("#group_select").val().length > 0) {
+                $("#select_subgroup").attr('checked', 'checked');
+                $("#select_subgroup").change();
+                $("#subgroup, #subgroup *").show();
+            } else {
+                $("#subgroup").hide();
+            }
+        }
+    });
+    $("#create_group").change(function() {
+        if($(this).attr('checked')) {
+            $("#group_input").attr('disabled', false);
+            $("#groupdesc_input").attr('disabled', false);
+            $("#group_select").attr('disabled', 'disabled');
+            $("#create_subgroup").attr('checked', 'checked').change();
+            $("#subgroup_select").hide();
+            $("#subgroup input[type='radio']").hide();
+            $("#subgroup label[for]").hide();
+            $("#subgroup_input").show();
+            $("#subgroupdesc_input").show();
+            $("#subgroup").show();
+        }
+    });
+    $("#select_subgroup").change(function() {
+        if($(this).attr('checked')) {
+            $("#subgroup_select").attr('disabled', false);
+            $("#subgroup_input").attr('disabled', 'disabled');
+            $("#subgroupdesc_input").attr('disabled', 'disabled');
+        }
+    });
+    $("#create_subgroup").change(function() {
+        if($(this).attr('checked')) {
+            $("#subgroup_input").attr('disabled', false);
+            $("#subgroupdesc_input").attr('disabled', false);
+            $("#subgroup_select").attr('disabled', 'disabled');
+        }
+    });
+    $("#select_group").change();
+    $("#select_subgroup").change();
+[% END %]
 });
 //]]>
 </script>
@@ -147,65 +269,95 @@ canned reports and writing custom SQL reports.</p>
 [% IF ( saved1 ) %]
 [% IF ( savedreports ) %]<h1>Saved reports</h1>
 
-<div id="pagertable_reports">
-[% INCLUDE 'table-pager.inc' perpage='20' %]
-</div>
-
-<table id="table_reports" class="tablesorter">
-<thead>
- <tr>
-  <th>ID</th>
-  <th>Report name</th>
-  <th>Type</th>
-  <th>Area</th>
-  <th>Group</th>
-  <th>Subgroup</th>
-  <th>Notes</th>
-  <th>Author</th>
-  <th>Creation date</th>
-  <th>Public</th>
-  [% IF (usecache) %] <th>Cache expiry (seconds)</th> [% END %]
-  <th>Saved results</th>
-  <th>Saved SQL</th>
-  <th>&nbsp;</th>
-  <th>&nbsp;</th>
- </tr>
-</thead>
-<tbody>
-[% FOREACH savedreport IN savedreports %]
-[% UNLESS ( loop.odd ) %]<tr class="odd">[% ELSE %]<tr>[% END %]
-<td>[% savedreport.id %]</td>
-<td>[% savedreport.report_name %]</td>
-<td>[% savedreport.type %]</td>
-<td>[% savedreport.areaname %]</td>
-<td>[% savedreport.groupname %]</td>
-<td>[% savedreport.subgroupname %]</td>
-<td>[% savedreport.notes %]</td>
-<td>[% savedreport.borrowersurname %][% IF ( savedreport.borrowerfirstname ) %], [% savedreport.borrowerfirstname %][% END %] ([% savedreport.borrowernumber %])</td>
-<td>[% savedreport.date_created %]</td>
-[% IF (savedreport.public) %]
-<td>Yes</td>
-[% ELSE %]
-<td>No</td>
-[% END %]
-[% IF (usecache) %] <td>[% savedreport.cache_expiry %]</td> [% END %]
-<td>[% IF ( savedreport.date_run ) %]<a href="/cgi-bin/koha/reports/guided_reports.pl?phase=retrieve%20results&amp;id=[% savedreport.id %]">[% savedreport.date_run %]</a>[% END %]
-</td>
-    <td>
-        <a href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Show%20SQL">Show</a> 
-        [% IF ( CAN_user_reports_create_reports ) %]
-            &nbsp; <a href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Edit%20SQL">Edit</a>
+<div id="tabs" class="toptabs">
+    <ul>
+        <li><a href="#reports">All</a></li>
+        [% FOREACH group IN groups_with_subgroups %]
+            <li><a id="[% group.id %]" href="#reports">[% group.name %]</a></li>
         [% END %]
-    </td>
-<td><a href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Run%20this%20report">Run</a>
-<a href="/cgi-bin/koha/tools/scheduler.pl?id=[% savedreport.id %]">Schedule</a></td>
-    [% IF ( CAN_user_reports_create_reports ) %]
-        <td><a class="confirmdelete" title="Delete this saved report" href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Delete%20Saved">Delete</a></td>
-    [% END %]
-</tr>
-[% END %]
-</tbody>
-</table>
+    </ul>
+    <div id="reports">
+        <div id="subgroup_filter_block">
+            <label for="subgroup_filter">Subgroup:</label>
+            <select id="subgroup_filter">
+                <option value="">All</option>
+            </select>
+        </div>
+<form action="/cgi-bin/koha/reports/guided_reports.pl" id="reports_form" method="post">
+<input type="hidden" name="phase" value="Delete Multiple" />
+        <table id="table_reports">
+            <thead>
+                <tr>
+                    <th>&nbsp;</th>
+                    <th>ID</th>
+                    <th>Report name</th>
+                    <th>Type</th>
+                    <th>Group</th>
+                    <th>Subgroup</th>
+                    <th>Notes</th>
+                    <th>Author</th>
+                    <th>Creation date</th>
+                    <th>Public</th>
+                    [% IF (usecache) %] <th>Cache expiry (seconds)</th> [% END %]
+                    <th>Saved results</th>
+                    <th>&nbsp;</th>
+                </tr>
+            </thead>
+            <tbody>
+                [% FOREACH savedreport IN savedreports %]
+                    [% UNLESS ( loop.odd ) %]<tr class="odd">[% ELSE %]<tr>[% END %]
+                        <td><input type="checkbox" name="ids" value="[% savedreport.id %]" /></td>
+                        <td><label for="ids">[% savedreport.id %]</label></td>
+                        <td>
+                            [% IF ( savedreport.report_name ) %]
+                                [% savedreport.report_name %]
+                            [% ELSE %]
+                                [ no name ]
+                            [% END %]
+                        </td>
+                        <td>[% savedreport.type %]</td>
+                        <td>[% savedreport.groupname %]</td>
+                        <td>[% savedreport.subgroupname %]</td>
+                        <td>[% savedreport.notes %]</td>
+                        <td>[% savedreport.borrowersurname %][% IF ( savedreport.borrowerfirstname ) %], [% savedreport.borrowerfirstname %][% END %] ([% savedreport.borrowernumber %])</td>
+                        <td><span title="[% savedreport.date_created %]">[% savedreport.date_created | $KohaDates %]</span></td>
+                        [% IF (savedreport.public) %]
+                        <td>Yes</td>
+                        [% ELSE %]
+                        <td>No</td>
+                        [% END %]
+                        [% IF (usecache) %] <td>[% savedreport.cache_expiry %]</td> [% END %]
+                        <td>[% IF ( savedreport.date_run ) %]<a href="/cgi-bin/koha/reports/guided_reports.pl?phase=retrieve%20results&amp;id=[% savedreport.id %]">[% savedreport.date_run %]</a>[% END %]
+                        </td>
+                        <td>
+                            <div class="dropdown">
+                                <a class="btn btn-mini dropdown-toggle" id="reportactions[% savedreport.id %]" role="button" data-toggle="dropdown" href="#">
+                                   Actions <b class="caret"></b>
+                                </a>
+                                <ul class="dropdown-menu pull-right" role="menu" aria-labelledby="reportactions[% savedreport.id %]">
+                                    <li><a href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Show%20SQL"><i class="icon-search"></i> Show</a></li>
+                                    [% IF ( CAN_user_reports_create_reports ) %]
+                                        <li><a href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Edit%20SQL"><i class="icon-pencil"></i> Edit</a></li>
+                                        <li><a title="Duplicate this saved report" href="/cgi-bin/koha/reports/guided_reports.pl?phase=Create report from SQL&amp;sql=[% savedreport.savedsql |uri %]&amp;reportname=[% savedreport.report_name |uri %]&amp;notes=[% savedreport.notes |uri %]"><i class="icon-copy"></i> Duplicate</a></li>
+                                    [% END %]
+                                    <li><a href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Run%20this%20report"><i class="icon-play"></i> Run</a></li>
+                                    <li><a href="/cgi-bin/koha/tools/scheduler.pl?id=[% savedreport.id %]"><i class="icon-time"></i> Schedule</a></li>
+                                    [% IF ( CAN_user_reports_create_reports ) %]
+                                        <li><a class="confirmdelete" title="Delete this saved report" href="/cgi-bin/koha/reports/guided_reports.pl?reports=[% savedreport.id %]&amp;phase=Delete%20Saved"><i class="icon-remove"></i> Delete</a></li>
+                                    [% END %]
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                [% END %]
+            </tbody>
+        </table>
+        <fieldset class="action">
+            <input type="submit" value="Delete selected" />
+        </fieldset>
+    </form>
+    </div>
+</div>
 [% ELSE %]<div class="dialog message">
     [% IF (filter_set) %]
     <h4>No saved reports match your criteria. </h4>
@@ -250,9 +402,9 @@ canned reports and writing custom SQL reports.</p>
 [% END %]
 </select></li>
 [% IF (public) %]
-  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0">No (default)</option> <option value="1" selected="selected">Yes</public> </select></li>
+  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0">No (default)</option> <option value="1" selected="selected">Yes</option> </select></li>
 [% ELSE %]
-  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0" selected="selected">No (default)</option> <option value="1">Yes</public> </select></li>
+  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0" selected="selected">No (default)</option> <option value="1">Yes</option> </select></li>
 [% END %]
 [% IF (usecache) %] <li>
 <label for="cache_expiry">Cache expiry:</label><input type="text" id="cache_expiry" name="cache_expiry" value="[% cache_expiry %]"></input>
@@ -264,7 +416,7 @@ canned reports and writing custom SQL reports.</p>
 </select>
 </li>[% END %]
 </ol>
-<ofieldset>
+</fieldset>
 <fieldset class="action">
 <input type="hidden" name="phase" value="Report on this Area" />
 <input type="submit" name="submit" value="Next &gt;&gt;" />
@@ -300,9 +452,9 @@ canned reports and writing custom SQL reports.</p>
 
 <!--- Summary and Matrix reports have not yet been implemented-->
 <!--<div class="yui-u">Summary:
-<img src="/intranet-tmpl/prog/img/reports-summary-graphic.gif" /></div>
+<img src="[% interface %]/[% theme %]/img/reports-summary-graphic.gif" /></div>
 <div class="yui-u">Matrix:
-<img src="/intranet-tmpl/prog/img/reports-matrix-graphic.gif" /></div>-->
+<img src="[% interface %]/[% theme %]/img/reports-matrix-graphic.gif" /></div>-->
 
 [% END %]
 
@@ -412,11 +564,13 @@ canned reports and writing custom SQL reports.</p>
     </fieldset>
 
 [% IF ( definitions ) %]
-<fieldset><legend>Dictionary definitions</legend><table>
+<fieldset><legend>Dictionary definitions</legend>
+<table>
 [% FOREACH definition IN definitions %]
     <tr><td><input type="checkbox" name="definition" value="[% definition.id %]" /> [% definition.name %]</td></tr>
 [% END %]
 </table>
+</fieldset>
 [% END %]
 
 <fieldset class="action"><input type="hidden" name="phase" value="Choose these criteria" />
@@ -517,31 +671,7 @@ canned reports and writing custom SQL reports.</p>
 <legend>Save your custom report</legend>
 <ol>
     <li><label for="reportname">Report name: </label><input type="text" id="reportname" name="reportname" /></li>
-    [% IF groups_with_subgroups %]
-    <li><label for="group">Report group: </label><select name="group" id="group" onChange="load_group_subgroups();">
-        [% FOR g IN groups_with_subgroups %]
-            [% IF g.selected %]
-    <option value="[% g.id %]" selected>[% g.name %]</option>
-            [% ELSE %]
-    <option value="[% g.id %]">[% g.name %]</option>
-            [% END %]
-    <script type="text/javascript">
-        var g_sg = new Array();
-            [% FOR sg IN g.subgroups %]
-        g_sg.push(["[% sg.id %]", "[% sg.name %]"]);
-                [% IF sg.selected %]
-        $(document).ready(function() {
-            $("#subgroup").val("[% sg.id %]");
-        });
-                [% END %]
-            [% END %]
-        group_subgroups["[% g.id %]"] = g_sg;
-    </script>
-        [% END %]
-    </select></li>
-    <li><label for="subgroup">Report subgroup: </label><select name="subgroup" id="subgroup">
-    </select></li>
-    [% END %]
+    [% PROCESS group_and_subgroup_selection %]
     <li><label for="notes">Notes:</label> <textarea name="notes" id="notes"></textarea></li>
 </ol></fieldset>
 <fieldset class="action"><input type="hidden" name="phase" value="Save Report" />
@@ -549,28 +679,93 @@ canned reports and writing custom SQL reports.</p>
 </form>
 [% END %]
 
+[% IF ( warn_authval_problem ) %]
+     <form action='/cgi-bin/koha/reports/guided_reports.pl'>
+        <!--Every parameter the user issued is provided as a hidden field for recovery-->
+        <input type='hidden' name='id' value='[% id %]' />
+        <input type='hidden' name='sql' value='[% sql %]' />
+        <input type='hidden' name='reportname' value='[% reportname %]' />
+        <input type='hidden' name='group' value='[% group %]' />
+        <input type='hidden' name='subgroup' value='[% subgroup %]' />
+        <input type='hidden' name='notes' value='[% notes %]' />
+        <input type='hidden' name='cache_expiry' value='[% cache_expiry %]' />
+        <input type='hidden' name='cache_expiry_units' value='[% cache_expiry_units %]' />
+        <input type='hidden' name='public' value='[% public %]' />
+
+        <div class="dialog alert">
+            <h3>Errors found when processing parameters for report: [% name %]</h3>
+            [% FOREACH problematic_authval IN problematic_authvals %]
+                <p>
+                <strong>[% problematic_authval.name %]:</strong> The authorized value category (<strong>[% problematic_authval.authval %]</strong>)
+                    you selected does not exist.
+                </p>
+            [% END %]
+            <!-- Save Anyway Form -->
+            <form action='/cgi-bin/koha/reports/guided_reports.pl'>
+            <!--Every parameter the user issued is provided as a hidden field for recovery-->
+                <input type='hidden' name='id' value='[% id %]' />
+                <input type='hidden' name='sql' value='[% sql %]' />
+                <input type='hidden' name='reportname' value='[% reportname %]' />
+                <input type='hidden' name='group' value='[% group %]' />
+                <input type='hidden' name='subgroup' value='[% subgroup %]' />
+                <input type='hidden' name='notes' value='[% notes %]' />
+                <input type='hidden' name='cache_expiry' value='[% cache_expiry %]' />
+                <input type='hidden' name='cache_expiry_units' value='[% cache_expiry_units %]' />
+                <input type='hidden' name='public' value='[% public %]' />
+            [% IF ( phase_update) %]
+                <input type='hidden' name='phase' value='Update SQL' />
+                <input type="submit" name="save_anyway" class="approve" value="Save anyway" />
+            [% ELSIF ( phase_save) %]
+                <input type='hidden' name='area' value='[% area %]' />
+                <input type='hidden' name='phase' value='Save Report' />
+                <input type="submit" name="save_anyway" class="approve" value="Save anyway" />
+            [% END %]
+            </form>
+            <!-- Go back to editing -->
+            <form action='/cgi-bin/koha/reports/guided_reports.pl'>
+                <input type="button" name='back' class="deny" value="Edit SQL"
+                                    onclick="javascript:history.back()" />
+            </form>
+        </div>
+    </form>
+[% END %]
+
 [% IF ( enter_params ) %]
     <form action='/cgi-bin/koha/reports/guided_reports.pl'>
-        <input type='hidden' name='phase' value='Run this report' />
         <input type='hidden' name='reports' value="[% reports %]" />
+    [% IF ( auth_val_error ) %]
+        <input type='hidden' name='phase' value='Edit SQL' />
+        <div class="dialog alert">
+            <h3>Errors found when processing parameters for report: [% name %]</h3>
+            [% FOREACH auth_val_error IN auth_val_errors %]
+                <p>
+                    <strong>[% auth_val_error.entry %]:</strong> The authorized value category (<strong>[% auth_val_error.auth_val %]</strong>)
+                    you selected does not exist.
+                </p>
+            [% END %]
+        </div>
+        <fieldset class="action"><input type="submit" value="Edit SQL" /></fieldset>
+    [% ELSE %]
+        <input type='hidden' name='phase' value='Run this report' />
         <h1>Enter parameters for report [% name %]:</h1>
         [% IF ( notes ) %]<p>[% notes %]</p>[% END %]
         <fieldset class="rows">
             <ol>
-        [% FOREACH sql_param IN sql_params %]
-            [% IF sql_param.input == 'date' %]
-                <li>
-                <label for="date_[% sql_param_entry %][% loop.count %]">[% sql_param.entry %]:</label> <input id="date_[% sql_param_entry %][% loop.count %]" type="text" value="" size="10" name="sql_params" class="datepicker" />
-                </li>
-            [% ELSIF ( sql_param.input == 'text' ) %]
-                <li><label for="sql_params[% loop.count %]">[% sql_param.entry %]: </label><input id="sql_params[% loop.count %]" type="text" name="sql_params" /></li>
-            [% ELSE %]
-                <li><label for="sql_params_[% sql_param.labelid %]">[% sql_param.entry %]:</label> [% sql_param.input %]</li>
+            [% FOREACH sql_param IN sql_params %]
+                [% IF sql_param.input == 'date' %]
+                    <li>
+                    <label for="date_[% sql_param_entry %][% loop.count %]">[% sql_param.entry %]:</label> <input id="date_[% sql_param_entry %][% loop.count %]" type="text" value="" size="10" name="sql_params" class="datepicker" />
+                    </li>
+                [% ELSIF ( sql_param.input == 'text' ) %]
+                    <li><label for="sql_params[% loop.count %]">[% sql_param.entry %]: </label><input id="sql_params[% loop.count %]" type="text" name="sql_params" /></li>
+                [% ELSE %]
+                    <li><label for="sql_params_[% sql_param.labelid %]">[% sql_param.entry %]:</label> [% sql_param.input %]</li>
+                [% END %]
             [% END %]
-        [% END %]
             </ol>
         </fieldset>
         <fieldset class="action"><input type="submit" value="Run the report" /></fieldset>
+    [% END %]
     </form>
 [% END %]
 
@@ -580,9 +775,13 @@ canned reports and writing custom SQL reports.</p>
 [% IF ( unlimited_total ) %]<p>Total number of rows matching the (unlimited) query is [% unlimited_total %].</p>[% END %]
 <pre id="sql_output">[% sql |html %]</pre>
 
-<form>
+<form action="/cgi-bin/koha/reports/guided_reports.pl" method="get">
     <input type="hidden" name="phase" value="Run this report"/>
     <input type="hidden" name="reports" value="[% report_id %]"/>
+
+    [% FOREACH p IN sql_params %]
+        <input type="hidden" name="sql_params" value="[% p %]"/>
+    [% END %]
 
     <label for="limit">Rows per page: </label>
     <select name="limit">
@@ -615,6 +814,7 @@ canned reports and writing custom SQL reports.</p>
 <select name="format" id="format">
 <option value="csv">Comma separated text</option>
 <option value="tab">Tab separated text</option>
+<option value="ods">Open Document Spreadsheet</option>
 </select>
 <input type="hidden" name="sql" value="[% sql |html %]" />
 <input type="hidden" name="phase" value="Export" />
@@ -637,35 +837,12 @@ $(document).ready(function() {
         [% IF ( reportname ) %]<input type="text" id="reportname" name="reportname" value="[% reportname %]" />
         [% ELSE %]<input type="text" id="reportname" name="reportname" />[% END %] 
     </li>
-    [% IF groups_with_subgroups %]
-    <li><label for="group">Report group: </label><select name="group" id="group" onChange="load_group_subgroups();">
-        [% FOR g IN groups_with_subgroups %]
-            [% IF g.selected %]
-    <option value="[% g.id %]" selected>[% g.name %]</option>
-            [% ELSE %]
-    <option value="[% g.id %]">[% g.name %]</option>
-            [% END %]
-    <script type="text/javascript">
-        var g_sg = new Array();
-            [% FOR sg IN g.subgroups %]
-        g_sg.push(["[% sg.id %]", "[% sg.name %]"]);
-                [% IF sg.selected %]
-        $(document).ready(function() {
-            $("#subgroup").val("[% sg.id %]");
-        });
-                [% END %]
-            [% END %]
-        group_subgroups["[% g.id %]"] = g_sg;
-    </script>
-        [% END %]
-    </select></li>
-    <li><label for="subgroup">Report subgroup: </label><select name="subgroup" id="subgroup">
-    </select></li>
-    [% END %]
+    [% PROCESS group_and_subgroup_selection %]
+
 [% IF (public) %]
-  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0">No (default)</option> <option value="1" selected="selected">Yes</public> </select></li>
+  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0">No (default)</option> <option value="1" selected="selected">Yes</option> </select></li>
 [% ELSE %]
-  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0" selected="selected">No (default)</option> <option value="1">Yes</public> </select></li>
+  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0" selected="selected">No (default)</option> <option value="1">Yes</option> </select></li>
 [% END %]
 [% IF (usecache) %] <li>
 <label for="cache_expiry">Cache expiry:</label><input type="text" id="cache_expiry" name="cache_expiry" value="[% cache_expiry %]"></input>
@@ -746,11 +923,6 @@ Sub report:<select name="subreport">
 [% END %]
 
 [% IF ( editsql ) %]
-<script type="text/javascript">
-$(document).ready(function() {
-    load_group_subgroups();
-});
-</script>
 <form action="/cgi-bin/koha/reports/guided_reports.pl" method="post">
 <input type="hidden" name="phase" value="Update SQL" />
 <input type="hidden" name="id" value="[% id %]"/>
@@ -758,35 +930,11 @@ $(document).ready(function() {
 <legend>Edit SQL report</legend>
 <ol>
 <li><label for="reportname">Report name:</label><input type="text" id="reportname" name="reportname" value="[% reportname %]" size="50" /></li>
-    [% IF groups_with_subgroups %]
-    <li><label for="group">Report group: </label><select name="group" id="group" onChange="load_group_subgroups();">
-        [% FOR g IN groups_with_subgroups %]
-            [% IF g.selected %]
-    <option value="[% g.id %]" selected>[% g.name %]</option>
-            [% ELSE %]
-    <option value="[% g.id %]">[% g.name %]</option>
-            [% END %]
-    <script type="text/javascript">
-        var g_sg = new Array();
-            [% FOR sg IN g.subgroups %]
-        g_sg.push(["[% sg.id %]", "[% sg.name %]"]);
-                [% IF sg.selected %]
-        $(document).ready(function() {
-            $("#subgroup").val("[% sg.id %]");
-        });
-                [% END %]
-            [% END %]
-        group_subgroups["[% g.id %]"] = g_sg;
-    </script>
-        [% END %]
-    </select></li>
-    <li><label for="subgroup">Report subgroup: </label><select name="subgroup" id="subgroup">
-    </select></li>
-    [% END %]
+[% PROCESS group_and_subgroup_selection %]
 [% IF (public) %]
-  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0">No (default)</option> <option value="1" selected="selected">Yes</public> </select></li>
+  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0">No (default)</option> <option value="1" selected="selected">Yes</option> </select></li>
 [% ELSE %]
-  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0" selected="selelcted">No (default)</option> <option value="1">Yes</public> </select></li>
+  <li><label for="public">Report is public:</label><select id="public" name="public"> <option value="0" selected="selected">No (default)</option> <option value="1">Yes</option> </select></li>
 [% END %]
 [% IF (usecache) %] <li>
 <label for="cache_expiry">Cache expiry:</label><input type="text" id="cache_expiry" name="cache_expiry" value="[% cache_expiry %]"></input>
@@ -850,43 +998,12 @@ $(document).ready(function() {
 
 [% IF ( saved1 ) %]
 <div id="saved-reports-filter">
-<script type="text/javascript">
-$(document).ready(function() {
-    no_subgroup_label = _( "-- All --" );
-    load_group_subgroups();
-});
-</script>
 <form action="/cgi-bin/koha/reports/guided_reports.pl" method="get">
   <input type="hidden" name="phase" value="Use saved" />
   <input type="hidden" name="filter_set" value="1" />
   <fieldset class="brief">
   <h3>Filter</h3>
   <ol>
-    <li><label for="group">Choose Group and Subgroup: </label>
-    <select name="group" id="group" onChange="load_group_subgroups();">
-        <option value="">-- All --</option>
-    [% FOR g IN groups_with_subgroups %]
-        [% IF g.selected %]
-        <option value="[% g.id %]" selected>[% g.name %]</option>
-        [% ELSE %]
-        <option value="[% g.id %]">[% g.name %]</option>
-        [% END %]
-        <script type="text/javascript">
-            var g_sg = new Array();
-        [% FOR sg IN g.subgroups %]
-            g_sg.push(["[% sg.id %]", "[% sg.name %]"]);
-            [% IF sg.selected %]
-            $(document).ready(function() {
-                $("#subgroup").val("[% sg.id %]");
-            });
-            [% END %]
-        [% END %]
-            group_subgroups["[% g.id %]"] = g_sg;
-        </script>
-    [% END %]
-    </select>
-    <select name="subgroup" id="subgroup"></select>
-    </li>
     <li><label for="filter_date">Date:</label> <input type="text" id="filter_date" name="filter_date" size="10" value="[% filter_date %]" class="datepicker" />
     <div class="hint">[% INCLUDE 'date-format.inc' %]</div>
 
@@ -894,6 +1011,7 @@ $(document).ready(function() {
     <li><label for="filter_author">Author:</label> <input type="text" id="filter_author" name="filter_author" value="[% filter_author %]" /></li>
     <li><label for="filter_keyword">Keyword:</label> <input type="text" id="filter_keyword" name="filter_keyword" value="[% filter_keyword %]" /></li>
   </ol>
+  </fieldset>
   <fieldset class="action"><input type="submit" value="Apply filter" /></fieldset>
 </form>
 </div>
@@ -922,3 +1040,56 @@ $("#column_submit").submit(function() {
 //]]>
 </script>
 [% INCLUDE 'intranet-bottom.inc' %]
+
+
+[% BLOCK group_and_subgroup_selection %]
+    <li id="group">
+        <label>Report group:</label>
+        <input type="radio" name="select_or_create_group"
+            id="select_group" checked="checked" />
+        <label for="select_group" style="float:none">Select</label>
+        <select name="group" onChange="load_group_subgroups();" id="group_select">
+            <option value="">(None)</option>
+            [% FOREACH group IN groups_with_subgroups %]
+                [% IF (group.selected) %]
+                    <option value="[% group.id %]" selected="selected">
+                [% ELSE %]
+                    <option value="[% group.id %]">
+                [% END %]
+                    [% group.name %]
+                </option>
+            [% END %]
+        </select>
+        <input type="radio" name="select_or_create_group" id="create_group" />
+        <label for="create_group" style="float:none">or create</label>
+        <input type="text" name="group" id="group_input" title="Group code" placeholder="Code" />
+        <input type="text" name="groupdesc" id="groupdesc_input" title="Group name" placeholder="Name" />
+    </li>
+    <li id="subgroup">
+        <label>Report subgroup:</label>
+        <input type="radio" name="select_or_create_subgroup"
+            id="select_subgroup" checked="checked" />
+        <label for="select_subgroup" style="float:none">Select</label>
+        <select name="subgroup" id="subgroup_select">
+            <option value="">(None)</option>
+            [% FOREACH group IN groups_with_subgroups %]
+                [% IF (group.selected) %]
+                    [% FOREACH subgroup IN group.subgroups %]
+                        [% IF (subgroup.selected) %]
+                            <option value="[% subgroup.id %]" selected="selected">
+                        [% ELSE %]
+                            <option value="[% subgroup.id %]">
+                        [% END %]
+                            [% subgroup.name %]
+                        </option>
+                    [% END %]
+                [% END %]
+            [% END %]
+        </select>
+        <input type="radio" name="select_or_create_subgroup"
+            id="create_subgroup" />
+        <label for="create_subgroup" style="float:none">or create</label>
+        <input type="text" name="subgroup" id="subgroup_input" title="Subgroup code" placeholder="Code" />
+        <input type="text" name="subgroupdesc" id="subgroupdesc_input" title="Subgroup name" placeholder="Name" />
+    </li>
+[% END %]

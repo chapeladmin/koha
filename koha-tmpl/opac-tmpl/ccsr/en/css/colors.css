@@ -13,6 +13,11 @@ body {
     background-color : #eaeae6;
 }
 
+body.popup {
+    min-width: 100px;
+    padding : 1em;
+}
+
 #container {
     background: #fff;
     border:1px solid #d2d2cf;
@@ -21,7 +26,6 @@ body {
     border-radius: 8px;
     margin:0 20px;
     padding: 10px;
-    overflow: hidden;
 }
 
 a:link,
@@ -56,7 +60,6 @@ a:hover {
     background: none;
     border: none;
     display: table;
-    margin: 40px 0 0 !important;
     padding: 0.7em 0 0 0.5em;
     width: 100%;
 }

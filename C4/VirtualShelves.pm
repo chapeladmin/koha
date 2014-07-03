@@ -29,6 +29,8 @@ use constant SHELVES_COMBO_MAX => 10; #add to combo in search
 use constant SHELVES_MGRPAGE_MAX => 20; #managing page
 use constant SHELVES_POPUP_MAX => 40; #addbybiblio popup
 
+use constant SHARE_INVITATION_EXPIRY_DAYS => 14; #two weeks to accept
+
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
 
 BEGIN {
@@ -43,6 +45,7 @@ BEGIN {
             &ShelfPossibleAction
             &DelFromShelf &DelShelf
             &GetBibliosShelves
+            &AddShare &AcceptShare &RemoveShare &IsSharedList
     );
         @EXPORT_OK = qw(
             &GetAllShelves &ShelvesMax
@@ -255,7 +258,7 @@ from C4::Circulation.
 =cut
 
 sub GetShelfContents {
-    my ($shelfnumber, $row_count, $offset, $sortfield) = @_;
+    my ($shelfnumber, $row_count, $offset, $sortfield, $sort_direction ) = @_;
     my $dbh=C4::Context->dbh();
     my $sth1 = $dbh->prepare("SELECT count(*) FROM virtualshelfcontents WHERE shelfnumber = ?");
     $sth1->execute($shelfnumber);
@@ -276,8 +279,8 @@ sub GetShelfContents {
          WHERE  vc.shelfnumber=? ";
     my @params = ($shelfnumber);
     if($sortfield) {
-        $query .= " ORDER BY " . $sortfield;
-        $query .= " DESC " if ($sortfield eq 'copyrightdate');
+        $query .= " ORDER BY " . $dbh->quote_identifier( $sortfield );
+        $query .= " DESC " if ( $sort_direction eq 'desc' );
     }
     if($row_count){
        $query .= " LIMIT ?, ? ";
@@ -331,6 +334,7 @@ sub AddShelf {
         $hashref->{allow_add}//0,
         $hashref->{allow_delete_own}//1,
         $hashref->{allow_delete_other}//0 );
+    return if $sth->err;
     my $shelfnumber = $dbh->{'mysql_insertid'};
     return $shelfnumber;
 }
@@ -432,6 +436,7 @@ ShelfPossibleAction($loggedinuser, $shelfnumber, $action);
 C<$loggedinuser,$shelfnumber,$action>
 
 $action can be "view", "add", "delete", "manage", "new_public", "new_private".
+New additional actions are: invite, acceptshare.
 Note that add/delete here refers to adding/deleting entries from the list. Deleting the list itself falls under manage.
 new_public and new_private refers to creating a new public or private list.
 The distinction between deleting your own entries from the list or entries from
@@ -439,6 +444,8 @@ others is made in DelFromShelf.
 
 Returns 1 if the user can do the $action in the $shelfnumber shelf.
 Returns 0 otherwise.
+For the actions invite and acceptshare a second errorcode is returned if the
+result is false. See opac-shareshelf.pl
 
 =cut
 
@@ -487,6 +494,28 @@ sub ShelfPossibleAction {
         #it does not answer the question about a specific biblio
         #DelFromShelf checks the situation per biblio
         return 1 if $user>0 && ($shelf->{allow_delete_own}==1 || $shelf->{allow_delete_other}==1);
+    }
+    elsif($action eq 'invite') {
+        #for sharing you must be the owner and the list must be private
+        if( $shelf->{category}==1 ) {
+            return 1 if $shelf->{owner}==$user;
+            return (0, 4); # code 4: should be owner
+        }
+        else {
+            return (0, 5); # code 5: should be private list
+        }
+    }
+    elsif($action eq 'acceptshare') {
+        #the key for accepting is checked later in AcceptShare
+        #you must not be the owner, list must be private
+        if( $shelf->{category}==1 ) {
+            return (0, 8) if $shelf->{owner}==$user;
+                #code 8: should not be owner
+            return 1;
+        }
+        else {
+            return (0, 5); # code 5: should be private list
+        }
     }
     elsif($action eq 'manage') {
         return 1 if $user && $shelf->{owner}==$user;
@@ -597,38 +626,129 @@ sub ShelvesMax {
     return SHELVES_MASTHEAD_MAX;
 }
 
+=head2 HandleDelBorrower
+
+     HandleDelBorrower($borrower);
+
+When a member is deleted (DelMember in Members.pm), you should call me first.
+This routine deletes/moves lists and entries for the deleted member/borrower.
+Lists owned by the borrower are deleted, but entries from the borrower to
+other lists are kept.
+
+=cut
+
 sub HandleDelBorrower {
-#when a member is deleted (DelMember in Members.pm), you should call me first
-#this routine deletes/moves lists and entries for the deleted member/borrower
-#you could just delete everything (and lose more than you want)
-#instead we now try to save all public/shared stuff and keep others happy
     my ($borrower)= @_;
     my $query;
     my $dbh = C4::Context->dbh;
 
-    #Delete shares of this borrower (not lists !)
-    $query="DELETE FROM virtualshelfshares WHERE borrowernumber=?";
+    #Delete all lists and all shares of this borrower
+    #Consistent with the approach Koha uses on deleting individual lists
+    #Note that entries in virtualshelfcontents added by this borrower to
+    #lists of others will be handled by a table constraint: the borrower
+    #is set to NULL in those entries.
+    $query="DELETE FROM virtualshelves WHERE owner=?";
     $dbh->do($query,undef,($borrower));
 
-    #Delete private lists without owner that now have no shares anymore
-    $query="DELETE vs.* FROM virtualshelves vs LEFT JOIN virtualshelfshares sh USING (shelfnumber) WHERE category=1 AND vs.owner IS NULL AND sh.shelfnumber IS NULL";
-    $dbh->do($query);
+    #NOTE:
+    #We could handle the above deletes via a constraint too.
+    #But a new BZ report 11889 has been opened to discuss another approach.
+    #Instead of deleting we could also disown lists (based on a pref).
+    #In that way we could save shared and public lists.
+    #The current table constraints support that idea now.
+    #This pref should then govern the results of other routines such as
+    #DelShelf too.
+}
 
-    #Change owner for private lists which have shares
-    $query="UPDATE virtualshelves LEFT JOIN virtualshelfshares sh USING (shelfnumber) SET owner=NULL where owner=? AND category=1 AND sh.borrowernumber IS NOT NULL";
-    $dbh->do($query,undef,($borrower));
+=head2 AddShare
 
-    #Delete unshared private lists
-    $query="DELETE FROM virtualshelves WHERE owner=? AND category=1";
-    $dbh->do($query,undef,($borrower));
+     AddShare($shelfnumber, $key);
 
-    #Handle public lists owned by borrower
-    $query="UPDATE virtualshelves SET owner=NULL WHERE owner=? AND category=2";
-    $dbh->do($query,undef,($borrower));
+Adds a share request to the virtualshelves table.
+Authorization must have been checked, and a key must be supplied. See script
+opac-shareshelf.pl for an example.
+This request is not yet confirmed. So it has no borrowernumber, it does have an
+expiry date.
 
-    #Handle entries added by borrower to lists of others
-    $query="UPDATE virtualshelfcontents SET borrowernumber=NULL WHERE borrowernumber=?";
-    $dbh->do($query,undef,($borrower));
+=cut
+
+sub AddShare {
+    my ($shelfnumber, $key)= @_;
+    return if !$shelfnumber || !$key;
+
+    my $dbh = C4::Context->dbh;
+    my $sql = "INSERT INTO virtualshelfshares (shelfnumber, invitekey, sharedate) VALUES (?, ?, NOW())";
+    $dbh->do($sql, undef, ($shelfnumber, $key));
+    return !$dbh->err;
+}
+
+=head2 AcceptShare
+
+     my $result= AcceptShare($shelfnumber, $key, $borrowernumber);
+
+Checks acceptation of a share request.
+Key must be found for this shelf. Invitation must not have expired.
+Returns true when accepted, false otherwise.
+
+=cut
+
+sub AcceptShare {
+    my ($shelfnumber, $key, $borrowernumber)= @_;
+    return if !$shelfnumber || !$key || !$borrowernumber;
+
+    my $sql;
+    my $dbh = C4::Context->dbh;
+    $sql="
+UPDATE virtualshelfshares
+SET invitekey=NULL, sharedate=NOW(), borrowernumber=?
+WHERE shelfnumber=? AND invitekey=? AND (sharedate + INTERVAL ? DAY) >NOW()
+    ";
+    my $i= $dbh->do($sql, undef, ($borrowernumber, $shelfnumber, $key,  SHARE_INVITATION_EXPIRY_DAYS));
+    return if !defined($i) || !$i || $i eq '0E0'; #not found
+    return 1;
+}
+
+=head2 IsSharedList
+
+     my $bool= IsSharedList( $shelfnumber );
+
+IsSharedList checks if a (private) list has shares.
+Note that such a check would not be useful for public lists. A public list has
+no shares, but is visible for anyone by nature..
+Used to determine the list type in the display of Your lists (all private).
+Returns boolean value.
+
+=cut
+
+sub IsSharedList {
+    my ($shelfnumber) = @_;
+    my $dbh = C4::Context->dbh;
+    my $sql="SELECT id FROM virtualshelfshares WHERE shelfnumber=? AND borrowernumber IS NOT NULL";
+    my $sth = $dbh->prepare($sql);
+    $sth->execute($shelfnumber);
+    my ($rv)= $sth->fetchrow_array;
+    return defined($rv);
+}
+
+=head2 RemoveShare
+
+     RemoveShare( $user, $shelfnumber );
+
+RemoveShare removes a share for specific shelf and borrower.
+Returns true if a record could be deleted.
+
+=cut
+
+sub RemoveShare {
+    my ($user, $shelfnumber)= @_;
+    my $dbh = C4::Context->dbh;
+    my $sql="
+DELETE FROM virtualshelfshares
+WHERE borrowernumber=? AND shelfnumber=?
+    ";
+    my $n= $dbh->do($sql,undef,($user, $shelfnumber));
+    return if !defined($n) || !$n || $n eq '0E0'; #nothing removed
+    return 1;
 }
 
 # internal subs
@@ -657,34 +777,30 @@ sub _shelf_count {
     return $total;
 }
 
-sub _biblionumber_sth { #only used in obsolete sub below
-    my ($shelf) = @_;
-    my $query = 'select biblionumber from virtualshelfcontents where shelfnumber = ?';
-    my $dbh = C4::Context->dbh;
-    my $sth = $dbh->prepare($query)
-        or die $dbh->errstr;
-    $sth->execute( $shelf )
-        or die $sth->errstr;
-    $sth;
-}
-
 sub _CheckShelfName {
     my ($name, $cat, $owner, $number)= @_;
 
     my $dbh = C4::Context->dbh;
+    my @pars;
     my $query = qq(
         SELECT DISTINCT shelfnumber
         FROM   virtualshelves
         LEFT JOIN virtualshelfshares sh USING (shelfnumber)
         WHERE  shelfname=? AND shelfnumber<>?);
-    if($cat==1) {
+    if($cat==1 && defined($owner)) {
         $query.= ' AND (sh.borrowernumber=? OR owner=?) AND category=1';
+        @pars=($name, $number, $owner, $owner);
     }
-    else {
+    elsif($cat==1 && !defined($owner)) { #owner is null (exceptional)
+        $query.= ' AND owner IS NULL AND category=1';
+        @pars=($name, $number);
+    }
+    else { #public list
         $query.= ' AND category=2';
+        @pars=($name, $number);
     }
     my $sth = $dbh->prepare($query);
-    $sth->execute($cat==1? ($name, $number, $owner, $owner): ($name, $number));
+    $sth->execute(@pars);
     return $sth->rows>0? 0: 1;
 }
 

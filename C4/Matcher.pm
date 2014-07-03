@@ -626,20 +626,45 @@ sub get_matches {
 
     my %matches = ();
 
-    foreach my $matchpoint (@{ $self->{'matchpoints'} }) {
-        my @source_keys = _get_match_keys($source_record, $matchpoint);
+    my $QParser;
+    $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser'));
+    foreach my $matchpoint ( @{ $self->{'matchpoints'} } ) {
+        my @source_keys = _get_match_keys( $source_record, $matchpoint );
+
         next if scalar(@source_keys) == 0;
+
+        # FIXME - because of a bug in QueryParser, an expression ofthe
+        # format 'isbn:"isbn1" || isbn:"isbn2" || isbn"isbn3"...'
+        # does not get parsed correctly, so we will not
+        # do AggressiveMatchOnISBN if UseQueryParser is on
+        @source_keys = C4::Koha::GetVariationsOfISBNs(@source_keys)
+          if ( $matchpoint->{index} =~ /^isbn$/i
+            && C4::Context->preference('AggressiveMatchOnISBN') )
+            && !C4::Context->preference('UseQueryParser');
+
         # build query
         my $query;
         my $error;
         my $searchresults;
         my $total_hits;
-        if ($self->{'record_type'} eq 'biblio') {
-            $query = join(" or ", map { "$matchpoint->{'index'}=$_" } @source_keys);
-# FIXME only searching biblio index at the moment
+        if ( $self->{'record_type'} eq 'biblio' ) {
+
+            if ($QParser) {
+                $query = join( " || ",
+                    map { "$matchpoint->{'index'}:$_" } @source_keys );
+            }
+            else {
+                my $phr = C4::Context->preference('AggressiveMatchOnISBN') ? ',phr' : q{};
+                $query = join( " or ",
+                    map { "$matchpoint->{'index'}$phr=$_" } @source_keys );
+            }
+
             require C4::Search;
-            ($error, $searchresults, $total_hits) = C4::Search::SimpleSearch($query, 0, $max_matches);
-        } elsif ($self->{'record_type'} eq 'authority') {
+
+            ( $error, $searchresults, $total_hits ) =
+              C4::Search::SimpleSearch( $query, 0, $max_matches );
+        }
+        elsif ( $self->{'record_type'} eq 'authority' ) {
             my $authresults;
             my @marclist;
             my @and_or;
@@ -648,24 +673,27 @@ sub get_matches {
             my @value;
             foreach my $key (@source_keys) {
                 push @marclist, $matchpoint->{'index'};
-                push @and_or, 'or';
+                push @and_or,   'or';
                 push @operator, 'exact';
-                push @value, $key;
+                push @value,    $key;
             }
             require C4::AuthoritiesMarc;
-            ($authresults, $total_hits) = C4::AuthoritiesMarc::SearchAuthorities(
-                    \@marclist, \@and_or, \@excluding, \@operator,
-                    \@value, 0, 20, undef, 'AuthidAsc', 1
-            );
+            ( $authresults, $total_hits ) =
+              C4::AuthoritiesMarc::SearchAuthorities(
+                \@marclist,  \@and_or, \@excluding, \@operator,
+                \@value,     0,        20,          undef,
+                'AuthidAsc', 1
+              );
             foreach my $result (@$authresults) {
                 push @$searchresults, $result->{'authid'};
             }
         }
 
-        if (defined $error ) {
+        if ( defined $error ) {
             warn "search failed ($query) $error";
-        } else {
-            foreach my $matched (@{$searchresults}) {
+        }
+        else {
+            foreach my $matched ( @{$searchresults} ) {
                 $matches{$matched} += $matchpoint->{'score'};
             }
         }
@@ -682,7 +710,7 @@ sub get_matches {
     if ($self->{'record_type'} eq 'biblio') {
         require C4::Biblio;
         foreach my $marcblob (keys %matches) {
-            my $target_record = MARC::Record->new_from_usmarc($marcblob);
+            my $target_record = C4::Search::new_record_from_zebra('biblioserver',$marcblob);
             my $record_number;
             my $result = C4::Biblio::TransformMarcToKoha(C4::Context->dbh, $target_record, '');
             $record_number = $result->{'biblionumber'};

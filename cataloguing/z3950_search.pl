@@ -53,7 +53,6 @@ my ( $template, $loggedinuser, $cookie ) = get_template_and_user({
         template_name   => "cataloguing/z3950_search.tmpl",
         query           => $input,
         type            => "intranet",
-        authnotrequired => 1,
         flagsrequired   => { catalogue => 1 },
 });
 
@@ -74,7 +73,7 @@ $template->param(
 );
 
 if ( $op ne "do_search" ) {
-    my $sth = $dbh->prepare("SELECT id,host,name,checked FROM z3950servers ORDER BY rank, name");
+    my $sth = $dbh->prepare("SELECT id,host,name,checked FROM z3950servers WHERE recordtype <> 'authority' ORDER BY rank, name");
     $sth->execute();
     my $serverloop = $sth->fetchall_arrayref( {} );
     $template->param(
@@ -94,7 +93,6 @@ if ( @id==0 ) {
 }
 
 my $pars= {
-        random => $input->param('random') || rand(1000000000),
         biblionumber => $biblionumber,
         page => $page,
         id => \@id,
@@ -106,8 +104,8 @@ my $pars= {
         subject => $subject,
         lccall => $lccall,
         controlnumber => $controlnumber,
-        stdid => 0,
-        srchany => 0,
+        stdid => $stdid,
+        srchany => $srchany,
 };
 Z3950Search($pars, $template);
 output_html_with_http_headers $input, $cookie, $template->output;

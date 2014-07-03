@@ -181,7 +181,7 @@ sub checkin {
     $circ->item($item = new ILS::Item $item_id);
 
     if ($item) {
-        $circ->do_checkin($current_loc);
+        $circ->do_checkin($current_loc, $return_date);
     } else {
         $circ->alert(1);
         $circ->alert_type(99);
@@ -229,7 +229,7 @@ sub pay_fee {
         $trans->screen_msg('Invalid patron barcode.');
         return $trans;
     }
-    $trans->pay($patron->{borrowernumber},$fee_amt);
+    $trans->pay($patron->{borrowernumber},$fee_amt, $pay_type);
     $trans->ok(1);
 
     return $trans;
@@ -253,6 +253,10 @@ sub add_hold {
 		$trans->screen_msg("No such item.");
 		return $trans;
 	}
+
+    if ( $patron->holds_blocked_by_excessive_fees() ) {
+        $trans->screen_msg("Excessive fees blocking placement of hold.");
+    }
 
    if ($item->fee and $fee_ack ne 'Y') {
 		$trans->screen_msg = "Fee required to place hold.";

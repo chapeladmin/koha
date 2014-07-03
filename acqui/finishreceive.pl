@@ -40,7 +40,6 @@ checkauth($input, 0, $flagsrequired, 'intranet');
 
 my $user             = $input->remote_user;
 my $biblionumber     = $input->param('biblionumber');
-my $biblioitemnumber = $input->param('biblioitemnumber');
 my $ordernumber      = $input->param('ordernumber');
 my $origquantityrec  = $input->param('origquantityrec');
 my $quantityrec      = $input->param('quantityrec');
@@ -52,17 +51,33 @@ my $invoiceno        = $invoice->{invoicenumber};
 my $datereceived     = $invoice->{shipmentdate};
 my $booksellerid     = $input->param('booksellerid');
 my $cnt              = 0;
-my $error_url_str;
 my $ecost            = $input->param('ecost');
 my $rrp              = $input->param('rrp');
-my $note             = $input->param("note");
+my $order_internalnote = $input->param("order_internalnote");
+my $bookfund         = $input->param("bookfund");
 my $order            = GetOrder($ordernumber);
+my $new_ordernumber  = $ordernumber;
 
 #need old recievedate if we update the order, parcel.pl only shows the right parcel this way FIXME
 if ($quantityrec > $origquantityrec ) {
     my @received_items = ();
     if(C4::Context->preference('AcqCreateItem') eq 'ordering') {
         @received_items = $input->param('items_to_receive');
+        my @affects = split q{\|}, C4::Context->preference("AcqItemSetSubfieldsWhenReceived");
+        if ( @affects ) {
+            my $frameworkcode = GetFrameworkCode($biblionumber);
+            my ( $itemfield ) = GetMarcFromKohaField( 'items.itemnumber', $frameworkcode );
+            for my $in ( @received_items ) {
+                my $item = C4::Items::GetMarcItem( $biblionumber, $in );
+                for my $affect ( @affects ) {
+                    my ( $sf, $v ) = split q{=}, $affect, 2;
+                    foreach ( $item->field($itemfield) ) {
+                        $_->update( $sf => $v );
+                    }
+                }
+                C4::Items::ModItemFromMarc( $item, $biblionumber, $in );
+            }
+        }
     }
 
     $order->{rrp} = $rrp;
@@ -83,22 +98,22 @@ if ($quantityrec > $origquantityrec ) {
         }
     }
 
-    my $new_ordernumber = $ordernumber;
     # save the quantity received.
     if ( $quantityrec > 0 ) {
-        ($datereceived, $new_ordernumber) = ModReceiveOrder(
-            $biblionumber,
-            $ordernumber,
-            $quantityrec,
-            $user,
-            $order->{unitprice},
-            $order->{ecost},
-            $invoiceid,
-            $order->{rrp},
-            undef,
-            $datereceived,
-            \@received_items,
-        );
+        ($datereceived, $new_ordernumber) = ModReceiveOrder({
+              biblionumber     => $biblionumber,
+              ordernumber      => $ordernumber,
+              quantityreceived => $quantityrec,
+              user             => $user,
+              cost             => $order->{unitprice},
+              ecost            => $order->{ecost},
+              invoiceid        => $invoiceid,
+              rrp              => $order->{rrp},
+              budget_id        => $bookfund,
+              datereceived     => $datereceived,
+              received_items   => \@received_items,
+              order_internalnote  => $order_internalnote,
+        } );
     }
 
     # now, add items if applicable
@@ -137,23 +152,18 @@ if ($quantityrec > $origquantityrec ) {
             NewOrderItem($itemnumber, $new_ordernumber);
         }
     }
-
 }
 
-update_item( $_ ) foreach GetItemnumbersFromOrder( $ordernumber );
-
-print $input->redirect("/cgi-bin/koha/acqui/parcel.pl?invoiceid=$invoiceid");
-
-################################ End of script ################################
-
-sub update_item {
-    my ( $itemnumber ) = @_;
-
-    ModItem( {
+ModItem(
+    {
         booksellerid         => $booksellerid,
         dateaccessioned      => $datereceived,
         price                => $unitprice,
         replacementprice     => $rrp,
         replacementpricedate => $datereceived,
-    }, $biblionumber, $itemnumber );
-}
+    },
+    $biblionumber,
+    $_
+) foreach GetItemnumbersFromOrder($new_ordernumber);
+
+print $input->redirect("/cgi-bin/koha/acqui/parcel.pl?invoiceid=$invoiceid&sticky_filters=1");

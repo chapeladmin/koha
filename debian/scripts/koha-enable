@@ -19,21 +19,59 @@
 
 set -e
 
-
-die() {
-    echo "$@" 1>&2
+# include helper functions
+if [ -f "/usr/share/koha/bin/koha-functions.sh" ]; then
+    . "/usr/share/koha/bin/koha-functions.sh"
+else
+    echo "Error: /usr/share/koha/bin/koha-functions.sh not present." 1>&2
     exit 1
+fi
+
+enable_instance()
+{
+    local instancename=$1
+    local instancefile="/etc/apache2/sites-available/$instancename.conf"
+
+    if ! is_enabled $instancename; then
+        sed -i 's:^\(\s*Include /etc/koha/apache-shared-disable.conf\)$:#\1:' \
+            "$instancefile"
+        return 0
+    else
+        return 1
+    fi
 }
 
+usage()
+{
+    local scriptname=$0
+    cat <<EOF
+Enables Koha instances.
+
+Usage: $scriptname instancename1 instancename2...
+
+EOF
+}
 
 # Parse command line.
-[ "$#" = 1 ] || die "Usage: $0 instancename..."
+[ $# -ge 1 ] || ( usage ; die "Missing instance name..." )
 
+restart_apache="no"
 
 for name in "$@"
 do
-    sed -i 's:^\(\s*Include /etc/koha/apache-shared-disable.conf\)$:#\1:' \
-        "/etc/apache2/sites-available/$name"
+    if is_instance $name ; then
+        if enable_instance $name; then
+            restart_apache="yes"
+        else
+            warn "Instance $name already enabled."
+        fi
+    else
+        warn "Unknown instance $name."
+    fi
 done
 
-/etc/init.d/apache2 restart
+if [ "$restart_apache" = "yes" ]; then
+    /etc/init.d/apache2 restart
+fi
+
+exit 0

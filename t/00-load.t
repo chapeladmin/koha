@@ -20,6 +20,7 @@ find({
         return if $m =~ /SIP/; # SIP modules will not load clean
         return if $m =~ /C4::VirtualShelves$/; # Requires a DB
         return if $m =~ /C4::Auth$/; # DB
+        return if $m =~ /C4::ILSDI::Services/; # DB
         return if $m =~ /C4::Tags$/; # DB
         return if $m =~ /C4::Service/; # DB
         return if $m =~ /C4::Auth_with_cas/; # DB
@@ -28,6 +29,8 @@ find({
         return if $m =~ /C4::Reports::Guided/; # DB
         return if $m =~ /C4::VirtualShelves::Page/; # DB
         return if $m =~ /C4::Members::Statistics/; # DB
+        return if $m =~ /C4::Serials/; # needs context
+        return if $m =~ /C4::Search::History/; # needs context
         use_ok($m) || BAIL_OUT("***** PROBLEMS LOADING FILE '$m'");
     },
 }, $lib);
@@ -43,7 +46,6 @@ find(
             $m =~ s{^.*/Koha/}{Koha/};
             $m =~ s{/}{::}g;
             return if $m =~ /Koha::SearchEngine/; # Koha::SearchEngine::* are experimental
-            return if $m =~ /Koha::Cache::Memcached/; # optional dependency
             use_ok($m) || BAIL_OUT("***** PROBLEMS LOADING FILE '$m'");
         },
     },

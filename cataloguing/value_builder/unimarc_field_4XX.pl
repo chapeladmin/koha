@@ -116,16 +116,19 @@ sub plugin {
             $subfield_value_a .= " " . $marcrecord->subfield( '700', "d" )
               if $marcrecord->subfield( '700', 'd' );
             $subfield_value_a .=
-              " (" . $marcrecord->subfield( '700', 'c' ) . " - "
+              " (" . $marcrecord->subfield( '700', 'c' )
               if $marcrecord->subfield( '700',     'c' );
+            $subfield_value_a .=  " ; "
+              if $marcrecord->subfield( '700',     'c' )
+                and $marcrecord->subfield( '700',     'f' );
             $subfield_value_a .= " ("
               if ( $marcrecord->subfield( '700', 'f' )
                 and not( $marcrecord->subfield( '700', 'c' ) ) );
             $subfield_value_a .= $marcrecord->subfield( '700', 'f' )
               if ( $marcrecord->subfield( '700', 'f' ) );
             $subfield_value_a .= ")"
-              if ( $marcrecord->subfield( '701', 'f' )
-                or $marcrecord->subfield( '701', 'c' ) );
+              if ( $marcrecord->subfield( '700', 'f' )
+                or $marcrecord->subfield( '700', 'c' ) );
         }
         elsif ( $marcrecord->field('702') ) {
             $subfield_value_a = $marcrecord->subfield( '702', 'a' );
@@ -134,8 +137,11 @@ sub plugin {
             $subfield_value_a .= " " . $marcrecord->subfield( '702', 'd' )
               if $marcrecord->subfield( '702', 'd' );
             $subfield_value_a .=
-              " (" . $marcrecord->subfield( '702', 'c' ) . "; "
+              " (" . $marcrecord->subfield( '702', 'c' )
               if $marcrecord->subfield( '702',     'c' );
+            $subfield_value_a .=  " ; "
+              if $marcrecord->subfield( '702',     'c' )
+                and $marcrecord->subfield( '702',     'f' );
             $subfield_value_a .= " ("
               if $marcrecord->subfield( '702', 'f' )
               and not $marcrecord->subfield( '702', 'c' );
@@ -193,7 +199,7 @@ sub plugin {
               " (" . $marcrecord->subfield( '712', 'f' ) . " - "
               if $marcrecord->subfield( '712',     'f' );
             $subfield_value_a .= " ("
-              if $marcrecord->field( '712', "e" )
+              if $marcrecord->subfield( '712', "e" )
               and not $marcrecord->subfield( '712', 'f' );
             $subfield_value_a .= $marcrecord->subfield( '712', 'e' )
               if $marcrecord->subfield( '712', 'e' );
@@ -341,7 +347,15 @@ sub plugin {
         my $startfrom      = $query->param('startfrom');
         my $resultsperpage = $query->param('resultsperpage') || 20;
         my $orderby;
-        $search = 'kw,wrdl='.$search.' and mc-itemtype='.$itype if $itype;
+        my $QParser;
+        $QParser = C4::Context->queryparser if (C4::Context->preference('UseQueryParser'));
+        my $op;
+        if ($QParser) {
+            $op = '&&';
+        } else {
+            $op = 'and';
+        }
+        $search = 'kw:'.$search." $op mc-itemtype:".$itype if $itype;
         my ( $errors, $results, $total_hits ) = SimpleSearch($search, $startfrom * $resultsperpage, $resultsperpage );
         if (defined $errors ) {
             $results = [];
@@ -376,7 +390,7 @@ sub plugin {
              $i++
            )
          {
-            my $record = MARC::Record::new_from_usmarc( $results->[$i] );
+            my $record = C4::Search::new_record_from_zebra( 'biblioserver', $results->[$i] );
             my $rechash = TransformMarcToKoha( $dbh, $record );
             my $pos;
             my $countitems;
@@ -503,25 +517,7 @@ sub plugin {
         );
         $sth->finish;
 
-        my @branchloop;
-        my @select_branch;
-        my %select_branches;
-        my $branches = GetBranches;
-        push @select_branch, "";
-        $select_branches{''} = "";
-        foreach my $thisbranch ( keys %$branches ) {
-            push @select_branch, $branches->{$thisbranch}->{'branchcode'};
-            $select_branches{ $branches->{$thisbranch}->{'branchcode'} } =
-              $branches->{$thisbranch}->{'branchname'};
-        }
-        my $CGIbranch = CGI::scrolling_list(
-            -name     => 'value',
-            -values   => \@select_branch,
-            -labels   => \%select_branches,
-            -size     => 1,
-            -multiple => 0
-        );
-        $sth->finish;
+        # To show list of branches please use GetBranchesLoop() and modify template
 
         my $req =
           $dbh->prepare(
@@ -552,7 +548,6 @@ sub plugin {
 
         $template->param(    #classlist => $classlist,
             CGIitemtype  => $CGIitemtype,
-            CGIbranch    => $CGIbranch,
             CGIPublisher => $CGIpublisher,
             itypeloop    => \@itemtypes,
             index        => $query->param('index'),

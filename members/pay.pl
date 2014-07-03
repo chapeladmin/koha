@@ -29,6 +29,7 @@
 use strict;
 use warnings;
 
+use URI::Escape;
 use C4::Context;
 use C4::Auth;
 use C4::Output;
@@ -43,12 +44,13 @@ use C4::Members::Attributes qw(GetBorrowerAttributes);
 
 our $input = CGI->new;
 
+my $updatecharges_permissions = $input->param('woall') ? 'writeoff' : 'remaining_permissions';
 our ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     {   template_name   => 'members/pay.tmpl',
         query           => $input,
         type            => 'intranet',
         authnotrequired => 0,
-        flagsrequired   => { borrowers => 1, updatecharges => 1 },
+        flagsrequired   => { borrowers => 1, updatecharges => $updatecharges_permissions },
         debug           => 1,
     }
 );
@@ -87,7 +89,8 @@ if ($writeoff_all) {
     my $itemno       = $input->param('itemnumber');
     my $account_type = $input->param('accounttype');
     my $amount       = $input->param('amountoutstanding');
-    WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $account_type, $amount );
+    my $payment_note = $input->param("payment_note");
+    WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $account_type, $amount, $branch, $payment_note );
 }
 
 for (@names) {
@@ -100,7 +103,10 @@ for (@names) {
     }
 }
 
-$template->param( activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne '') );
+$template->param(
+    activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
+    RoutingSerials => C4::Context->preference('RoutingSerials'),
+);
 
 add_accounts_to_template();
 
@@ -161,12 +167,12 @@ sub redirect_to_paycollect {
     $redirect .=
       get_for_redirect( 'amountoutstanding', "amountoutstanding$line_no", 1 );
     $redirect .= get_for_redirect( 'accountno',    "accountno$line_no",    0 );
-    $redirect .= get_for_redirect( 'description',  "description$line_no",  0 );
     $redirect .= get_for_redirect( 'title',        "title$line_no",        0 );
     $redirect .= get_for_redirect( 'itemnumber',   "itemnumber$line_no",   0 );
     $redirect .= get_for_redirect( 'notify_id',    "notify_id$line_no",    0 );
     $redirect .= get_for_redirect( 'notify_level', "notify_level$line_no", 0 );
     $redirect .= get_for_redirect( 'accountlines_id', "accountlines_id$line_no", 0 );
+    $redirect .= q{&} . 'payment_note' . q{=} . uri_escape( $input->param("payment_note_$line_no") );
     $redirect .= '&remote_user=';
     $redirect .= $user;
     return print $input->redirect($redirect);
@@ -185,7 +191,8 @@ sub writeoff_all {
             my $amount    = $input->param("amountoutstanding$value");
             my $accountno = $input->param("accountno$value");
             my $accountlines_id = $input->param("accountlines_id$value");
-            WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $accounttype, $amount );
+            my $payment_note = $input->param("payment_note_$value");
+            WriteOffFee( $borrowernumber, $accountlines_id, $itemno, $accounttype, $amount, $branch, $payment_note );
         }
     }
 
@@ -214,7 +221,7 @@ sub borrower_add_additional_fields {
     } elsif ( $b_ref->{category_type} eq 'A' ) {
         $b_ref->{adultborrower} = 1;
     }
-    my ( $picture, $dberror ) = GetPatronImage( $b_ref->{cardnumber} );
+    my ( $picture, $dberror ) = GetPatronImage( $b_ref->{borrowernumber} );
     if ($picture) {
         $b_ref->{has_picture} = 1;
     }
@@ -243,10 +250,12 @@ sub payselected {
     }
     $amt = '&amt=' . $amt;
     my $sel = '&selected=' . join ',', @lines_to_pay;
+    my $notes = '&notes=' . join("%0A", map { $input->param("payment_note_$_") } @lines_to_pay );
     my $redirect =
         "/cgi-bin/koha/members/paycollect.pl?borrowernumber=$borrowernumber"
       . $amt
-      . $sel;
+      . $sel
+      . $notes;
 
     print $input->redirect($redirect);
     return;

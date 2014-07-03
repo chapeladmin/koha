@@ -9,7 +9,7 @@ OPAC:
             - "The OPAC is located at http://"
             - pref: OPACBaseURL
               class: url
-            - . (This must be filled in correctly for RSS, unAPI, and search plugins to work.)
+            - . Do not include a trailing slash in the URL. (This must be filled in correctly for RSS, unAPI, and search plugins to work.)
         -
             - Show
             - pref: LibraryName
@@ -21,6 +21,17 @@ OPAC:
                   yes: Enable
                   no: Disable
             - "Koha OPAC as public. Private OPAC requires authentification before accessing the OPAC."
+        -
+            - pref: HighlightOwnItemsOnOPAC
+              choices:
+                  yes: Emphasize
+                  no: "Don't emphasize"
+            - "results from the "
+            - pref: HighlightOwnItemsOnOPACWhich
+              choices:
+                  PatronBranch: "patron's home branch"
+                  OpacURLBranch: "OPAC's branch via the URL"
+            - " by moving the results to the front and increasing the size or highlighting the rows for those results. (Non-XSLT Only)"
         -
             - "Show star-ratings on"
             - pref: OpacStarRatings
@@ -66,12 +77,11 @@ OPAC:
               class: file
             - '<br />Options:<ul><li><a href="#" class="set_syspref" data-syspref="OPACXSLTDetailsDisplay" data-value="">Leave empty</a> for "no xslt"</li><li>enter "<a href="#" class="set_syspref" data-syspref="OPACXSLTDetailsDisplay" data-value="default">default</a>" for the default one</li><li>put a path to define a xslt file</li><li>put an URL for an external specific stylesheet.</li></ul>{langcode} will be replaced with current interface language'
         -
-            - On pages displayed with XSLT stylesheets on the OPAC,
             - pref: DisplayOPACiconsXSLT
               choices:
-                  yes: show
-                  no: "don't show"
-            - icons for itemtype and authorized values.
+                  yes: Show
+                  no: "Don't show"
+            - the format, audience, and material type icons in XSLT MARC21 results and detail pages in the OPAC.
         -
             - pref: COinSinOPACResults
               choices:
@@ -99,6 +109,22 @@ OPAC:
                   yes: Show
                   no: "Don't show"
             - the name of the patron that has an item checked out on item detail pages on the OPAC.
+        -
+            - Display the
+            - pref: OpacLocationBranchToDisplay
+              choices:
+                  home: "home library"
+                  holding: "holding library"
+                  both: "home and holding libraries"
+            - for items on the OPAC record details page.
+        -
+            - Display the shelving location under the
+            - pref: OpacLocationBranchToDisplayShelving
+              choices:
+                  home: "home library"
+                  holding: "holding library"
+                  both: "home and holding libraries"
+            - for items on the OPAC record details page.
         -
             - pref: OpacKohaUrl
               default: 0
@@ -227,6 +253,10 @@ OPAC:
               type: textarea
               class: code
         -
+            - "Note to display on the patron summary page. This note only appears if the patron is logged in:"
+            - pref: OPACMySummaryNote
+              type: textarea
+        -
             - "Include the following HTML under the facets in OPAC search results:"
             - pref: OPACResultsSidebar
               type: textarea
@@ -270,6 +300,22 @@ OPAC:
                 homebranch: 'home library'
                 holdingbranch: 'holding library'
             - "is the logged in user's library. The second tab will contain all other items."
+        -
+            - pref: OpacSuggestionManagedBy
+              choices:
+                  yes: Show
+                  no: Don't show
+            - "the name of the staff member who managed a suggestion in OPAC."
+        -
+            - Display up to
+            - pref: OpacMaxItemsToDisplay
+              class: integer
+            - items on the biblio detail page (if the biblio has more items than this, a link is displayed instead that allows the user to choose to display all items).
+        -
+            - "Show the following HTML on the OPAC login form when a patron is not logged in:"
+            - pref: NoLoginInstructions
+              type: textarea
+              class: code
     Features:
         -
             - pref: opacuserlogin
@@ -407,6 +453,20 @@ OPAC:
                 yes: Display
                 no: Don't display
             - the list of authors/subjects in a popup for a combined search on OPAC detail pages.
+        -
+            - pref: OpacHoldNotes
+              default: 0
+              choices:
+                  yes: Allow
+                  no: Do not allow
+            - users to add a note when placing a hold.
+        -
+            - pref: OPACAcquisitionDetails
+              default: 0
+              choices:
+                  yes: Display
+                  no: Don't display
+            - the acquisition details on OPAC detail pages.
     Policy:
         -
             - pref: singleBranchMode
@@ -436,9 +496,10 @@ OPAC:
         -
             - pref: OPACItemHolds
               choices:
-                  yes: Allow
                   no: "Don't allow"
-            - patrons to place holds on specific items in the OPAC. If this is disabled, users can only put a hold on the next available item.
+                  yes: Allow
+                  force: Force
+            - patrons to place holds on specific items in the OPAC. If this is disabled, users can only put a hold on the next available item. If this is forced, users must put a hold on a specific item.
         -
             - pref: OpacRenewalAllowed
               choices:
@@ -491,7 +552,13 @@ OPAC:
               choices:
                   no: "Don't allow"
                   yes: Allow
-            - opac users to share private lists with other patrons. This feature is not active yet but will be released soon
+            - opac users to share private lists with other patrons.
+        -
+            - pref: BlockExpiredPatronOpacActions
+              choices:
+                yes: "Block"
+                no: "Don't block"
+            - expired patrons from OPAC actions such as placing a hold or renewing.  Note that the setting for a patron category takes priority over this system preference.
 
     Privacy:
         -
@@ -596,3 +663,8 @@ OPAC:
             - pref: PatronSelfRegistrationBorrowerUnwantedField
               class: multi
             - (separate columns with |)
+        -
+            - "Display the following additional instructions for patrons who self register via the OPAC ( HTML is allowed ):"
+            - pref: PatronSelfRegistrationAdditionalInstructions
+              type: textarea
+              class: html

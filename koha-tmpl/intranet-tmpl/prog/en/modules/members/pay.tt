@@ -1,19 +1,41 @@
 [% INCLUDE 'doc-head-open.inc' %]
 <title>Koha &rsaquo; Patrons &rsaquo; Pay Fines for  [% borrower.firstname %] [% borrower.surname %]</title>
 [% INCLUDE 'doc-head-close.inc' %]
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
+<script type="text/javascript" src="[% interface %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
 <script type= "text/javascript">
 //<![CDATA[
+function enableCheckboxActions(){
+    // Enable/disable controls if checkboxes are checked
+    var checkedBoxes = $("input.cb:checked");
+    if ($(checkedBoxes).size()) {
+      $("#payselected").prop("disabled",false);
+    } else {
+      $("#payselected").prop("disabled",true);
+    }
+}
     $(document).ready(function(){
  $('#pay-fines-form').preventDoubleFormSubmit();
         $("#woall").click(function(event){
-            var answer = confirm(_("Are you sure you want to write off [% total | format('%.2f') %] in outstanding fines? This cannot be undone!"));
+            var msg = _("Are you sure you want to write off %s in outstanding fines? This cannot be undone!").format( "[% total | format('%.2f') %]" );
+            var answer = confirm(msg);
                 if (!answer){
                     event.preventDefault();
                 }
         });
-        $('#CheckAll').click(function(){ $("#finest").checkCheckboxes(); return false;});
-        $('#CheckNone').click(function(){ $("#finest").unCheckCheckboxes(); return false;});
+        $('#CheckAll').click(function(){
+            $("#finest").checkCheckboxes();
+            enableCheckboxActions();
+            return false;
+        });
+        $('#CheckNone').click(function(){
+            $("#finest").unCheckCheckboxes();
+            enableCheckboxActions();
+            return false;
+        });
+        $(".cb").change(function(){
+            enableCheckboxActions();
+        });
+        enableCheckboxActions();
     });
 //]]>
 </script>
@@ -50,17 +72,18 @@
 <tr>
     <th>&nbsp;</th>
     <th>Fines &amp; charges</th>
-	<th>Description</th>
+    <th>Description</th>
+    <th>Payment note</th>
     <th>Account type</th>
-	<th>Notify id</th>
-	<th>Level</th>
-	<th>Amount</th>
+    <th>Notify id</th>
+    <th>Level</th>
+    <th>Amount</th>
     <th>Amount outstanding</th>
 </tr>
 </thead>
 <tfoot>
 <tr>
-    <td class="total" colspan="7">Total Due:</td>
+    <td class="total" colspan="8">Total due:</td>
     <td>[% total | format('%.2f') %]</td>
 </tr>
 </tfoot>
@@ -70,13 +93,13 @@
 <tr>
     <td>
     [% IF ( line.amountoutstanding > 0 ) %]
-        <input type="checkbox" checked="checked" name="incl_par_[% line.accountno %]" />
+        <input class="cb" type="checkbox" checked="checked" name="incl_par_[% line.accountno %]" />
     [% END %]
     </td>
     <td>
     [% IF ( line.amountoutstanding > 0 ) %]
         <input type="submit" name="pay_indiv_[% line.accountno %]" value="Pay" />
-        <input type="submit" name="wo_indiv_[% line.accountno %]" value="Write off" />
+        [% IF CAN_user_updatecharges_writeoff %]<input type="submit" name="wo_indiv_[% line.accountno %]" value="Write off" />[% END %]
     [% END %]
     <input type="hidden" name="itemnumber[% line.accountno %]" value="[% line.itemnumber %]" />
     <input type="hidden" name="description[% line.accountno %]" value="[% line.description %]" />
@@ -90,7 +113,24 @@
     <input type="hidden" name="notify_level[% line.accountno %]" value="[% line.notify_level %]" />
     <input type="hidden" name="totals[% line.accountno %]" value="[% line.totals %]" />
     </td>
-    <td>[% line.description %] ([% line.title |html_entity %])</td>
+    <td>
+        [% SWITCH line.accounttype %]
+          [% CASE 'Pay' %]Payment,thanks
+          [% CASE 'Pay00' %]Payment,thanks (cash via SIP2)
+          [% CASE 'Pay01' %]Payment,thanks (VISA via SIP2)
+          [% CASE 'Pay02' %]Payment,thanks (credit card via SIP2)
+          [% CASE 'N' %]New Card
+          [% CASE 'F' %]Fine
+          [% CASE 'A' %]Account management fee
+          [% CASE 'M' %]Sundry
+          [% CASE 'L' %]Lost Item
+          [% CASE 'W' %]Writeoff
+          [% CASE %][% line.accounttype %]
+        [%- END -%]
+        [%- IF line.description %], [% line.description %][% END %]
+        [% IF line.title %]([% line.title |html_entity %])[% END %]
+    </td>
+    <td><input type="text" name="payment_note_[% line.accountno %]" /></td>
     <td>[% line.accounttype %]</td>
     <td>[% line.notify_id %]</td>
     <td>[% line.notify_level %]</td>
@@ -101,7 +141,7 @@
 [% IF ( account_grp.total ) %]
 <tr>
 
-    <td class="total" colspan="7">Sub total:</td>
+    <td class="total" colspan="8">Sub total:</td>
     <td>[% account_grp.total | format('%.2f') %]</td>
 </tr>
 [% END %]
@@ -109,9 +149,9 @@
 </tbody>
 </table>
 <fieldset class="action">
-<input type="submit" name="paycollect"  value="Pay amount" class="submit" />
-<input type="submit" name="woall"  id="woall" value="Write off all" class="submit" />
-<input type="submit" name="payselected"  value="Pay selected" class="submit" />
+<input type="submit" id="paycollect" name="paycollect"  value="Pay amount" class="submit" />
+[% IF CAN_user_updatecharges_writeoff %]<input type="submit" name="woall"  id="woall" value="Write off all" class="submit" />[% END %]
+<input type="submit" id="payselected" name="payselected"  value="Pay selected" class="submit" />
 <a class="cancel" href="/cgi-bin/koha/members/boraccount.pl?borrowernumber=[% borrower.borrowernumber %]">Cancel</a>
 </fieldset>
 </form>

@@ -5,7 +5,8 @@ use DateTime;
 use DateTime::TimeZone;
 
 use C4::Context;
-use Test::More tests => 28;
+use Test::More tests => 34;
+use Test::MockModule;
 
 BEGIN { use_ok('Koha::DateUtils'); }
 
@@ -23,34 +24,52 @@ cmp_ok( $dt->ymd(), 'eq', $testdate_iso, 'Returned object matches input' );
 $dt->set_hour(12);
 $dt->set_minute(0);
 
-my $date_string = output_pref( $dt, 'iso' );
+my $date_string;
+
+my $module_context = new Test::MockModule('C4::Context');
+$module_context->mock(
+    'preference',
+    sub {
+        return 'us';
+    }
+);
+
+my $dateformat = C4::Context->preference('dateformat');
+cmp_ok  output_pref({ dt => $dt, dateformat => $dateformat }),
+        'eq',
+        output_pref($dt),
+        'output_pref gives an hashref or a dt';
+
+$date_string = output_pref({ dt => $dt, dateformat => 'iso', timeformat => '24hr' });
 cmp_ok $date_string, 'eq', '2011-06-16 12:00', 'iso output';
 
-my $date_string = output_pref( $dt, 'iso',1 );
+$date_string = output_pref({ dt => $dt, dateformat => 'iso', timeformat => '12hr' });
+cmp_ok $date_string, 'eq', '2011-06-16 12:00 PM', 'iso output 12hr';
+
+# "notime" doesn't actually mean anything in this context, but we
+# can't pass undef or output_pref will try to access the database
+$date_string = output_pref({ dt => $dt, dateformat => 'iso', timeformat => 'notime', dateonly => 1 });
 cmp_ok $date_string, 'eq', '2011-06-16', 'iso output (date only)';
 
-$date_string = output_pref( $dt, 'us' );
+$date_string = output_pref({ dt => $dt, dateformat => 'us', timeformat => '24hr' });
 cmp_ok $date_string, 'eq', '06/16/2011 12:00', 'us output';
 
-$date_string = output_pref( $dt, 'us', 1 );
+$date_string = output_pref({ dt => $dt, dateformat => 'us', timeformat => '12hr' });
+cmp_ok $date_string, 'eq', '06/16/2011 12:00 PM', 'us output 12hr';
+
+$date_string = output_pref({ dt => $dt, dateformat => 'us', timeformat => 'notime', dateonly => 1 });
 cmp_ok $date_string, 'eq', '06/16/2011', 'us output (date only)';
 
 # metric should return the French Revolutionary Calendar Really
-$date_string = output_pref( $dt, 'metric' );
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '24hr' });
 cmp_ok $date_string, 'eq', '16/06/2011 12:00', 'metric output';
 
-$date_string = output_pref( $dt, 'metric',1 );
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => 'notime', dateonly => 1 });
 cmp_ok $date_string, 'eq', '16/06/2011', 'metric output (date only)';
 
-$date_string = output_pref_due( $dt, 'metric' );
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '24hr' });
 cmp_ok $date_string, 'eq', '16/06/2011 12:00',
-  'output_pref_due preserves non midnight HH:SS';
-
-$dt->set_hour(23);
-$dt->set_minute(59);
-$date_string = output_pref_due( $dt, 'metric' );
-cmp_ok $date_string, 'eq', '16/06/2011',
-  'output_pref_due truncates HH:SS at midnight';
+  'output_pref preserves non midnight HH:SS';
 
 my $dear_dirty_dublin = DateTime::TimeZone->new( name => 'Europe/Dublin' );
 my $new_dt = dt_from_string( '16/06/2011', 'metric', $dear_dirty_dublin );
@@ -87,20 +106,42 @@ cmp_ok( $dt0->ymd(), 'eq', $ymd, 'Returned object corrects iso day 0' );
 $dt0 = dt_from_string( '0000-00-00', 'iso' );
 is( $dt0, undef, "undefined returned for 0 iso date" );
 
-my $formatted = format_sqldatetime( '2011-06-16 12:00:07', 'metric' );
+my $formatted = format_sqldatetime( '2011-06-16 12:00:07', 'metric', '24hr' );
 cmp_ok( $formatted, 'eq', '16/06/2011 12:00', 'format_sqldatetime conversion' );
 
 $formatted = format_sqldatetime( undef, 'metric' );
 cmp_ok( $formatted, 'eq', q{},
     'format_sqldatetime formats undef as empty string' );
 
-$formatted = format_sqlduedatetime( '2011-06-16 12:00:07', 'metric' );
-cmp_ok(
-    $formatted, 'eq',
-    '16/06/2011 12:00',
-    'format_sqlduedatetime conversion for hourly loans'
+# Test the as_due_date parameter
+$dt = DateTime->new(
+    year       => 2013,
+    month      => 12,
+    day        => 11,
+    hour       => 23,
+    minute     => 59,
 );
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '24hr', as_due_date => 1 });
+cmp_ok $date_string, 'eq', '11/12/2013', 'as_due_date with hours and timeformat 24hr';
 
-$formatted = format_sqlduedatetime( '2011-06-16 23:59:07', 'metric' );
-cmp_ok( $formatted, 'eq', '16/06/2011',
-    'format_sqlduedatetime conversion for daily loans' );
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '24hr', dateonly => 1, as_due_date => 1});
+cmp_ok $date_string, 'eq', '11/12/2013', 'as_due_date without hours and timeformat 24hr';
+
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '12hr', as_due_date => 1 });
+cmp_ok $date_string, 'eq', '11/12/2013', 'as_due_date with hours and timeformat 12hr';
+
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '12hr', dateonly => 1, as_due_date => 1});
+cmp_ok $date_string, 'eq', '11/12/2013', 'as_due_date without hours and timeformat 12hr';
+
+# Test as_due_date for hourly loans
+$dt = DateTime->new(
+    year       => 2013,
+    month      => 12,
+    day        => 11,
+    hour       => 18,
+    minute     => 35,
+);
+$date_string = output_pref({ dt => $dt, dateformat => 'metric', timeformat => '24hr', as_due_date => 1 });
+cmp_ok $date_string, 'eq', '11/12/2013 18:35', 'as_due_date with hours and timeformat 24hr (non-midnight time)';
+$date_string = output_pref({ dt => $dt, dateformat => 'us', timeformat => '12hr', as_due_date => 1 });
+cmp_ok $date_string, 'eq', '12/11/2013 06:35 PM', 'as_due_date with hours and timeformat 12hr (non-midnight time)';

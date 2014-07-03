@@ -20,6 +20,7 @@ use strict;
 use warnings;
 
 use CGI;
+use C4::Acquisition qw( GetHistory );
 use C4::Auth;
 use C4::Dates qw/format_date/;
 use C4::Koha;
@@ -41,14 +42,14 @@ use C4::XSLT;
 use C4::Images;
 use Koha::DateUtils;
 use C4::HTML5Media;
-
-# use Smart::Comments;
+use C4::CourseReserves qw(GetItemCourseReservesInfo);
+use C4::Acquisition qw(GetOrdersByBiblionumber);
 
 my $query = CGI->new();
 
 my $analyze = $query->param('analyze');
 
-my ( $template, $borrowernumber, $cookie ) = get_template_and_user(
+my ( $template, $borrowernumber, $cookie, $flags ) = get_template_and_user(
     {
     template_name   =>  'catalogue/detail.tmpl',
         query           => $query,
@@ -164,6 +165,15 @@ foreach my $subscription (@subscriptions) {
     push @subs, \%cell;
 }
 
+
+# Get acquisition details
+if ( C4::Context->preference('AcquisitionDetails') ) {
+    my ( $orders, $qty, $price, $received ) = C4::Acquisition::GetHistory( biblionumber => $biblionumber, get_canceled_order => 1 );
+    $template->param(
+        orders => $orders,
+    );
+}
+
 if ( defined $dat->{'itemtype'} ) {
     $dat->{imageurl} = getitemtypeimagelocation( 'intranet', $itemtypes->{ $dat->{itemtype} }{imageurl} );
 }
@@ -219,7 +229,7 @@ foreach my $item (@items) {
     }
 
     # checking for holds
-    my ($reservedate,$reservedfor,$expectedAt) = GetReservesFromItemnumber($item->{itemnumber});
+    my ($reservedate,$reservedfor,$expectedAt,undef,$wait) = GetReservesFromItemnumber($item->{itemnumber});
     my $ItemBorrowerReserveInfo = GetMemberDetails( $reservedfor, 0);
     
     if (C4::Context->preference('HidePatronName')){
@@ -233,8 +243,11 @@ foreach my $item (@items) {
         $item->{ReservedForSurname}     = $ItemBorrowerReserveInfo->{'surname'};
         $item->{ReservedForFirstname}   = $ItemBorrowerReserveInfo->{'firstname'};
         $item->{ExpectedAtLibrary}      = $branches->{$expectedAt}{branchname};
-	$item->{Reservedcardnumber}             = $ItemBorrowerReserveInfo->{'cardnumber'};
+        $item->{Reservedcardnumber}             = $ItemBorrowerReserveInfo->{'cardnumber'};
+        # Check waiting status
+        $item->{waitingdate} = $wait;
     }
+
 
 	# Check the transit status
     my ( $transfertwhen, $transfertfrom, $transfertto ) = GetTransfers($item->{itemnumber});
@@ -243,13 +256,6 @@ foreach my $item (@items) {
         $item->{transfertfrom} = $branches->{$transfertfrom}{branchname};
         $item->{transfertto}   = $branches->{$transfertto}{branchname};
         $item->{nocancel} = 1;
-    }
-
-    # FIXME: move this to a pm, check waiting status for holds
-    my $sth2 = $dbh->prepare("SELECT * FROM reserves WHERE borrowernumber=? AND itemnumber=? AND found='W'");
-    $sth2->execute($item->{ReservedForBorrowernumber},$item->{itemnumber});
-    while (my $wait_hashref = $sth2->fetchrow_hashref) {
-        $item->{waitingdate} = format_date($wait_hashref->{waitingdate});
     }
 
     # item has a host number if its biblio number does not match the current bib
@@ -269,6 +275,10 @@ foreach my $item (@items) {
 	$materials_flag = 1;
     }
 
+    if ( C4::Context->preference('UseCourseReserves') ) {
+        $item->{'course_reserves'} = GetItemCourseReservesInfo( itemnumber => $item->{'itemnumber'} );
+    }
+
     if ($currentbranch and $currentbranch ne "NO_LIBRARY_SET"
     and C4::Context->preference('SeparateHoldings')) {
         if ($itembranchcode and $itembranchcode eq $currentbranch) {
@@ -278,6 +288,14 @@ foreach my $item (@items) {
         }
     } else {
         push @itemloop, $item;
+    }
+}
+
+# Display only one tab if one items list is empty
+if (scalar(@itemloop) == 0 || scalar(@otheritemloop) == 0) {
+    $template->param(SeparateHoldings => 0);
+    if (scalar(@itemloop) == 0) {
+        @itemloop = @otheritemloop;
     }
 }
 
@@ -347,6 +365,7 @@ $template->param(
     subscriptions       => \@subs,
     subscriptionsnumber => $subscriptionsnumber,
     subscriptiontitle   => $dat->{title},
+    searchid            => $query->param('searchid'),
 );
 
 # $debug and $template->param(debug_display => 1);
@@ -395,7 +414,58 @@ if (C4::Context->preference('TagsEnabled') and $tag_quantity = C4::Context->pref
                                 'sort'=>'-weight', limit=>$tag_quantity}));
 }
 
-my ( $holdcount, $holds ) = C4::Reserves::GetReservesFromBiblionumber($biblionumber,1);
-$template->param( holdcount => $holdcount, holds => $holds );
+#we only need to pass the number of holds to the template
+my $holds = C4::Reserves::GetReservesFromBiblionumber({ biblionumber => $biblionumber, all_dates => 1 });
+$template->param( holdcount => scalar ( @$holds ) );
+
+my $StaffDetailItemSelection = C4::Context->preference('StaffDetailItemSelection');
+if ($StaffDetailItemSelection) {
+    # Only enable item selection if user can execute at least one action
+    if (
+        $flags->{superlibrarian}
+        || (
+            ref $flags->{tools} eq 'HASH' && (
+                $flags->{tools}->{items_batchmod}       # Modify selected items
+                || $flags->{tools}->{items_batchdel}    # Delete selected items
+            )
+        )
+        || ( ref $flags->{tools} eq '' && $flags->{tools} )
+      )
+    {
+        $template->param(
+            StaffDetailItemSelection => $StaffDetailItemSelection );
+    }
+}
+
+my @allorders_using_biblio = GetOrdersByBiblionumber ($biblionumber);
+my @deletedorders_using_biblio;
+my @orders_using_biblio;
+my @baskets_orders;
+my @baskets_deletedorders;
+
+foreach my $myorder (@allorders_using_biblio) {
+    my $basket = $myorder->{'basketno'};
+    if ((defined $myorder->{'datecancellationprinted'}) and  ($myorder->{'datecancellationprinted'} ne '0000-00-00') ){
+        push @deletedorders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_deletedorders)){
+            push @baskets_deletedorders,$myorder->{'basketno'};
+        }
+    }
+    else {
+        push @orders_using_biblio, $myorder;
+        unless (grep(/^$basket$/, @baskets_orders)){
+            push @baskets_orders,$myorder->{'basketno'};
+            }
+    }
+}
+
+my $count_orders_using_biblio = scalar @orders_using_biblio ;
+$template->param (countorders => $count_orders_using_biblio);
+
+my $count_deletedorders_using_biblio = scalar @deletedorders_using_biblio ;
+$template->param (countdeletedorders => $count_deletedorders_using_biblio);
+
+$template->param (basketsorders => \@baskets_orders);
+$template->param (basketsdeletedorders => \@baskets_deletedorders);
 
 output_html_with_http_headers $query, $cookie, $template->output;

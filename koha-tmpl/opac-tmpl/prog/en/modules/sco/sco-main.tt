@@ -1,18 +1,32 @@
+[% USE Koha %]
 [% USE KohaDates %]
 [% INCLUDE 'doc-head-open.inc' %][% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha [% END %] &rsaquo; Self checkout </title>
 <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
 <meta name="generator" content="Koha [% Version %]" /> <!-- leave this for stats -->
-<link rel="shortcut icon" href="[% themelang %]/includes/favicon.ico" type="image/x-icon" />
+<link rel="shortcut icon" href="[% interface %]/[% theme %]/images/favicon.ico" type="image/x-icon" />
 <!-- yui js -->
 <script type="text/javascript" src="[% yuipath %]/utilities/utilities.js"></script>
 <script type="text/javascript" src="[% yuipath %]/container/container-min.js"></script>
 <script type="text/javascript" src="[% yuipath %]/menu/menu-min.js"></script>
 <script type="text/javascript" src="[% themelang %]/lib/jquery/jquery.js"></script>
 <script type="text/javascript" src="[% themelang %]/lib/jquery/jquery-ui.js"></script>
-<script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
 <script type="text/javascript">//<![CDATA[
+    function _(s) { return s } // dummy function for gettext
+//]]>
+</script>
+[% INCLUDE 'datatables.inc' %]
+<script type="text/javascript">//<![CDATA[
+function mungeHistory() {
+    // prevent back button from allowing form resubmission
+    if (history && history.pushState) {
+        history.replaceState(null, document.title, window.location.href);
+    }
+}
+var mainTimeout;
 function sco_init() {
-    setTimeout("location.href='/cgi-bin/koha/sco/sco-main.pl?op=logout';",[% SelfCheckTimeout %]);
+    mainTimeout = setTimeout(function() {
+        location.href = '/cgi-bin/koha/sco/sco-main.pl?op=logout';
+    }, [% SelfCheckTimeout %]);
 }
 function dofocus() {    // named function req'd for body onload event by some FF and IE7 security models
     // alert("dofocus called");
@@ -64,41 +78,31 @@ YAHOO.util.Event.onContentReady("changelanguage", function () {
   });
 });
 
-$.tablesorter.addParser({
-    id: 'articles',
-    is: function(s) {return false;  },
-    format: function(s) { return s.toLowerCase().replace(/^(the|an|a) /,''); },
-    type: 'text'
-});
-
 $(document).ready(function() {
 	$('#finish').submit(function() {
 		window.print();
 	});
     dofocus();
     [% IF ( patronid ) %]sco_init();[% END %]
-    $("#loanTable").tablesorter({
-        [% IF ( dateformat_metric ) %]
-            dateFormat: 'uk',
-        [% END %]
-        widgets:   ['zebra'],
-        sortList:  [[2, 1], [0, 0]],
-        headers: {
-            0: { sorter: 'articles' },
-            3: { sorter: false }
-            [% UNLESS ( nofines ) %], 4: { sorter: false }[% END %]
-        }
-    });
-});
-//]]>
-$(document).ready(function(){
+    $("#loanTable").dataTable($.extend(true, {}, dataTablesDefaults, {
+        "aaSorting": [ [2, "desc"], [0, "asc"] ],
+        "aoColumnDefs": [
+            { "aTargets": [ "nosort" ],"bSortable": false,"bSearchable": false },
+            { "sType": "anti-the", "aTargets" : [ "anti-the" ] },
+            { "sType": "title-string", "aTargets" : [ "title-string" ] }
+        ]
+    }));
     $("#logout_form").submit(function(){
-        if(confirm("Would you like to print a receipt?")){
-            window.open("/cgi-bin/koha/sco/printslip.pl?borrowernumber=[% borrowernumber %]&amp;print=qslip");
-        }
+        clearTimeout(mainTimeout);
+        [% IF Koha.Preference('SelfCheckReceiptPrompt') %]
+            if( confirm("Would you like to print a receipt?") ) {
+                window.open("/cgi-bin/koha/sco/printslip.pl?borrowernumber=[% borrowernumber %]&amp;print=qslip");
+            }
+        [% END %]
         return true;
     });
 });
+//]]>
 </script>
 [% IF ( opacuserjs ) %]<script type="text/javascript">[% opacuserjs %]</script>[% END %]
 [% IF ( SCOUserJS ) %]<script type="text/javascript">[% SCOUserJS %]</script>[% END %]
@@ -108,7 +112,7 @@ $(document).ready(function(){
 [% IF ( SCOUserCSS ) %]<style type="text/css">[% SCOUserCSS %]</style>[% END %]
 
 </head>
-<body onload="dofocus();">
+<body onload="dofocus();" onunload="mungeHistory();">
 
 <div id="doc" class="yui-t7">
 <img src="/opac-tmpl/prog/images/logo-sco.png" />
@@ -255,7 +259,7 @@ Sorry, this self-checkout station has lost authentication.  Please contact the a
   [% IF ( display_patron_image ) %]</div> <!-- /yui-u first -->[% END %]
   [% IF ( display_patron_image ) %]
   <div class="yui-u">
-        <img src="/cgi-bin/koha/sco/sco-patron-image.pl?cardnumber=[% cardnumber %]" alt="" />
+        <img src="/cgi-bin/koha/sco/sco-patron-image.pl?borrowernumber=[% borrowernumber %]" alt="" />
   </div>
   [% END %]
   </div> <!-- /yui-ge -->
@@ -265,17 +269,17 @@ Sorry, this self-checkout station has lost authentication.  Please contact the a
 	<table id="loanTable"><caption>Checkouts for [% borrowername %] <span class="count">([% issues_count %] total)</span></caption>
 	<!-- ISSUES TABLE ROWS -->
     <thead>
-        <tr><th>Title</th><th>Call no.</th><th>Due</th><th>Renew</th>[% UNLESS ( nofines ) %]<th>Fines</th>[% END %]</tr>
+        <tr><th class="anti-the">Title</th><th>Call no.</th><th class="title-string">Due</th><th class="nosort">Renew</th>[% UNLESS ( nofines ) %]<th class="nosort">Fines</th>[% END %]</tr>
     </thead>
 
     <tbody>
 	[% FOREACH ISSUE IN ISSUES %]
 	[% UNLESS ( loop.odd ) %]<tr class="highlight">[% ELSE %]<tr>[% END %]
     <!-- FIXME: yet another jacket image breakpoint -->
-	[% IF ( ISSUE.overdue ) %]<td class="overdue">[% ISSUE.date_due_display %]</td>[% ELSE %]<td class="due">[% ISSUE.date_due_display %]</td>[% END %]
-	<td>[% UNLESS ( ISSUE.noitemlinks ) %]<a href="/cgi-bin/koha/opac-detail.pl?bib=[% ISSUE.biblionumber %]">[% ISSUE.title |html %]</a>[% ELSE %]<strong>[% ISSUE.title |html %]</strong>[% END %]<span class="item-details">
-	[% ISSUE.author %]</span><!-- ([% ISSUE.barcode %])--></td>
-	<td class="callnumber">[% ISSUE.itemcallnumber %]</td>
+	<td>[% UNLESS ( noitemlinks ) %]<a href="/cgi-bin/koha/opac-detail.pl?bib=[% ISSUE.biblionumber %]">[% ISSUE.title |html %]</a>[% ELSE %]<strong>[% ISSUE.title |html %]</strong>[% END %]<span class="item-details">
+	[% ISSUE.author %]</span> ([% ISSUE.barcode %])</td>
+	<td>[% ISSUE.itemcallnumber %]</td>
+    [% IF ( ISSUE.overdue ) %]<td class="overdue"><span title="[% ISSUE.date_due %]">[% ISSUE.date_due | $KohaDates as_due_date => 1 %]</span></td>[% ELSE %]<td><span title="[% ISSUE.date_due %]">[% ISSUE.date_due | $KohaDates as_due_date => 1 %]</span></td>[% END %]
 	<td>
     <form action="/cgi-bin/koha/sco/sco-main.pl" method="post">
     <input type="hidden" name="patronid" value="[% patronid %]" />

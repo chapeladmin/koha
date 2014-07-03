@@ -40,7 +40,6 @@ BEGIN {
 		&makepayment
 		&manualinvoice
 		&getnextacctno
-		&reconcileaccount
 		&getcharges
 		&ModNote
 		&getcredits
@@ -71,11 +70,13 @@ patron.
 
 =head2 recordpayment
 
-  &recordpayment($borrowernumber, $payment);
+  &recordpayment($borrowernumber, $payment, $sip_paytype);
 
 Record payment by a patron. C<$borrowernumber> is the patron's
 borrower number. C<$payment> is a floating-point number, giving the
-amount that was paid.
+amount that was paid. C<$sip_paytype> is an optional flag to indicate this
+payment was made over a SIP2 interface, rather than the staff client. The
+value passed is the SIP2 payment type value (message 37, characters 21-22)
 
 Amounts owed are paid off oldest first. That is, if the patron has a
 $1 fine from Feb. 1, another $1 fine from Mar. 1, and makes a payment
@@ -88,7 +89,7 @@ will be credited to the next one.
 sub recordpayment {
 
     #here we update the account lines
-    my ( $borrowernumber, $data ) = @_;
+    my ( $borrowernumber, $data, $sip_paytype ) = @_;
     my $dbh        = C4::Context->dbh;
     my $newamtos   = 0;
     my $accdata    = "";
@@ -146,9 +147,13 @@ sub recordpayment {
     my $usth = $dbh->prepare(
         "INSERT INTO accountlines
   (borrowernumber, accountno,date,amount,description,accounttype,amountoutstanding,manager_id)
-  VALUES (?,?,now(),?,'Payment,thanks','Pay',?,?)"
+  VALUES (?,?,now(),?,'',?,?,?)"
     );
-    $usth->execute( $borrowernumber, $nextaccntno, 0 - $data, 0 - $amountleft, $manager_id );
+
+    my $paytype = "Pay";
+    $paytype .= $sip_paytype if defined $sip_paytype;
+    $usth->execute( $borrowernumber, $nextaccntno, 0 - $data, $paytype, 0 - $amountleft, $manager_id );
+    $usth->finish;
 
     UpdateStats( $branch, 'payment', $data, '', '', '', $borrowernumber, $nextaccntno );
 
@@ -191,7 +196,7 @@ sub makepayment {
     #here we update both the accountoffsets and the account lines
     #updated to check, if they are paying off a lost item, we return the item
     # from their card, and put a note on the item record
-    my ( $accountlines_id, $borrowernumber, $accountno, $amount, $user, $branch ) = @_;
+    my ( $accountlines_id, $borrowernumber, $accountno, $amount, $user, $branch, $payment_note ) = @_;
     my $dbh = C4::Context->dbh;
     my $manager_id = 0;
     $manager_id = C4::Context->userenv->{'number'} if C4::Context->userenv; 
@@ -202,19 +207,17 @@ sub makepayment {
     my $sth         = $dbh->prepare("SELECT * FROM accountlines WHERE accountlines_id=?");
     $sth->execute( $accountlines_id );
     my $data = $sth->fetchrow_hashref;
-    $sth->finish;
 
     my $payment;
     if ( $data->{'accounttype'} eq "Pay" ){
         my $udp = 		
             $dbh->prepare(
                 "UPDATE accountlines
-                    SET amountoutstanding = 0, description = 'Payment,thanks'
+                    SET amountoutstanding = 0
                     WHERE accountlines_id = ?
                 "
             );
         $udp->execute($accountlines_id);
-        $udp->finish;
     }else{
         my $udp = 		
             $dbh->prepare(
@@ -224,19 +227,18 @@ sub makepayment {
                 "
             );
         $udp->execute($accountlines_id);
-        $udp->finish;
 
          # create new line
-        $payment = 0 - $amount;
+        my $payment = 0 - $amount;
+        $payment_note //= "";
         
         my $ins = 
             $dbh->prepare( 
                 "INSERT 
-                    INTO accountlines (borrowernumber, accountno, date, amount, itemnumber, description, accounttype, amountoutstanding, manager_id)
-                    VALUES ( ?, ?, now(), ?, ?, 'Payment,thanks', 'Pay', 0, ?)"
+                    INTO accountlines (borrowernumber, accountno, date, amount, itemnumber, description, accounttype, amountoutstanding, manager_id, note)
+                    VALUES ( ?, ?, now(), ?, ?, '', 'Pay', 0, ?, ?)"
             );
-        $ins->execute($borrowernumber, $nextaccntno, $payment, $data->{'itemnumber'}, $manager_id);
-        $ins->finish;
+        $ins->execute($borrowernumber, $nextaccntno, $payment, $data->{'itemnumber'}, $manager_id, $payment_note);
     }
 
     if ( C4::Context->preference("FinesLog") ) {
@@ -278,7 +280,6 @@ sub makepayment {
     my $sthr = $dbh->prepare("SELECT max(accountlines_id) AS lastinsertid FROM accountlines");
     $sthr->execute();
     my $datalastinsertid = $sthr->fetchrow_hashref;
-    $sthr->finish;
     return $datalastinsertid->{'lastinsertid'};
 }
 
@@ -363,7 +364,6 @@ sub chargelostitem{
         VALUES (?,?,now(),?,?,'L',?,?,?)");
         $sth2->execute($borrowernumber,$accountno,$amount,
         $description,$amount,$itemnumber,$manager_id);
-        $sth2->finish;
 
         if ( C4::Context->preference("FinesLog") ) {
             logaction("FINES", 'CREATE', $borrowernumber, Dumper({
@@ -418,37 +418,6 @@ sub manualinvoice {
     my $accountno  = getnextacctno($borrowernumber);
     my $amountleft = $amount;
 
-#    if (   $type eq 'CS'
-#        || $type eq 'CB'
-#        || $type eq 'CW'
-#        || $type eq 'CF'
-#        || $type eq 'CL' )
-#    {
-#        my $amount2 = $amount * -1;    # FIXME - $amount2 = -$amount
-#        $amountleft =
-#          fixcredit( $borrowernumber, $amount2, $itemnum, $type, $user );
-#    }
-    if ( $type eq 'N' ) {
-        $desc .= " New Card";
-    }
-    if ( $type eq 'F' ) {
-        $desc .= " Fine";
-    }
-    if ( $type eq 'A' ) {
-        $desc .= " Account Management fee";
-    }
-    if ( $type eq 'M' ) {
-        $desc .= " Sundry";
-    }
-
-    if ( $type eq 'L' && $desc eq '' ) {
-
-        $desc = " Lost Item";
-    }
-#    if ( $type eq 'REF' ) {
-#        $desc .= " Cash Refund";
-#        $amountleft = refund( '', $borrowernumber, $amount );
-#    }
     if (   ( $type eq 'L' )
         or ( $type eq 'F' )
         or ( $type eq 'A' )
@@ -493,178 +462,6 @@ sub manualinvoice {
     return 0;
 }
 
-=head2 fixcredit #### DEPRECATED
-
- $amountleft = &fixcredit($borrowernumber, $data, $barcode, $type, $user);
-
- This function is only used internally, not exported.
-
-=cut
-
-# This function is deprecated in 3.0
-
-sub fixcredit {
-
-    #here we update both the accountoffsets and the account lines
-    my ( $borrowernumber, $data, $barcode, $type, $user ) = @_;
-    my $dbh        = C4::Context->dbh;
-    my $newamtos   = 0;
-    my $accdata    = "";
-    my $amountleft = $data;
-    if ( $barcode ne '' ) {
-        my $item        = GetBiblioFromItemNumber( '', $barcode );
-        my $nextaccntno = getnextacctno($borrowernumber);
-        my $query       = "SELECT * FROM accountlines WHERE (borrowernumber=?
-    AND itemnumber=? AND amountoutstanding > 0)";
-        if ( $type eq 'CL' ) {
-            $query .= " AND (accounttype = 'L' OR accounttype = 'Rep')";
-        }
-        elsif ( $type eq 'CF' ) {
-            $query .= " AND (accounttype = 'F' OR accounttype = 'FU' OR
-      accounttype='Res' OR accounttype='Rent')";
-        }
-        elsif ( $type eq 'CB' ) {
-            $query .= " and accounttype='A'";
-        }
-
-        #    print $query;
-        my $sth = $dbh->prepare($query);
-        $sth->execute( $borrowernumber, $item->{'itemnumber'} );
-        $accdata = $sth->fetchrow_hashref;
-        $sth->finish;
-        if ( $accdata->{'amountoutstanding'} < $amountleft ) {
-            $newamtos = 0;
-            $amountleft -= $accdata->{'amountoutstanding'};
-        }
-        else {
-            $newamtos   = $accdata->{'amountoutstanding'} - $amountleft;
-            $amountleft = 0;
-        }
-        my $thisacct = $accdata->{accountlines_id};
-        my $usth     = $dbh->prepare(
-            "UPDATE accountlines SET amountoutstanding= ?
-     WHERE (accountlines_id = ?)"
-        );
-        $usth->execute( $newamtos, $thisacct );
-        $usth->finish;
-        $usth = $dbh->prepare(
-            "INSERT INTO accountoffsets
-     (borrowernumber, accountno, offsetaccount,  offsetamount)
-     VALUES (?,?,?,?)"
-        );
-        $usth->execute( $borrowernumber, $accdata->{'accountno'},
-            $nextaccntno, $newamtos );
-        $usth->finish;
-    }
-
-    # begin transaction
-    my $nextaccntno = getnextacctno($borrowernumber);
-
-    # get lines with outstanding amounts to offset
-    my $sth = $dbh->prepare(
-        "SELECT * FROM accountlines
-  WHERE (borrowernumber = ?) AND (amountoutstanding >0)
-  ORDER BY date"
-    );
-    $sth->execute($borrowernumber);
-
-    #  print $query;
-    # offset transactions
-    while ( ( $accdata = $sth->fetchrow_hashref ) and ( $amountleft > 0 ) ) {
-        if ( $accdata->{'amountoutstanding'} < $amountleft ) {
-            $newamtos = 0;
-            $amountleft -= $accdata->{'amountoutstanding'};
-        }
-        else {
-            $newamtos   = $accdata->{'amountoutstanding'} - $amountleft;
-            $amountleft = 0;
-        }
-        my $thisacct = $accdata->{accountlines_id};
-        my $usth     = $dbh->prepare(
-            "UPDATE accountlines SET amountoutstanding= ?
-     WHERE (accountlines_id = ?)"
-        );
-        $usth->execute( $newamtos, $thisacct );
-        $usth->finish;
-        $usth = $dbh->prepare(
-            "INSERT INTO accountoffsets
-     (borrowernumber, accountno, offsetaccount,  offsetamount)
-     VALUE (?,?,?,?)"
-        );
-        $usth->execute( $borrowernumber, $accdata->{'accountno'},
-            $nextaccntno, $newamtos );
-        $usth->finish;
-    }
-    $sth->finish;
-    $type = "Credit " . $type;
-    UpdateStats( $user, $type, $data, $user, '', '', $borrowernumber );
-    $amountleft *= -1;
-    return ($amountleft);
-
-}
-
-=head2 refund
-
-#FIXME : DEPRECATED SUB
- This subroutine tracks payments and/or credits against fines/charges
-   using the accountoffsets table, which is not used consistently in
-   Koha's fines management, and so is not used in 3.0 
-
-=cut 
-
-sub refund {
-
-    #here we update both the accountoffsets and the account lines
-    my ( $borrowernumber, $data ) = @_;
-    my $dbh        = C4::Context->dbh;
-    my $newamtos   = 0;
-    my $accdata    = "";
-    my $amountleft = $data * -1;
-
-    # begin transaction
-    my $nextaccntno = getnextacctno($borrowernumber);
-
-    # get lines with outstanding amounts to offset
-    my $sth = $dbh->prepare(
-        "SELECT * FROM accountlines
-  WHERE (borrowernumber = ?) AND (amountoutstanding<0)
-  ORDER BY date"
-    );
-    $sth->execute($borrowernumber);
-
-    #  print $amountleft;
-    # offset transactions
-    while ( ( $accdata = $sth->fetchrow_hashref ) and ( $amountleft < 0 ) ) {
-        if ( $accdata->{'amountoutstanding'} > $amountleft ) {
-            $newamtos = 0;
-            $amountleft -= $accdata->{'amountoutstanding'};
-        }
-        else {
-            $newamtos   = $accdata->{'amountoutstanding'} - $amountleft;
-            $amountleft = 0;
-        }
-
-        #     print $amountleft;
-        my $thisacct = $accdata->{accountlines_id};
-        my $usth     = $dbh->prepare(
-            "UPDATE accountlines SET amountoutstanding= ?
-     WHERE (accountlines_id = ?)"
-        );
-        $usth->execute( $newamtos, $thisacct );
-        $usth->finish;
-        $usth = $dbh->prepare(
-            "INSERT INTO accountoffsets
-     (borrowernumber, accountno, offsetaccount,  offsetamount)
-     VALUES (?,?,?,?)"
-        );
-        $usth->execute( $borrowernumber, $accdata->{'accountno'},
-            $nextaccntno, $newamtos );
-        $usth->finish;
-    }
-    $sth->finish;
-    return ($amountleft);
-}
-
 sub getcharges {
 	my ( $borrowerno, $timestamp, $accountno ) = @_;
 	my $dbh        = C4::Context->dbh;
@@ -694,7 +491,7 @@ sub getcredits {
 	my $dbh = C4::Context->dbh;
 	my $sth = $dbh->prepare(
 			        "SELECT * FROM accountlines,borrowers
-      WHERE amount < 0 AND accounttype <> 'Pay' AND accountlines.borrowernumber = borrowers.borrowernumber
+      WHERE amount < 0 AND accounttype not like 'Pay%' AND accountlines.borrowernumber = borrowers.borrowernumber
 	  AND timestamp >=TIMESTAMP(?) AND timestamp < TIMESTAMP(?)"
       );  
 
@@ -788,7 +585,7 @@ will be credited to the next one.
 =cut
 
 sub recordpayment_selectaccts {
-    my ( $borrowernumber, $amount, $accts ) = @_;
+    my ( $borrowernumber, $amount, $accts, $note ) = @_;
 
     my $dbh        = C4::Context->dbh;
     my $newamtos   = 0;
@@ -848,9 +645,9 @@ sub recordpayment_selectaccts {
 
     # create new line
     $sql = 'INSERT INTO accountlines ' .
-    '(borrowernumber, accountno,date,amount,description,accounttype,amountoutstanding,manager_id) ' .
-    q|VALUES (?,?,now(),?,'Payment,thanks','Pay',?,?)|;
-    $dbh->do($sql,{},$borrowernumber, $nextaccntno, 0 - $amount, 0 - $amountleft, $manager_id );
+    '(borrowernumber, accountno,date,amount,description,accounttype,amountoutstanding,manager_id,note) ' .
+    q|VALUES (?,?,now(),?,'','Pay',?,?,?)|;
+    $dbh->do($sql,{},$borrowernumber, $nextaccntno, 0 - $amount, 0 - $amountleft, $manager_id, $note );
     UpdateStats( $branch, 'payment', $amount, '', '', '', $borrowernumber, $nextaccntno );
 
     if ( C4::Context->preference("FinesLog") ) {
@@ -872,12 +669,13 @@ sub recordpayment_selectaccts {
 # makepayment needs to be fixed to handle partials till then this separate subroutine
 # fills in
 sub makepartialpayment {
-    my ( $accountlines_id, $borrowernumber, $accountno, $amount, $user, $branch ) = @_;
+    my ( $accountlines_id, $borrowernumber, $accountno, $amount, $user, $branch, $payment_note ) = @_;
     my $manager_id = 0;
     $manager_id = C4::Context->userenv->{'number'} if C4::Context->userenv;
     if (!$amount || $amount < 0) {
         return;
     }
+    $payment_note //= "";
     my $dbh = C4::Context->dbh;
 
     my $nextaccntno = getnextacctno($borrowernumber);
@@ -905,11 +703,11 @@ sub makepartialpayment {
 
     # create new line
     my $insert = 'INSERT INTO accountlines (borrowernumber, accountno, date, amount, '
-    .  'description, accounttype, amountoutstanding, itemnumber, manager_id) '
-    . ' VALUES (?, ?, now(), ?, ?, ?, 0, ?, ?)';
+    .  'description, accounttype, amountoutstanding, itemnumber, manager_id, note) '
+    . ' VALUES (?, ?, now(), ?, ?, ?, 0, ?, ?, ?)';
 
-    $dbh->do(  $insert, undef, $borrowernumber, $nextaccntno, 0 - $amount,
-        "Payment, thanks - $user", 'Pay', $data->{'itemnumber'}, $manager_id);
+    $dbh->do(  $insert, undef, $borrowernumber, $nextaccntno, $amount,
+        "Payment, thanks - $user", 'Pay', $data->{'itemnumber'}, $manager_id, $payment_note);
 
     UpdateStats( $user, 'payment', $amount, '', '', '', $borrowernumber, $accountno );
 
@@ -931,7 +729,7 @@ sub makepartialpayment {
 
 =head2 WriteOffFee
 
-  WriteOff( $borrowernumber, $accountline_id, $itemnum, $accounttype, $amount, $branch );
+  WriteOffFee( $borrowernumber, $accountline_id, $itemnum, $accounttype, $amount, $branch, $payment_note );
 
 Write off a fine for a patron.
 C<$borrowernumber> is the patron's borrower number.
@@ -940,11 +738,13 @@ C<$itemnum> is the itemnumber of of item whose fine is being written off.
 C<$accounttype> is the account type of the fine being written off.
 C<$amount> is a floating-point number, giving the amount that is being written off.
 C<$branch> is the branchcode of the library where the writeoff occurred.
+C<$payment_note> is the note to attach to this payment
 
 =cut
 
 sub WriteOffFee {
-    my ( $borrowernumber, $accountlines_id, $itemnum, $accounttype, $amount, $branch ) = @_;
+    my ( $borrowernumber, $accountlines_id, $itemnum, $accounttype, $amount, $branch, $payment_note ) = @_;
+    $payment_note //= "";
     $branch ||= C4::Context->userenv->{branch};
     my $manager_id = 0;
     $manager_id = C4::Context->userenv->{'number'} if C4::Context->userenv;
@@ -973,12 +773,12 @@ sub WriteOffFee {
 
     $query ="
         INSERT INTO accountlines
-        ( borrowernumber, accountno, itemnumber, date, amount, description, accounttype, manager_id )
-        VALUES ( ?, ?, ?, NOW(), ?, 'Writeoff', 'W', ? )
+        ( borrowernumber, accountno, itemnumber, date, amount, description, accounttype, manager_id, note )
+        VALUES ( ?, ?, ?, NOW(), ?, 'Writeoff', 'W', ?, ? )
     ";
     $sth = $dbh->prepare( $query );
     my $acct = getnextacctno($borrowernumber);
-    $sth->execute( $borrowernumber, $acct, $itemnum, $amount, $manager_id );
+    $sth->execute( $borrowernumber, $acct, $itemnum, $amount, $manager_id, $payment_note );
 
     if ( C4::Context->preference("FinesLog") ) {
         logaction("FINES", 'CREATE',$borrowernumber,Dumper({

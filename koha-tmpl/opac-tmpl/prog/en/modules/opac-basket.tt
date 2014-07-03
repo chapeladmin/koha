@@ -2,50 +2,52 @@
 
 [% INCLUDE 'doc-head-open.inc' %]
 [% IF ( LibraryNameTitle ) %][% LibraryNameTitle %][% ELSE %]Koha online[% END %] catalog &rsaquo; Your cart
-    [% IF ( print_basket ) %]</title>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-<link rel="shortcut icon" href="[% themelang %]/includes/favicon.ico" type="image/x-icon" />
-<meta http-equiv="Content-Language" content="en-us" />
-<script type="text/javascript" src="[% themelang %]/lib/jquery/jquery.js"></script>
+[% INCLUDE 'doc-head-close.inc' %]
+    [% IF ( print_basket ) %]
     <script type="text/javascript">
     //<![CDATA[
+    var IEprint=0;
     $(document).ready(function(){
-        print();
-        location.href="/cgi-bin/koha/opac-basket.pl?bib_list=[% bib_list %][% IF ( verbose ) %]&verbose=1[% END %]";
+        if(navigator.appName.indexOf("Internet Explorer")>-1) {
+        // too bad that we need this trick to make printing work in IE...
+            window.setTimeout(function () {IE_Print_Page();}, 500);
+        }
+        else {
+            print();
+            location.href="/cgi-bin/koha/opac-basket.pl?bib_list=[% bib_list %][% IF ( verbose ) %]&verbose=1[% END %]";
+        }
     });
+    function IE_Print_Page() {
+        if(IEprint==0) {
+            IEprint++;
+            window.print(); // IE needs the window object here
+            window.onfocus=function() { // focus will not work in Firefox a.o.
+                location.href="/cgi-bin/koha/opac-basket.pl?bib_list=[% bib_list %][% IF ( verbose ) %]&verbose=1[% END %]"; }
+        }
+    }
     //]]>
     </script>
-<style type="text/css">
-    @import url([% themelang %]/css/print.css);
-</style>
-    [% ELSE %][% INCLUDE 'doc-head-close.inc' %]
+    [% ELSE %]
     <script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.checkboxes.min.js"></script>
-    <script type="text/javascript" src="[% themelang %]/lib/jquery/plugins/jquery.tablesorter.min.js"></script>
+    [% INCLUDE 'datatables.inc' %]
     <script type="text/javascript">
     //<![CDATA[
 
-$.tablesorter.addParser({
-    // set a unique id
-    id: 'links',
-    is: function(s)
-    {
-        // return false so this parser is not auto detected
-        return false;
-    },
-    format: function(s)
-    {
-        // format your data for normalization
-        return s.replace(new RegExp(/<.*?>/),"");
-    },
-    // set type, either numeric or text
-    type: 'text'
-});
+$(document).ready(function(){
+    $("#itemst").dataTable($.extend(true, {}, dataTablesDefaults, {
+        "aaSorting": [[ 1, "asc" ]],
+        "aoColumnDefs": [
+          { "aTargets": [ 0,-1 ], "bSortable": false, "bSearchable": false }
+        ],
+        "aoColumns": [
+            null,
+            { "sType": "anti-the" },
+            null,
+            null,
+            null
+        ]
+    }));
 
-$(document).ready(function()
-    {
-        $("#itemst").tablesorter({
-                        headers: { 0: { sorter: false }, 1: {sorter: 'links'}, 4:{sorter:false}}
-                });
     $(".cb").click(function(){
       enableCheckboxActions();
     });
@@ -135,7 +137,7 @@ function enableCheckboxActions(){
     </script>
     [% END %]
 </head>
-<body id="basket">
+<body id="basket" class="popup">
 
 <div id="doc" class="yui-t7">
 <div id="userbasket" class="container">

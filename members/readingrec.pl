@@ -50,6 +50,7 @@ my ($template, $loggedinuser, $cookie)= get_template_and_user({template_name => 
 				debug => 1,
 				});
 
+my $op = $input->param('op') || '';
 if ($input->param('cardnumber')) {
     $cardnumber = $input->param('cardnumber');
     $data = GetMember(cardnumber => $cardnumber);
@@ -62,7 +63,15 @@ if ($input->param('borrowernumber')) {
 
 my $order = 'date_due desc';
 my $limit = 0;
-my $issues = GetAllIssues($borrowernumber,$order,$limit);
+my $issues = ();
+# Do not request the old issues of anonymous patron
+if ( $borrowernumber eq C4::Context->preference('AnonymousPatron') ){
+    # use of 'eq' in the above comparison is intentional -- the
+    # system preference value could be blank
+    $template->param( is_anonymous => 1 );
+} else {
+    $issues = GetAllIssues($borrowernumber,$order,$limit);
+}
 
 my $branches = GetBranches();
 foreach my $issue ( @{$issues} ) {
@@ -70,7 +79,7 @@ foreach my $issue ( @{$issues} ) {
 }
 
 #   barcode export
-if ( $input->param('op') eq 'export_barcodes' ) {
+if ( $op eq 'export_barcodes' ) {
     my $today = C4::Dates->new();
     $today = $today->output('iso');
     my @barcodes =
@@ -102,7 +111,7 @@ if (! $limit){
 }
 
 
-my ($picture, $dberror) = GetPatronImage($data->{'cardnumber'});
+my ($picture, $dberror) = GetPatronImage($data->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
 if (C4::Context->preference('ExtendedPatronAttributes')) {
@@ -139,6 +148,7 @@ $template->param(
     loop_reading      => $issues,
     activeBorrowerRelationship =>
       ( C4::Context->preference('borrowerRelationship') ne '' ),
+    RoutingSerials => C4::Context->preference('RoutingSerials'),
 );
 output_html_with_http_headers $input, $cookie, $template->output;
 

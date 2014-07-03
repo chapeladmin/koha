@@ -30,8 +30,11 @@ use MARC::Record;
 use C4::ClassSource;
 use C4::Log;
 use List::MoreUtils qw/any/;
+use YAML qw/Load/;
+use DateTime::Format::MySQL;
 use Data::Dumper; # used as part of logging item record changes, not just for
                   # debugging; so please don't remove this
+use Koha::DateUtils qw/dt_from_string/;
 
 use vars qw($VERSION @ISA @EXPORT);
 
@@ -144,6 +147,7 @@ sub GetItem {
     my ($itemnumber,$barcode, $serial) = @_;
     my $dbh = C4::Context->dbh;
 	my $data;
+
     if ($itemnumber) {
         my $sth = $dbh->prepare("
             SELECT * FROM items 
@@ -158,6 +162,9 @@ sub GetItem {
         $sth->execute($barcode);		
         $data = $sth->fetchrow_hashref;
     }
+
+    return unless ( $data );
+
     if ( $serial) {      
     my $ssth = $dbh->prepare("SELECT serialseq,publisheddate from serialitems left join serial on serialitems.serialid=serial.serialid where serialitems.itemnumber=?");
         $ssth->execute($data->{'itemnumber'}) ;
@@ -295,7 +302,7 @@ sub AddItem {
 	my ( $itemnumber, $error ) = _koha_new_item( $item, $item->{barcode} );
     $item->{'itemnumber'} = $itemnumber;
 
-    ModZebra( $item->{biblionumber}, "specialUpdate", "biblioserver", undef, undef );
+    ModZebra( $item->{biblionumber}, "specialUpdate", "biblioserver" );
    
     logaction("CATALOGUING", "ADD", $itemnumber, "item") if C4::Context->preference("CataloguingLog");
     
@@ -463,7 +470,7 @@ my %default_values_for_mod_from_marc = (
     stack                => undef, 
     stocknumber          => undef, 
     uri                  => undef, 
-    wthdrawn             => 0,
+    withdrawn             => 0,
 );
 
 sub ModItemFromMarc {
@@ -535,6 +542,31 @@ sub ModItem {
 
     $item->{onloan} = undef if $item->{itemlost};
 
+    my @fields = qw( itemlost withdrawn );
+
+    # Only call GetItem if we need to set an "on" date field
+    if ( $item->{itemlost} || $item->{withdrawn} ) {
+        my $pre_mod_item = GetItem( $item->{'itemnumber'} );
+        for my $field (@fields) {
+            if (    defined( $item->{$field} )
+                and not $pre_mod_item->{$field}
+                and $item->{$field} )
+            {
+                $item->{ $field . '_on' } =
+                  DateTime::Format::MySQL->format_datetime( dt_from_string() );
+            }
+        }
+    }
+
+    # If the field is defined but empty, we are removing and,
+    # and thus need to clear out the 'on' field as well
+    for my $field (@fields) {
+        if ( defined( $item->{$field} ) && !$item->{$field} ) {
+            $item->{ $field . '_on' } = undef;
+        }
+    }
+
+
     _set_derived_columns_for_mod($item);
     _do_column_fixes_for_mod($item);
     # FIXME add checks
@@ -549,9 +581,9 @@ sub ModItem {
 
     # request that bib be reindexed so that searching on current
     # item status is possible
-    ModZebra( $biblionumber, "specialUpdate", "biblioserver", undef, undef );
+    ModZebra( $biblionumber, "specialUpdate", "biblioserver" );
 
-    logaction("CATALOGUING", "MODIFY", $itemnumber, Dumper($item)) if C4::Context->preference("CataloguingLog");
+    logaction("CATALOGUING", "MODIFY", $itemnumber, "item ".Dumper($item)) if C4::Context->preference("CataloguingLog");
 }
 
 =head2 ModItemTransfer
@@ -615,12 +647,7 @@ sub DelItem {
 
     # get the MARC record
     my $record = GetMarcBiblio($biblionumber);
-    ModZebra( $biblionumber, "specialUpdate", "biblioserver", undef, undef );
-
-    # backup the record
-    my $copy2deleted = $dbh->prepare("UPDATE deleteditems SET marc=? WHERE itemnumber=?");
-    $copy2deleted->execute( $record->as_usmarc(), $itemnumber );
-    # This last update statement makes that the timestamp column in deleteditems is updated too. If you remove these lines, please add a line to update the timestamp separately. See Bugzilla report 7146 and Biblio.pm (DelBiblio).
+    ModZebra( $biblionumber, "specialUpdate", "biblioserver" );
 
     #search item field code
     logaction("CATALOGUING", "DELETE", $itemnumber, "item") if C4::Context->preference("CataloguingLog");
@@ -751,12 +778,16 @@ Create a status selector with the following code
 
 =head3 in TEMPLATE
 
- <select name="statusloop">
-     <option value="">Default</option>
- <!-- TMPL_LOOP name="statusloop" -->
-     <option value="<!-- TMPL_VAR name="value" -->" <!-- TMPL_IF name="selected" -->selected<!-- /TMPL_IF -->><!-- TMPL_VAR name="statusname" --></option>
- <!-- /TMPL_LOOP -->
- </select>
+<select name="statusloop" id="statusloop">
+    <option value="">Default</option>
+    [% FOREACH statusloo IN statusloop %]
+        [% IF ( statusloo.selected ) %]
+            <option value="[% statusloo.value %]" selected="selected">[% statusloo.statusname %]</option>
+        [% ELSE %]
+            <option value="[% statusloo.value %]">[% statusloo.statusname %]</option>
+        [% END %]
+    [% END %]
+</select>
 
 =cut
 
@@ -970,9 +1001,7 @@ sub GetLostItems {
 
 =head2 GetItemsForInventory
 
-  $itemlist = GetItemsForInventory($minlocation, $maxlocation, 
-                 $location, $itemtype $datelastseen, $branch, 
-                 $offset, $size, $statushash);
+($itemlist, $iTotalRecords)  = GetItemsForInventory($minlocation, $maxlocation, $location, $itemtype, $ignoreissued, $datelastseen, $branchcode, $offset, $size, $statushash);
 
 Retrieve a list of title/authors/barcode/callnumber, for biblio inventory.
 
@@ -985,6 +1014,8 @@ the datelastseen can be used to specify that you want to see items not seen sinc
 offset & size can be used to retrieve only a part of the whole listing (defaut behaviour)
 $statushash requires a hashref that has the authorized values fieldname (intems.notforloan, etc...) as keys, and an arrayref of statuscodes we are searching for as values.
 
+$iTotalRecords is the number of rows that would have been returned without the $offset, $size limit clause
+
 =cut
 
 sub GetItemsForInventory {
@@ -992,12 +1023,15 @@ sub GetItemsForInventory {
     my $dbh = C4::Context->dbh;
     my ( @bind_params, @where_strings );
 
-    my $query = <<'END_SQL';
-SELECT items.itemnumber, barcode, itemcallnumber, title, author, biblio.biblionumber, datelastseen
-FROM items
-  LEFT JOIN biblio ON items.biblionumber = biblio.biblionumber
-  LEFT JOIN biblioitems on items.biblionumber = biblioitems.biblionumber
-END_SQL
+    my $select_columns = q{
+        SELECT items.itemnumber, barcode, itemcallnumber, title, author, biblio.biblionumber, biblio.frameworkcode, datelastseen, homebranch, location, notforloan, damaged, itemlost, stocknumber
+    };
+    my $select_count = q{SELECT COUNT(*)};
+    my $query = q{
+        FROM items
+        LEFT JOIN biblio ON items.biblionumber = biblio.biblionumber
+        LEFT JOIN biblioitems on items.biblionumber = biblioitems.biblionumber
+    };
     if ($statushash){
         for my $authvfield (keys %$statushash){
             if ( scalar @{$statushash->{$authvfield}} > 0 ){
@@ -1036,7 +1070,7 @@ END_SQL
         }
         push @bind_params, $branchcode;
     }
-    
+
     if ( $itemtype ) {
         push @where_strings, 'biblioitems.itemtype = ?';
         push @bind_params, $itemtype;
@@ -1052,20 +1086,34 @@ END_SQL
         $query .= join ' AND ', @where_strings;
     }
     $query .= ' ORDER BY items.cn_sort, itemcallnumber, title';
+    my $count_query = $select_count . $query;
+    $query .= " LIMIT $offset, $size" if ($offset and $size);
+    $query = $select_columns . $query;
     my $sth = $dbh->prepare($query);
     $sth->execute( @bind_params );
 
-    my @results;
-    $size--;
-    while ( my $row = $sth->fetchrow_hashref ) {
-        $offset-- if ($offset);
-        $row->{datelastseen}=format_date($row->{datelastseen});
-        if ( ( !$offset ) && $size ) {
-            push @results, $row;
-            $size--;
+    my @results = ();
+    my $tmpresults = $sth->fetchall_arrayref({});
+    $sth = $dbh->prepare( $count_query );
+    $sth->execute( @bind_params );
+    my ($iTotalRecords) = $sth->fetchrow_array();
+
+    foreach my $row (@$tmpresults) {
+
+        # Auth values
+        foreach (keys %$row) {
+            # If the koha field is mapped to a marc field
+            my ($f, $sf) = GetMarcFromKohaField("items.$_", $row->{'frameworkcode'});
+            if ($f and $sf) {
+                # We replace the code with it's description
+                my $authvals = C4::Koha::GetKohaAuthorisedValuesFromField($f, $sf, $row->{'frameworkcode'});
+                $row->{$_} = $authvals->{$row->{$_}} if defined $authvals->{$row->{$_}};
+            }
         }
+        push @results, $row;
     }
-    return \@results;
+
+    return (\@results, $iTotalRecords);
 }
 
 =head2 GetItemsCount
@@ -1136,7 +1184,7 @@ sub GetItemsByBiblioitemnumber {
             $data->{'borrowernumber'}   = $data2->{'borrowernumber'};
         }
         else {
-            # set date_due to blank, so in the template we check itemlost, and wthdrawn 
+            # set date_due to blank, so in the template we check itemlost, and withdrawn
             $data->{'date_due'} = '';                                                                                                         
         }    # else         
         # Find the last 3 people who borrowed this item.                  
@@ -1222,7 +1270,8 @@ sub GetItemsInfo {
            itemtypes.notforloan as notforloan_per_itemtype,
            holding.branchurl,
            holding.branchname,
-           holding.opac_info as branch_opac_info
+           holding.opac_info as holding_branch_opac_info,
+           home.opac_info as home_branch_opac_info
      FROM items
      LEFT JOIN branches AS holding ON items.holdingbranch = holding.branchcode
      LEFT JOIN branches AS home ON items.homebranch=home.branchcode
@@ -1253,9 +1302,9 @@ sub GetItemsInfo {
             $data->{firstname}     = $idata->{firstname};
             $data->{lastreneweddate} = $idata->{lastreneweddate};
             $datedue                = $idata->{'date_due'};
-        if (C4::Context->preference("IndependantBranches")){
+        if (C4::Context->preference("IndependentBranches")){
         my $userenv = C4::Context->userenv;
-        if ( ($userenv) && ( $userenv->{flags} % 2 != 1 ) ) { 
+        unless ( C4::Context->IsSuperLibrarian() ) {
             $data->{'NOTSAMEBRANCH'} = 1 if ($idata->{'bcode'} ne $userenv->{branch});
         }
         }
@@ -1284,8 +1333,8 @@ sub GetItemsInfo {
 
         # get restricted status and description if applicable
         if ( my $code = C4::Koha::GetAuthValCode( 'items.restricted', $data->{frameworkcode} ) ) {
-            $data->{restricted}     = C4::Koha::GetKohaAuthorisedValueLib( $code, $data->{restricted} );
             $data->{restrictedopac} = C4::Koha::GetKohaAuthorisedValueLib( $code, $data->{restricted}, 1 );
+            $data->{restricted}     = C4::Koha::GetKohaAuthorisedValueLib( $code, $data->{restricted} );
         }
 
         # my stack procedures
@@ -1612,11 +1661,11 @@ sub GetBarcodeFromItemnumber {
 
 =head2 GetHiddenItemnumbers
 
-=over 4
+    my @itemnumbers_to_hide = GetHiddenItemnumbers(@items);
 
-$result = GetHiddenItemnumbers(@items);
-
-=back
+Given a list of items it checks which should be hidden from the OPAC given
+the current configuration. Returns a list of itemnumbers corresponding to
+those that should be hidden.
 
 =cut
 
@@ -1625,6 +1674,7 @@ sub GetHiddenItemnumbers {
     my @resultitems;
 
     my $yaml = C4::Context->preference('OpacHiddenItems');
+    return () if (! $yaml =~ /\S/ );
     $yaml = "$yaml\n\n"; # YAML is anal on ending \n. Surplus does not hurt
     my $hidingrules;
     eval {
@@ -1939,7 +1989,7 @@ Given an item hashref containing one or more
 columns to modify, fix up certain values.
 Specifically, set to 0 any passed value
 of C<notforloan>, C<damaged>, C<itemlost>, or
-C<wthdrawn> that is either undefined or
+C<withdrawn> that is either undefined or
 contains the empty string.
 
 =cut
@@ -1959,9 +2009,9 @@ sub _do_column_fixes_for_mod {
         (not defined $item->{'itemlost'} or $item->{'itemlost'} eq '')) {
         $item->{'itemlost'} = 0;
     }
-    if (exists $item->{'wthdrawn'} and
-        (not defined $item->{'wthdrawn'} or $item->{'wthdrawn'} eq '')) {
-        $item->{'wthdrawn'} = 0;
+    if (exists $item->{'withdrawn'} and
+        (not defined $item->{'withdrawn'} or $item->{'withdrawn'} eq '')) {
+        $item->{'withdrawn'} = 0;
     }
     if (exists $item->{'location'} && !exists $item->{'permanent_location'}) {
         $item->{'permanent_location'} = $item->{'location'};
@@ -2035,7 +2085,7 @@ C<items.itemlost>
 
 =item *
 
-C<items.wthdrawn>
+C<items.withdrawn>
 
 =back
 
@@ -2044,7 +2094,7 @@ C<items.wthdrawn>
 sub _set_defaults_for_add {
     my $item = shift;
     $item->{dateaccessioned} ||= C4::Dates->new->output('iso');
-    $item->{$_} ||= 0 for (qw( notforloan damaged itemlost wthdrawn));
+    $item->{$_} ||= 0 for (qw( notforloan damaged itemlost withdrawn));
 }
 
 =head2 _koha_new_item
@@ -2076,7 +2126,7 @@ sub _koha_new_item {
             notforloan          = ?,
             damaged             = ?,
             itemlost            = ?,
-            wthdrawn            = ?,
+            withdrawn            = ?,
             itemcallnumber      = ?,
             coded_location_qualifier = ?,
             restricted          = ?,
@@ -2118,7 +2168,7 @@ sub _koha_new_item {
             $item->{'notforloan'},
             $item->{'damaged'},
             $item->{'itemlost'},
-            $item->{'wthdrawn'},
+            $item->{'withdrawn'},
             $item->{'itemcallnumber'},
             $item->{'coded_location_qualifier'},
             $item->{'restricted'},
@@ -2173,8 +2223,8 @@ sub MoveItemFromBiblio {
     $sth = $dbh->prepare("UPDATE items SET biblioitemnumber = ?, biblionumber = ? WHERE itemnumber = ? AND biblionumber = ?");
     my $return = $sth->execute($tobiblioitem, $tobiblio, $itemnumber, $frombiblio);
     if ($return == 1) {
-        ModZebra( $tobiblio, "specialUpdate", "biblioserver", undef, undef );
-        ModZebra( $frombiblio, "specialUpdate", "biblioserver", undef, undef );
+        ModZebra( $tobiblio, "specialUpdate", "biblioserver" );
+        ModZebra( $frombiblio, "specialUpdate", "biblioserver" );
 	    # Checking if the item we want to move is in an order 
         require C4::Acquisition;
         my $order = C4::Acquisition::GetOrderFromItemnumber($itemnumber);
@@ -2204,27 +2254,33 @@ sub DelItemCheck {
 
 
     # check that there is no issue on this item before deletion.
-    my $sth=$dbh->prepare("select * from issues i where i.itemnumber=?");
+    my $sth = $dbh->prepare(q{
+        SELECT COUNT(*) FROM issues
+        WHERE itemnumber = ?
+    });
     $sth->execute($itemnumber);
+    my ($onloan) = $sth->fetchrow;
 
     my $item = GetItem($itemnumber);
-    my $onloan=$sth->fetchrow;
 
     if ($onloan){
         $error = "book_on_loan" 
     }
-    elsif ( !(C4::Context->userenv->{flags} & 1) and
-            C4::Context->preference("IndependantBranches") and
-           (C4::Context->userenv->{branch} ne
-             $item->{C4::Context->preference("HomeOrHoldingBranch")||'homebranch'}) )
+    elsif ( !C4::Context->IsSuperLibrarian()
+        and C4::Context->preference("IndependentBranches")
+        and ( C4::Context->userenv->{branch} ne $item->{'homebranch'} ) )
     {
         $error = "not_same_branch";
     }
 	else{
         # check it doesnt have a waiting reserve
-        $sth=$dbh->prepare("SELECT * FROM reserves WHERE (found = 'W' or found = 'T') AND itemnumber = ?");
+        $sth = $dbh->prepare(q{
+            SELECT COUNT(*) FROM reserves
+            WHERE (found = 'W' OR found = 'T')
+            AND itemnumber = ?
+        });
         $sth->execute($itemnumber);
-        my $reserve=$sth->fetchrow;
+        my ($reserve) = $sth->fetchrow;
         if ($reserve){
             $error = "book_reserved";
         } elsif ($countanalytics > 0){
@@ -2254,16 +2310,17 @@ sub _koha_modify_item {
     my $query = "UPDATE items SET ";
     my @bind;
     for my $key ( keys %$item ) {
+        next if ( $key eq 'itemnumber' );
         $query.="$key=?,";
         push @bind, $item->{$key};
     }
     $query =~ s/,$//;
     $query .= " WHERE itemnumber=?";
     push @bind, $item->{'itemnumber'};
-    my $sth = C4::Context->dbh->prepare($query);
+    my $sth = $dbh->prepare($query);
     $sth->execute(@bind);
-    if ( C4::Context->dbh->errstr ) {
-        $error.="ERROR in _koha_modify_item $query".$dbh->errstr;
+    if ( $sth->err ) {
+        $error.="ERROR in _koha_modify_item $query: ".$sth->errstr;
         warn $error;
     }
     return ($item->{'itemnumber'},$error);
@@ -2287,6 +2344,7 @@ sub _koha_delete_item {
     my $query = "INSERT INTO deleteditems SET ";
     my @bind  = ();
     foreach my $key ( keys %$data ) {
+        next if ( $key eq 'timestamp' ); # timestamp will be set by db
         $query .= "$key = ?,";
         push( @bind, $data->{$key} );
     }
@@ -2460,18 +2518,12 @@ counts Usage of itemnumber in Analytical bibliorecords.
 sub GetAnalyticsCount {
     my ($itemnumber) = @_;
     require C4::Search;
-    if (C4::Context->preference('NoZebra')) {
-        # Read the index Koha-Auth-Number for this authid and count the lines
-        my $result = C4::Search::NZanalyse("hi=$itemnumber");
-        my @tab = split /;/,$result;
-        return scalar @tab;
-    } else {
-        ### ZOOM search here
-        my $query;
-        $query= "hi=".$itemnumber;
-                my ($err,$res,$result) = C4::Search::SimpleSearch($query,0,10);
-        return ($result);
-    }
+
+    ### ZOOM search here
+    my $query;
+    $query= "hi=".$itemnumber;
+            my ($err,$res,$result) = C4::Search::SimpleSearch($query,0,10);
+    return ($result);
 }
 
 =head2 GetItemHolds
@@ -2637,7 +2689,8 @@ sub PrepareItemrecordDisplay {
                 $subfield_data{mandatory}  = $tagslib->{$tag}->{$subfield}->{mandatory};
                 $subfield_data{repeatable} = $tagslib->{$tag}->{$subfield}->{repeatable};
                 $subfield_data{hidden}     = "display:none"
-                  if $tagslib->{$tag}->{$subfield}->{hidden};
+                  if ( ( $tagslib->{$tag}->{$subfield}->{hidden} > 4 )
+                    || ( $tagslib->{$tag}->{$subfield}->{hidden} < -4 ) );
                 my ( $x, $defaultvalue );
                 if ($itemrecord) {
                     ( $x, $defaultvalue ) = _find_value( $tag, $subfield, $itemrecord );
@@ -2662,6 +2715,10 @@ sub PrepareItemrecordDisplay {
                     && $defaultvalues
                     && $defaultvalues->{'callnumber'} ) {
                     if( $itemrecord and $defaultvalues and not $itemrecord->field($subfield) ){
+                        # if the item record exists, only use default value if the item has no callnumber
+                        $defaultvalue = $defaultvalues->{callnumber};
+                    } elsif ( !$itemrecord and $defaultvalues ) {
+                        # if the item record *doesn't* exists, always use the default value
                         $defaultvalue = $defaultvalues->{callnumber};
                     }
                 }
@@ -2677,6 +2734,10 @@ sub PrepareItemrecordDisplay {
                     && $defaultvalues->{'location'} ) {
 
                     if ( $itemrecord and $defaultvalues and not $itemrecord->field($subfield) ) {
+                        # if the item record exists, only use default value if the item has no locationr
+                        $defaultvalue = $defaultvalues->{location};
+                    } elsif ( !$itemrecord and $defaultvalues ) {
+                        # if the item record *doesn't* exists, always use the default value
                         $defaultvalue = $defaultvalues->{location};
                     }
                 }
@@ -2687,8 +2748,8 @@ sub PrepareItemrecordDisplay {
                     # builds list, depending on authorised value...
                     #---- branch
                     if ( $tagslib->{$tag}->{$subfield}->{'authorised_value'} eq "branches" ) {
-                        if (   ( C4::Context->preference("IndependantBranches") )
-                            && ( C4::Context->userenv->{flags} % 2 != 1 ) ) {
+                        if (   ( C4::Context->preference("IndependentBranches") )
+                            && !C4::Context->IsSuperLibrarian() ) {
                             my $sth = $dbh->prepare( "SELECT branchcode,branchname FROM branches WHERE branchcode = ? ORDER BY branchname" );
                             $sth->execute( C4::Context->userenv->{branch} );
                             push @authorised_values, ""
@@ -2707,7 +2768,11 @@ sub PrepareItemrecordDisplay {
                                 $authorised_lib{$branchcode} = $branchname;
                             }
                         }
-                        $defaultvalue = C4::Context->userenv->{branch};
+
+                        $defaultvalue = C4::Context->userenv ? C4::Context->userenv->{branch} : undef;
+                        if ( $defaultvalues and $defaultvalues->{branchcode} ) {
+                            $defaultvalue = $defaultvalues->{branchcode};
+                        }
 
                         #----- itemtypes
                     } elsif ( $tagslib->{$tag}->{$subfield}->{authorised_value} eq "itemtypes" ) {
@@ -2732,6 +2797,8 @@ sub PrepareItemrecordDisplay {
                             push @authorised_values, $class_source;
                             $authorised_lib{$class_source} = $class_sources->{$class_source}->{'description'};
                         }
+
+                        $defaultvalue = $default_source;
 
                         #---- "true" authorised value
                     } else {
@@ -2762,21 +2829,21 @@ sub PrepareItemrecordDisplay {
                             my $extended_param = plugin_parameters( $dbh, undef, $tagslib, $subfield_data{id}, undef );
                             my ( $function_name, $javascript ) = plugin_javascript( $dbh, undef, $tagslib, $subfield_data{id}, undef );
                             $subfield_data{random}     = int(rand(1000000));    # why do we need 2 different randoms?
-                            $subfield_data{marc_value} = qq[<input tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="255"
+                            $subfield_data{marc_value} = qq[<input type="text" tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="255"
                                 onfocus="Focus$function_name($subfield_data{random}, '$subfield_data{id}');"
                                  onblur=" Blur$function_name($subfield_data{random}, '$subfield_data{id}');" />
                                 <a href="#" class="buttonDot" onclick="Clic$function_name('$subfield_data{id}'); return false;" title="Tag Editor">...</a>
                                 $javascript];
                         } else {
                             warn "Plugin Failed: $plugin";
-                            $subfield_data{marc_value} = qq(<input tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="255" />); # supply default input form
+                            $subfield_data{marc_value} = qq(<input type="text" tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="255" />); # supply default input form
                         }
                 }
                 elsif ( $tag eq '' ) {       # it's an hidden field
-                    $subfield_data{marc_value} = qq(<input type="hidden" tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="255" value="$defaultvalue" />);
+                    $subfield_data{marc_value} = qq(<input type="hidden" tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="255" value="$defaultvalue" />);
                 }
                 elsif ( $tagslib->{$tag}->{$subfield}->{'hidden'} ) {   # FIXME: shouldn't input type be "hidden" ?
-                    $subfield_data{marc_value} = qq(<input type="text" tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="255" value="$defaultvalue" />);
+                    $subfield_data{marc_value} = qq(<input type="text" tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="255" value="$defaultvalue" />);
                 }
                 elsif ( length($defaultvalue) > 100
                             or (C4::Context->preference("marcflavour") eq "UNIMARC" and
@@ -2785,7 +2852,7 @@ sub PrepareItemrecordDisplay {
                                   500 <= $tag && $tag < 600                     )
                           ) {
                     # oversize field (textarea)
-                    $subfield_data{marc_value} = qq(<textarea tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="67" maxlength="255">$defaultvalue</textarea>\n");
+                    $subfield_data{marc_value} = qq(<textarea tabindex="1" id="$subfield_data{id}" name="field_value" class="input_marceditor" size="50" maxlength="255">$defaultvalue</textarea>\n");
                 } else {
                     $subfield_data{marc_value} = "<input type=\"text\" name=\"field_value\" value=\"$defaultvalue\" size=\"50\" maxlength=\"255\" />";
                 }

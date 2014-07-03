@@ -29,11 +29,11 @@ use C4::Biblio;
 use C4::Reserves qw(AddReserve CancelReserve GetReservesFromBiblionumber GetReservesFromBorrowernumber CanBookBeReserved CanItemBeReserved);
 use C4::Context;
 use C4::AuthoritiesMarc;
-use C4::ILSDI::Utility;
 use XML::Simple;
 use HTML::Entities;
 use CGI;
 use DateTime;
+use C4::Auth;
 
 =head1 NAME
 
@@ -60,7 +60,7 @@ hashref that will be printed by XML::Simple in opac/ilsdi.pl
 		noattr => 1, 
 		noescape => 1,
 		nosort => 1,
-		xmldecl => '<?xml version="1.0" encoding="ISO-8859-1" ?>', 
+                xmldecl => '<?xml version="1.0" encoding="UTF-8" ?>',
 		RootName => 'LookupPatron', 
 		SuppressEmpty => 1);
 
@@ -105,7 +105,7 @@ availability
 sub GetAvailability {
     my ($cgi) = @_;
 
-    my $out = "<?xml version=\"1.0\" encoding=\"ISO-8859-1\" ?>\n";
+    my $out = "<?xml version=\"1.0\" encoding=\"UTF-8\" ?>\n";
     $out .= "<dlf:collection\n";
     $out .= "  xmlns:dlf=\"http://diglib.org/ilsdi/1.1\"\n";
     $out .= "  xmlns:xsi=\"http://www.w3.org/2001/XMLSchema-instance\"\n";
@@ -114,7 +114,7 @@ sub GetAvailability {
 
     foreach my $id ( split( / /, $cgi->param('id') ) ) {
         if ( $cgi->param('id_type') eq "item" ) {
-            my ( $biblionumber, $status, $msg, $location ) = Availability($id);
+            my ( $biblionumber, $status, $msg, $location ) = _availability($id);
 
             $out .= "  <dlf:record>\n";
             $out .= "    <dlf:bibliographic id=\"" . ( $biblionumber || $id ) . "\" />\n";
@@ -208,7 +208,7 @@ sub GetRecords {
 
         # Get most of the needed data
         my $biblioitemnumber = $biblioitem->{'biblioitemnumber'};
-        my @reserves         = GetReservesFromBiblionumber( $biblionumber, undef, undef );
+        my $reserves         = GetReservesFromBiblionumber({ biblionumber => $biblionumber });
         my $issues           = GetBiblioIssues($biblionumber);
         my $items            = GetItemsByBiblioitemnumber($biblioitemnumber);
 
@@ -225,7 +225,7 @@ sub GetRecords {
 
         # Hashref building...
         $biblioitem->{'items'}->{'item'}       = $items;
-        $biblioitem->{'reserves'}->{'reserve'} = $reserves[1];
+        $biblioitem->{'reserves'}->{'reserve'} = $reserves;
         $biblioitem->{'issues'}->{'issue'}     = $issues;
 
         push @records, $biblioitem;
@@ -312,28 +312,24 @@ the patron.
 Parameters:
 
   - username (Required)
-	user's login identifier
+    user's login identifier (userid or cardnumber)
   - password (Required)
-	user's password
+    user's password
 
 =cut
 
 sub AuthenticatePatron {
     my ($cgi) = @_;
-
-    # Check if borrower exists, using a C4::Auth function...
-    unless( C4::Auth::checkpw( C4::Context->dbh, $cgi->param('username'), $cgi->param('password') ) ) {
+    my ($status, $cardnumber, $userid) = C4::Auth::checkpw( C4::Context->dbh, $cgi->param('username'), $cgi->param('password') );
+    if ( $status ) {
+        # Get the borrower
+        my $borrower = GetMember( cardnumber => $cardnumber );
+        my $patron->{'id'} = $borrower->{'borrowernumber'};
+        return $patron;
+    }
+    else {
         return { code => 'PatronNotFound' };
     }
-
-    # Get the borrower
-    my $borrower = GetMember( userid => $cgi->param('username') );
-
-    # Build the hashref
-    my $patron->{'id'} = $borrower->{'borrowernumber'};
-
-    # ... and return his ID
-    return $patron;
 }
 
 =head2 GetPatronInfo
@@ -627,8 +623,11 @@ sub HoldTitle {
     }
 
     # Add the reserve
-    #          $branch, $borrowernumber, $biblionumber, $constraint, $bibitems,  $priority, $notes, $title, $checkitem,  $found
-    AddReserve( $branch, $borrowernumber, $biblionumber, 'a', undef, 0, undef, $title, undef, undef );
+    #    $branch,    $borrowernumber, $biblionumber,
+    #    $constraint, $bibitems,  $priority, $resdate, $expdate, $notes,
+    #    $title,      $checkitem, $found
+    my $priority= C4::Reserves::CalculatePriority( $biblionumber );
+    AddReserve( $branch, $borrowernumber, $biblionumber, 'a', undef, $priority, undef, undef, undef, $title, undef, undef );
 
     # Hashref building
     my $out;
@@ -690,9 +689,8 @@ sub HoldItem {
     my $canbookbereserved = C4::Reserves::CanBookBeReserved( $borrowernumber, $biblionumber );
     return { code => 'NotHoldable' } unless $canbookbereserved and $canitembereserved;
 
-    my $branch;
-
     # Pickup branch management
+    my $branch;
     if ( $cgi->param('pickup_location') ) {
         $branch = $cgi->param('pickup_location');
         my $branches = GetBranches();
@@ -701,18 +699,12 @@ sub HoldItem {
         $branch = $$borrower{branchcode};
     }
 
-    my $rank;
-    my $found;
-
-    # Get rank and found
-    $rank = '0' unless C4::Context->preference('ReservesNeedReturns');
-    if ( $item->{'holdingbranch'} eq $branch ) {
-        $found = 'W' unless C4::Context->preference('ReservesNeedReturns');
-    }
-
     # Add the reserve
-    # $branch,$borrowernumber,$biblionumber,$constraint,$bibitems,$priority,$resdate,$expdate,$notes,$title,$checkitem,$found
-    AddReserve( $branch, $borrowernumber, $biblionumber, 'a', undef, $rank, '', '', '', $title, $itemnumber, $found );
+    #    $branch,    $borrowernumber, $biblionumber,
+    #    $constraint, $bibitems,  $priority, $resdate, $expdate, $notes,
+    #    $title,      $checkitem, $found
+    my $priority= C4::Reserves::CalculatePriority( $biblionumber );
+    AddReserve( $branch, $borrowernumber, $biblionumber, 'a', undef, $priority, undef, undef, undef, $title, $itemnumber, undef );
 
     # Hashref building
     my $out;
@@ -762,9 +754,43 @@ sub CancelHold {
     return { code => 'NotCanceled' } unless any { $itemnumber eq $_ } @reserveditems;
 
     # Cancel the reserve
-    CancelReserve( $itemnumber, undef, $borrowernumber );
+    CancelReserve({ itemnumber => $itemnumber, borrowernumber => $borrowernumber });
 
     return { code => 'Canceled' };
+}
+
+=head2 _availability
+
+Returns, for an itemnumber, an array containing availability information.
+
+ my ($biblionumber, $status, $msg, $location) = _availability($id);
+
+=cut
+
+sub _availability {
+    my ($itemnumber) = @_;
+    my $item = GetItem( $itemnumber, undef, undef );
+
+    if ( not $item->{'itemnumber'} ) {
+        return ( undef, 'unknown', 'Error: could not retrieve availability for this ID', undef );
+    }
+
+    my $biblionumber = $item->{'biblioitemnumber'};
+    my $location     = GetBranchName( $item->{'holdingbranch'} );
+
+    if ( $item->{'notforloan'} ) {
+        return ( $biblionumber, 'not available', 'Not for loan', $location );
+    } elsif ( $item->{'onloan'} ) {
+        return ( $biblionumber, 'not available', 'Checked out', $location );
+    } elsif ( $item->{'itemlost'} ) {
+        return ( $biblionumber, 'not available', 'Item lost', $location );
+    } elsif ( $item->{'wthdrawn'} ) {
+        return ( $biblionumber, 'not available', 'Item withdrawn', $location );
+    } elsif ( $item->{'damaged'} ) {
+        return ( $biblionumber, 'not available', 'Item damaged', $location );
+    } else {
+        return ( $biblionumber, 'available', undef, $location );
+    }
 }
 
 1;
