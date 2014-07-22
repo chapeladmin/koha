@@ -27,11 +27,14 @@ use C4::Context;
 use C4::Search;
 use C4::Output;
 
-=head1
+=head1 FUNCTIONS
 
-plugin_parameters : other parameters added when the plugin is called by the dopop function
+=head2 plugin_parameters
+
+Other parameters added when the plugin is called by the dopop function
 
 =cut
+
 sub plugin_parameters {
 my ($dbh,$record,$tagslib,$i,$tabloop) = @_;
 return "";
@@ -69,7 +72,7 @@ my ($input) = @_;
 	my $dbh = C4::Context->dbh;
 
 my ($template, $loggedinuser, $cookie)
-    = get_template_and_user({template_name => "cataloguing/value_builder/unimarc_field_100.tmpl",
+    = get_template_and_user({template_name => "cataloguing/value_builder/unimarc_field_100.tt",
 			     query => $input,
 			     type => "intranet",
 			     authnotrequired => 0,

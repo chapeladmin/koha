@@ -42,7 +42,7 @@ my $transfer = $input->param('transfer');
 
 my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     {   
-        template_name   => "circ/printslip.tmpl",
+        template_name   => "circ/printslip.tt",
         query           => $input,
         type            => "intranet",
         authnotrequired => 0,
@@ -57,18 +57,9 @@ if ( my $letter = ReserveSlip ($session->param('branch') || $userenv->{branch}, 
     $slip = $letter->{content};
     $is_html = $letter->{is_html};
 }
-else {
-    $slip = "Reserve not found";
-}
-$template->param(
-    slip => $slip,
-    plain => !$is_html,
-    title => "Koha -- Circulation: Transfers",
-    stylesheet => C4::Context->preference("SlipCSS"),
-);
+$template->param( slip => $slip ) if ($slip);
+$template->param( caller => 'hold-transfer' );
+$template->param( plain => !$is_html );
 
 output_html_with_http_headers $input, $cookie, $template->output;
-
-
-
 

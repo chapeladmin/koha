@@ -17,7 +17,9 @@
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
 =head1 members/statistics.pl
+
   Generate statistic issues for a member
+
 =cut
 
 use Modern::Perl;
@@ -34,7 +36,7 @@ use C4::Output;
 my $input = new CGI;
 
 my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
-    {   template_name   => "members/statistics.tmpl",
+    {   template_name   => "members/statistics.tt",
         query           => $input,
         type            => "intranet",
         authnotrequired => 0,
@@ -94,9 +96,14 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
 my ($picture, $dberror) = GetPatronImage($borrower->{'borrowernumber'});
 $template->param( picture => 1 ) if $picture;
 
+# Computes full borrower address
+my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $borrower->{streettype} );
+my $address = $borrower->{'streetnumber'} . " $roadtype " . $borrower->{'address'};
+
 $template->param(
     statisticsview => 1,
     datas          => $datas,
+    address        => $address,
     column_names   => \@statistic_column_names,
     length_keys    => scalar( @statistic_column_names),
     count_total_issues => $count_total_issues,
@@ -112,9 +119,12 @@ output_html_with_http_headers $input, $cookie, $template->output;
 =head1 FUNCTIONS
 
 =head2 add_actual_state
+
   Add a 'count_actual_state' key in all hashes
   count_actual_state = count_precedent_state - count_total_issues_returned_today + count_total_issues_today
+
 =cut
+
 sub add_actual_state {
     my ( $array ) = @_;
     for my $hash ( @$array ) {
@@ -123,6 +133,7 @@ sub add_actual_state {
 }
 
 =head2 build_array
+
   Build a new array containing values of hashes.
   It used by template whitch display silly values.
   ex:
@@ -151,6 +162,7 @@ sub add_actual_state {
     ];
 
 =cut
+
 sub build_array {
     my ( $array ) = @_;
     my ( @r, $total );
@@ -173,6 +185,7 @@ sub build_array {
 }
 
 =head2 merge
+
   Merge hashes with the same statistic column names into one
   param: array, a arrayref of arrayrefs
   ex:
@@ -202,6 +215,7 @@ sub build_array {
    ];
 
 =cut
+
 sub merge {
     my @array = @_;
     my @r;

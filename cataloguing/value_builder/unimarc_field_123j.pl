@@ -27,9 +27,11 @@ use C4::Context;
 use C4::Search;
 use C4::Output;
 
-=head1
+=head1 FUNCTIONS
 
-plugin_parameters : other parameters added when the plugin is called by the dopop function
+=head2 plugin_parameters
+
+Other parameters added when the plugin is called by the dopop function
 
 =cut
 
@@ -73,7 +75,7 @@ sub plugin {
 	my ($template, $loggedinuser, $cookie)
     = get_template_and_user(
     	{
-    		template_name => "cataloguing/value_builder/unimarc_field_123j.tmpl",
+            template_name => "cataloguing/value_builder/unimarc_field_123j.tt",
 			query => $input,
 			type => "intranet",
 			authnotrequired => 0,

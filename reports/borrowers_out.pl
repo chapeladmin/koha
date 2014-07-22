@@ -32,17 +32,17 @@ use C4::Dates qw/format_date_in_iso/;
 
 =head1 NAME
 
-plugin that shows a stats on borrowers
+reports/borrowers_out.pl
 
 =head1 DESCRIPTION
 
-=over 2
+Plugin that shows a stats on borrowers
 
 =cut
 
 my $input = new CGI;
 my $do_it=$input->param('do_it');
-my $fullreportname = "reports/borrowers_out.tmpl";
+my $fullreportname = "reports/borrowers_out.tt";
 my $limit = $input->param("Limit");
 my $column = $input->param("Criteria");
 my @filters = $input->param("Filter");

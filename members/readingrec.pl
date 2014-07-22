@@ -42,7 +42,7 @@ my $data = undef;
 my $borrowernumber = undef;
 my $cardnumber = undef;
 
-my ($template, $loggedinuser, $cookie)= get_template_and_user({template_name => "members/readingrec.tmpl",
+my ($template, $loggedinuser, $cookie)= get_template_and_user({template_name => "members/readingrec.tt",
 				query => $input,
 				type => "intranet",
 				authnotrequired => 0,
@@ -122,6 +122,11 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
     );
 }
 
+
+# Computes full borrower address
+my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $data->{streettype} );
+my $address = $data->{'streetnumber'} . " $roadtype " . $data->{'address'};
+
 $template->param(
     readingrecordview => 1,
     title             => $data->{title},
@@ -134,14 +139,17 @@ $template->param(
     categorycode      => $data->{categorycode},
     category_type     => $data->{category_type},
     categoryname      => $data->{description},
-    address           => $data->{address},
+    address           => $address,
     address2          => $data->{address2},
     city              => $data->{city},
     state             => $data->{state},
     zipcode           => $data->{zipcode},
     country           => $data->{country},
     phone             => $data->{phone},
+    phonepro          => $data->{phonepro},
+    mobile            => $data->{mobile},
     email             => $data->{email},
+    emailpro             => $data->{emailpro},
     branchcode        => $data->{branchcode},
     is_child          => ( $data->{category_type} eq 'C' ),
     branchname        => $branches->{ $data->{branchcode} }->{branchname},

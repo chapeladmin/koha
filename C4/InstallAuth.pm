@@ -46,7 +46,7 @@ InstallAuth - Authenticates Koha users for Install process
   my $query = new CGI;
 
   my ($template, $borrowernumber, $cookie) 
-    = get_template_and_user({template_name   => "opac-main.tmpl",
+    = get_template_and_user({template_name   => "opac-main.tt",
                              query           => $query,
 			     type            => "opac",
 			     authnotrequired => 1,
@@ -81,7 +81,7 @@ InstallAuth - Authenticates Koha users for Install process
 =item get_template_and_user
 
   my ($template, $borrowernumber, $cookie)
-    = get_template_and_user({template_name   => "opac-main.tmpl",
+    = get_template_and_user({template_name   => "opac-main.tt",
                              query           => $query,
 			     type            => "opac",
 			     authnotrequired => 1,
@@ -111,7 +111,6 @@ sub get_template_and_user {
     my $path     = C4::Context->config('intrahtdocs'). "/prog/". $language;
 
     my $tmplbase = $in->{template_name};
-    $tmplbase=~ s/\.tmpl$/.tt/;
     my $filename = "$path/modules/" . $tmplbase;
     my $interface = 'intranet';
     my $template = C4::Templates->new( $interface, $filename, $tmplbase, $query);
@@ -234,7 +233,7 @@ sub checkauth {
 
     my $dbh = C4::Context->dbh();
     my $template_name;
-    $template_name = "installer/auth.tmpl";
+    $template_name = "installer/auth.tt";
 
     # state variables
     my $loggedin = 0;
@@ -372,7 +371,6 @@ sub checkauth {
       C4::Context->config('intrahtdocs') . "/prog/"
       . ( $query->param('language') ? $query->param('language') : "en" );
     my $filename = "$path/modules/$template_name";
-    $filename =~ s/\.tmpl$/.tt/;
     my $interface = 'intranet';
     my $template = C4::Templates->new( $interface, $filename, '', $query);
     $template->param(

@@ -38,7 +38,7 @@ my $borrowernumber = $input->param('borrowernumber');
 my $borrower = GetMember(borrowernumber => $borrowernumber);
 
 my ($template, $loggedinuser, $cookie)
-= get_template_and_user({template_name => "members/notices.tmpl",
+= get_template_and_user({template_name => "members/notices.tt",
 				query => $input,
 				type => "intranet",
 				authnotrequired => 0,
@@ -62,12 +62,17 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
     );
 }
 
+# Computes full borrower address
+my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $borrower->{'streettype'} );
+my $address = $borrower->{'streetnumber'} . " $roadtype " . $borrower->{'address'};
+
 $template->param(
 			QUEUED_MESSAGES 	=> $queued_messages,
 			borrowernumber 		=> $borrowernumber,
 			sentnotices 		=> 1,
                         branchname              => GetBranchName($borrower->{'branchcode'}),
                         categoryname            => $borrower->{'description'},
+                        address                 => $address,
 			activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
             RoutingSerials => C4::Context->preference('RoutingSerials'),
 );

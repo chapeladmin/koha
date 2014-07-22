@@ -1,12 +1,12 @@
 use utf8;
-package Koha::Schema::Result::ImportRecordMatches;
+package Koha::Schema::Result::ImportRecordMatch;
 
 # Created by DBIx::Class::Schema::Loader
 # DO NOT MODIFY THE FIRST PART OF THIS FILE
 
 =head1 NAME
 
-Koha::Schema::Result::ImportRecordMatches
+Koha::Schema::Result::ImportRecordMatch
 
 =cut
 
@@ -69,9 +69,9 @@ __PACKAGE__->belongs_to(
 );
 
 
-# Created by DBIx::Class::Schema::Loader v0.07025 @ 2013-10-14 20:56:21
-# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:VLaEo7f96O80PqFr/baR9A
+# Created by DBIx::Class::Schema::Loader v0.07039 @ 2014-07-11 09:26:55
+# DO NOT MODIFY THIS OR ANYTHING ABOVE! md5sum:hJW36EeP+H8+0/Ij3iuIFw
 
 
-# You can replace this text with custom content, and it will be preserved on regeneration
+# You can replace this text with custom code or comments, and it will be preserved on regeneration
 1;

@@ -109,7 +109,6 @@ sub output {
     $vars->{theme} = $self->theme;
     $vars->{opaccolorstylesheet} =
         C4::Context->preference('opaccolorstylesheet');
-    $vars->{opacsmallimage} = C4::Context->preference('opacsmallimage');
     $vars->{opaclayoutstylesheet} =
         C4::Context->preference('opaclayoutstylesheet');
 
@@ -217,27 +216,10 @@ sub gettemplate {
     my ( $tmplbase, $interface, $query, $is_plugin ) = @_;
     ($query) or warn "no query in gettemplate";
     my $path = C4::Context->preference('intranet_includes') || 'includes';
-    $tmplbase =~ s/\.tmpl$/.tt/;
     my ($htdocs, $theme, $lang, $filename)
        =  _get_template_file($tmplbase, $interface, $query);
     $filename = $tmplbase if ( $is_plugin );
     my $template = C4::Templates->new($interface, $filename, $tmplbase, $query);
-
-# NOTE: Commenting these out rather than deleting them so that those who need
-# to know how we previously shimmed these directories will be able to understand.
-#    my $is_intranet = $interface eq 'intranet';
-#    my $themelang =
-#        ($is_intranet ? '/intranet-tmpl' : '/opac-tmpl') .
-#        "/$theme/$lang";
-#    $template->param(
-#        themelang => $themelang,
-#        yuipath   => C4::Context->preference("yuipath") eq "local"
-#                     ? "$themelang/lib/yui"
-#                     : C4::Context->preference("yuipath"),
-#        interface => $is_intranet ? '/intranet-tmpl' : '/opac-tmpl',
-#        theme     => $theme,
-#        lang      => $lang
-#    );
 
     # Bidirectionality, must be sent even if is the only language
     my $current_lang = regex_lang_subtags($lang);

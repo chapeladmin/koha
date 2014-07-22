@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 
-
 # Copyright 2000-2002 Katipo Communications
 #
 # This file is part of Koha.
@@ -18,8 +17,6 @@
 # with Koha; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
 
-# test comment
-
 use Modern::Perl;
 
 use C4::Auth;
@@ -35,17 +32,17 @@ use C4::Biblio;
 
 =head1 NAME
 
-plugin that shows a stats on borrowers
+reports/acquisitions_stats.pl
 
 =head1 DESCRIPTION
 
-=over 2
+Plugin that shows a stats on borrowers
 
 =cut
 
 my $input          = new CGI;
 my $do_it          = $input->param('do_it');
-my $fullreportname = "reports/acquisitions_stats.tmpl";
+my $fullreportname = "reports/acquisitions_stats.tt";
 my $line           = $input->param("Line");
 my $column         = $input->param("Column");
 my @filters        = $input->param("Filter");
@@ -301,50 +298,54 @@ sub calculate {
     foreach ($line, $column) {
         $filter{$_} = [];
         $field{$_} = $_;
-        given ($_) {
-            when (/closedate/) {
-                $filter{$_}->[0] = @$filters[0];
-                $filter{$_}->[1] = @$filters[1];
-                my $a = $_;
-                given ($podsp) {
-                    when (1) { $field{$a} = "concat(hex(weekday($a)+1),'-',dayname($a))" }
-                    when (2) { $field{$a} = "concat(hex(month($a)),'-',monthname($a))" }
-                    when (3) { $field{$a} = "Year($a)" }
-                    default  { $field{$a} = $a }
-                }
+        if ( $_ =~ /closedate/ ) {
+            $filter{$_}->[0] = @$filters[0];
+            $filter{$_}->[1] = @$filters[1];
+            my $a = $_;
+            if ( $podsp == 1 ) {
+                $field{$a} = "concat(hex(weekday($a)+1),'-',dayname($a))";
+            } elsif ( $podsp == 2 ) {
+                $field{$a} = "concat(hex(month($a)),'-',monthname($a))";
+            } elsif ( $podsp == 3 ) {
+                $field{$a} = "Year($a)";
+            } else {
+                $field{$a} = $a;
             }
-            when (/received/) {
-                $filter{$_}->[0] = @$filters[2];
-                $filter{$_}->[1] = @$filters[3];
-                my $a = $_;
-                given ($rodsp) {
-                    when (1) { $field{$a} = "concat(hex(weekday($a)+1),'-',dayname($a))" }
-                    when (2) { $field{$a} = "concat(hex(month($a)),'-',monthname($a))" }
-                    when (3) { $field{$a} = "Year($a)" }
-                    default  { $field{$a} = $a }
-                }
+        }
+        elsif ( $_ =~ /received/ ) {
+            $filter{$_}->[0] = @$filters[2];
+            $filter{$_}->[1] = @$filters[3];
+            my $a = $_;
+            if ( $rodsp == 1 ) {
+                $field{$a} = "concat(hex(weekday($a)+1),'-',dayname($a))";
+            } elsif ( $rodsp == 2 ) {
+                $field{$a} = "concat(hex(month($a)),'-',monthname($a))";
+            } elsif ( $rodsp == 3 ) {
+                $field{$a} = "Year($a)";
+            } else {
+                field{$a} = $a;
             }
-            when (/bookseller/) {
-                $filter{$_}->[0] = @$filters[4];
-            }
-            when (/homebranch/) {
-                $filter{$_}->[0] = @$filters[5];
-            }
-            when (/ccode/) {
-                $filter{$_}->[0] = @$filters[6];
-            }
-            when (/itemtype/) {
-                $filter{$_}->[0] = @$filters[7];
-            }
-            when (/budget/) {
-                $filter{$_}->[0] = @$filters[8];
-            }
-            when (/sort1/) {
-                $filter{$_}->[0] = @$filters[9];
-            }
-            when (/sort2/) {
-                $filter{$_}->[0] = @$filters[10];
-            }
+        }
+        elsif ( $_ =~ /bookseller/ ) {
+            $filter{$_}->[0] = @$filters[4];
+        }
+        elsif ( $_ =~ /homebranch/ ) {
+            $filter{$_}->[0] = @$filters[5];
+        }
+        elsif ( $_ =~ /ccode/ ) {
+            $filter{$_}->[0] = @$filters[6];
+        }
+        elsif ( $_ =~ /itemtype/ ) {
+            $filter{$_}->[0] = @$filters[7];
+        }
+        elsif ( $_ =~ /budget/ ) {
+            $filter{$_}->[0] = @$filters[8];
+        }
+        elsif ( $_ =~ /sort1/ ) {
+            $filter{$_}->[0] = @$filters[9];
+        }
+        elsif ( $_ =~ /sort2/ ) {
+            $filter{$_}->[0] = @$filters[10];
         }
     }
 
@@ -484,11 +485,14 @@ sub calculate {
     # preparing calculation
     my $strcalc;
     $strcalc .= "SELECT $linefield, $colfield, ";
-    given ($process) {
-        when (1) { $strcalc .= "COUNT(*) " }
-        when (2) { $strcalc .= "COUNT(DISTINCT(aqorders.biblionumber)) " }
-        when ([3,4,5]) { $strcalc .= "SUM(aqorders.listprice) " }
-        default { $strcalc .= "NULL " }
+    if ( $process == 1 ) {
+        $strcalc .= "COUNT(*) ";
+    } elsif ( $process == 2 ) {
+        $strcalc .= "COUNT(DISTINCT(aqorders.biblionumber)) ";
+    } elsif ( $process == 3 || $process == 4 || $process == 5 ) {
+        $strcalc .= "SUM(aqorders.listprice) ";
+    } else {
+        $strcalc .= "NULL ";
     }
     $strcalc .= "
         FROM aqorders

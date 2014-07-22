@@ -8579,6 +8579,13 @@ if ( CheckVersion($DBversion) ) {
     SetVersion($DBversion);
 }
 
+$DBversion = "3.17.00.010";
+if ( CheckVersion($DBversion) ) {
+    $dbh->do("DELETE FROM systempreferences WHERE variable='opacsmallimage'");
+    print "Upgrade to $DBversion done (Bug 11347 - PROG/CCSR deprecation: Remove opacsmallimage system preference)\n";
+    SetVersion ($DBversion);
+}
+
 =head1 FUNCTIONS
 
 =head2 TableExists($table)

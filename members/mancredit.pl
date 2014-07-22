@@ -60,14 +60,17 @@ if ($add){
         print $input->redirect("/cgi-bin/koha/members/boraccount.pl?borrowernumber=$borrowernumber");
     }
 } else {
-	my ($template, $loggedinuser, $cookie)
-	  = get_template_and_user({template_name => "members/mancredit.tmpl",
-					  query => $input,
-					  type => "intranet",
-					  authnotrequired => 0,
-                      flagsrequired => { borrowers => 1, updatecharges => 'remaining_permissions' },
-					  debug => 1,
-					  });
+    my ($template, $loggedinuser, $cookie) = get_template_and_user(
+        {
+            template_name   => "members/mancredit.tt",
+            query           => $input,
+            type            => "intranet",
+            authnotrequired => 0,
+            flagsrequired   => { borrowers     => 1,
+                                 updatecharges => 'remaining_permissions' },
+            debug           => 1,
+        }
+    );
 					  
     if ( $data->{'category_type'} eq 'C') {
         my  ( $catcodes, $labels ) =  GetborCatFromCatType( 'A', 'WHERE category_type = ?' );
@@ -87,23 +90,32 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
         extendedattributes => $attributes
     );
 }
-    
+
+# Computes full borrower address
+my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $data->{streettype} );
+my $address = $data->{'streetnumber'} . " $roadtype " . $data->{'address'};
+
     $template->param(
+        finesview => 1,
         borrowernumber => $borrowernumber,
         firstname => $data->{'firstname'},
         surname  => $data->{'surname'},
+        othernames => $data->{'othernames'},
 		    cardnumber => $data->{'cardnumber'},
 		    categorycode => $data->{'categorycode'},
 		    category_type => $data->{'category_type'},
 		    categoryname  => $data->{'description'},
-		    address => $data->{'address'},
+            address => $address,
 		    address2 => $data->{'address2'},
 		    city => $data->{'city'},
 		    state => $data->{'state'},
 		    zipcode => $data->{'zipcode'},
 		    country => $data->{'country'},
 		    phone => $data->{'phone'},
+            phonepro => $data->{'phonepro'},
+            mobile => $data->{'mobile'},
 		    email => $data->{'email'},
+            emailpro => $data->{'emailpro'},
 		    branchcode => $data->{'branchcode'},
 		    branchname => GetBranchName($data->{'branchcode'}),
 		    is_child        => ($data->{'category_type'} eq 'C'),

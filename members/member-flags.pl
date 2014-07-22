@@ -26,14 +26,14 @@ my $bor = GetMemberDetails( $member,'');
 if( $bor->{'category_type'} eq 'S' )  {
 	$flagsrequired->{'staffaccess'} = 1;
 }
-my ($template, $loggedinuser, $cookie)
-	= get_template_and_user({template_name => "members/member-flags.tmpl",
-				query => $input,
-				type => "intranet",
-				authnotrequired => 0,
-				flagsrequired => $flagsrequired,
-				debug => 1,
-				});
+my ($template, $loggedinuser, $cookie) = get_template_and_user({
+        template_name   => "members/member-flags.tt",
+        query           => $input,
+        type            => "intranet",
+        authnotrequired => 0,
+        flagsrequired   => $flagsrequired,
+        debug           => 1,
+});
 
 
 my %member2;
@@ -171,22 +171,30 @@ if (C4::Context->preference('ExtendedPatronAttributes')) {
     );
 }
 
+# Computes full borrower address
+my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $bor->{streettype} );
+my $address = $bor->{'streetnumber'} . " $roadtype " . $bor->{'address'};
+
 $template->param(
 		borrowernumber => $bor->{'borrowernumber'},
     cardnumber => $bor->{'cardnumber'},
 		surname => $bor->{'surname'},
 		firstname => $bor->{'firstname'},
+        othernames => $bor->{'othernames'},
 		categorycode => $bor->{'categorycode'},
 		category_type => $bor->{'category_type'},
 		categoryname => $bor->{'description'},
-		address => $bor->{'address'},
+        address => $address,
 		address2 => $bor->{'address2'},
 		city => $bor->{'city'},
         state => $bor->{'state'},
 		zipcode => $bor->{'zipcode'},
 		country => $bor->{'country'},
 		phone => $bor->{'phone'},
+        phonepro => $bor->{'phonepro'},
+        mobile => $bor->{'mobile'},
 		email => $bor->{'email'},
+        emailpro => $bor->{'emailpro'},
 		branchcode => $bor->{'branchcode'},
 		branchname => GetBranchName($bor->{'branchcode'}),
 		loop => \@loop,
