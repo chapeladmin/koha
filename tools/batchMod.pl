@@ -52,11 +52,11 @@ my $use_default_values = $input->param('use_default_values');
 my $template_name;
 my $template_flag;
 if (!defined $op) {
-    $template_name = "tools/batchMod.tmpl";
+    $template_name = "tools/batchMod.tt";
     $template_flag = { tools => '*' };
     $op = q{};
 } else {
-    $template_name = ($del) ? "tools/batchMod-del.tmpl" : "tools/batchMod-edit.tmpl";
+    $template_name = ($del) ? "tools/batchMod-del.tt" : "tools/batchMod-edit.tt";
     $template_flag = ($del) ? { tools => 'items_batchdel' }   : { tools => 'items_batchmod' };
 }
 
@@ -580,7 +580,7 @@ sub UpdateMarcWith {
     foreach my $subfield ( $fieldfrom->subfields() ) {
         foreach my $field_to_update ( @fields_to ) {
             if ( $subfield->[1] ) {
-                unless ( $field_to_update->subfield($subfield->[0]) ~~ $subfield->[1] ) {
+                unless ( $field_to_update->subfield($subfield->[0]) eq $subfield->[1] ) {
                     $modified++;
                     $field_to_update->update( $subfield->[0] => $subfield->[1] );
                 }

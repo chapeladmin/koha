@@ -76,24 +76,24 @@ my $quickslip = 0;
 
 my $flagsrequired;
 if (defined $print and $print eq "page") {
-    $template_name = "members/moremember-print.tmpl";
+    $template_name = "members/moremember-print.tt";
     # circ staff who process checkouts but can't edit
     # patrons still need to be able to access print view
     $flagsrequired = { circulate => "circulate_remaining_permissions" };
 } elsif (defined $print and $print eq "slip") {
-    $template_name = "members/moremember-receipt.tmpl";
+    $template_name = "members/moremember-receipt.tt";
     # circ staff who process checkouts but can't edit
     # patrons still need to be able to print receipts
     $flagsrequired =  { circulate => "circulate_remaining_permissions" };
 } elsif (defined $print and $print eq "qslip") {
-    $template_name = "members/moremember-receipt.tmpl";
+    $template_name = "members/moremember-receipt.tt";
     $quickslip = 1;
     $flagsrequired =  { circulate => "circulate_remaining_permissions" };
 } elsif (defined $print and $print eq "brief") {
-    $template_name = "members/moremember-brief.tmpl";
+    $template_name = "members/moremember-brief.tt";
     $flagsrequired = { borrowers => 1 };
 } else {
-    $template_name = "members/moremember.tmpl";
+    $template_name = "members/moremember.tt";
     $flagsrequired = { borrowers => 1 };
 }
 
@@ -338,6 +338,9 @@ if (C4::Context->preference('EnhancedMessagingPreferences')) {
     $template->param(TalkingTechItivaPhone => C4::Context->preference("TalkingTechItivaPhoneNotification"));
 }
 
+# Computes full borrower address
+my $address = $data->{'streetnumber'} . " $roadtype " . $data->{'address'};
+
 # in template <TMPL_IF name="I"> => instutitional (A for Adult, C for children) 
 $template->param( $data->{'categorycode'} => 1 ); 
 $template->param(
@@ -369,6 +372,7 @@ $template->param(
     PatronsPerPage => C4::Context->preference("PatronsPerPage") || 20,
     relatives_issues_count => $relatives_issues_count,
     relatives_borrowernumbers => \@relatives,
+    address => $address
 );
 
 output_html_with_http_headers $input, $cookie, $template->output;

@@ -30,15 +30,12 @@ use Modern::Perl;
 use C4::Context;
 
 my $searchengine = C4::Context->preference("SearchEngine");
-for ( $searchengine ) {
-    when ( /^Solr$/ ) {
-        warn "We use Solr";
-        require 'opac/search.pl';
-        exit;
-    }
-    when ( /^Zebra$/ ) {
+if ( $searchengine =~ /^Solr$/ ) {
+    warn "We use Solr";
+    require 'opac/search.pl';
+    exit;
+} elsif ( $searchengine =~ /^Zebra$/ ) {
 
-    }
 }
 
 use C4::Output;
@@ -100,16 +97,16 @@ my @params = $cgi->param("limit");
 my $format = $cgi->param("format") || '';
 my $build_grouped_results = C4::Context->preference('OPACGroupResults');
 if ($format =~ /(rss|atom|opensearchdescription)/) {
-    $template_name = 'opac-opensearch.tmpl';
+    $template_name = 'opac-opensearch.tt';
 }
 elsif (@params && $build_grouped_results) {
-    $template_name = 'opac-results-grouped.tmpl';
+    $template_name = 'opac-results-grouped.tt';
 }
 elsif ((@params>=1) || ($cgi->param("q")) || ($cgi->param('multibranchlimit')) || ($cgi->param('limit-yr')) ) {
-    $template_name = 'opac-results.tmpl';
+    $template_name = 'opac-results.tt';
 }
 else {
-    $template_name = 'opac-advsearch.tmpl';
+    $template_name = 'opac-advsearch.tt';
     $template_type = 'advsearch';
 }
 # load the template
@@ -123,7 +120,7 @@ else {
 
 my $lang = C4::Languages::getlanguage($cgi);
 
-if ($template_name eq 'opac-results.tmpl') {
+if ($template_name eq 'opac-results.tt') {
    $template->param('COinSinOPACResults' => C4::Context->preference('COinSinOPACResults'));
 }
 
@@ -360,7 +357,7 @@ my @allowed_sortby = qw /acqdate_asc acqdate_dsc author_az author_za call_number
 @sort_by = $cgi->param('sort_by');
 $sort_by[0] = $default_sort_by if !$sort_by[0] && defined($default_sort_by);
 foreach my $sort (@sort_by) {
-    if ( $sort ~~ @allowed_sortby ) {
+    if ( grep { /^$sort$/ } @allowed_sortby ) {
         $template->param($sort => 1);
     }
 }

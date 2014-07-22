@@ -46,7 +46,7 @@ our $input = CGI->new;
 
 my $updatecharges_permissions = $input->param('woall') ? 'writeoff' : 'remaining_permissions';
 our ( $template, $loggedinuser, $cookie ) = get_template_and_user(
-    {   template_name   => 'members/pay.tmpl',
+    {   template_name   => 'members/pay.tt',
         query           => $input,
         type            => 'intranet',
         authnotrequired => 0,
@@ -104,6 +104,7 @@ for (@names) {
 }
 
 $template->param(
+    finesview => 1,
     activeBorrowerRelationship => (C4::Context->preference('borrowerRelationship') ne ''),
     RoutingSerials => C4::Context->preference('RoutingSerials'),
 );
@@ -225,6 +226,10 @@ sub borrower_add_additional_fields {
     if ($picture) {
         $b_ref->{has_picture} = 1;
     }
+
+    # Computes full borrower address
+    my $roadtype = C4::Koha::GetAuthorisedValueByCode( 'ROADTYPE', $borrower->{streettype} );
+    $b_ref->{address} = $borrower->{'streetnumber'} . " $roadtype " . $borrower->{'address'};
 
     if (C4::Context->preference('ExtendedPatronAttributes')) {
         $b_ref->{extendedattributes} = GetBorrowerAttributes($borrowernumber);

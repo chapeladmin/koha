@@ -1,6 +1,5 @@
 #!/usr/bin/perl
 
-
 # Copyright 2000-2002 Katipo Communications
 #
 # This file is part of Koha.
@@ -37,17 +36,17 @@ use C4::Members;
 
 =head1 NAME
 
-plugin that shows circulation stats
+reports/issues_stats.pl
 
 =head1 DESCRIPTION
 
-=over 2
+Plugin that shows circulation stats
 
 =cut
 
 # my $debug = 1;	# override for now.
 my $input = new CGI;
-my $fullreportname = "reports/issues_stats.tmpl";
+my $fullreportname = "reports/issues_stats.tt";
 my $do_it    = $input->param('do_it');
 my $line     = $input->param("Line");
 my $column   = $input->param("Column");

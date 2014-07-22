@@ -410,9 +410,9 @@ sub ModBiblioframework {
   my $error = &DelBiblio($biblionumber);
 
 Exported function (core API) for deleting a biblio in koha.
-Deletes biblio record from Zebra and Koha tables (biblio,biblioitems,items)
-Also backs it up to deleted* tables
-Checks to make sure there are not issues on any of the items
+Deletes biblio record from Zebra and Koha tables (biblio & biblioitems)
+Also backs it up to deleted* tables.
+Checks to make sure that the biblio has no items attached.
 return:
 C<$error> : undef unless an error occurs
 
@@ -634,6 +634,7 @@ sub LinkBibHeadingsToAuthorities {
                         $heading->auth_type() );
                     $field->add_subfields( '9', $authid );
                     $num_headings_changed++;
+                    $linker->update_cache($heading, $authid);
                     $results{'added'}->{ $heading->display_form() }++;
                 }
             }
@@ -1073,13 +1074,15 @@ sub GetBiblio {
 sub GetBiblioItemInfosOf {
     my @biblioitemnumbers = @_;
 
-    my $query = '
+    my $biblioitemnumber_values = @biblioitemnumbers ? join( ',', @biblioitemnumbers ) : "''";
+
+    my $query = "
         SELECT biblioitemnumber,
             publicationyear,
             itemtype
         FROM biblioitems
-        WHERE biblioitemnumber IN (' . join( ',', @biblioitemnumbers ) . ')
-    ';
+        WHERE biblioitemnumber IN ($biblioitemnumber_values)
+    ";
     return get_infos_of( $query, 'biblioitemnumber' );
 }
 

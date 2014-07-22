@@ -52,7 +52,7 @@ my $query = new CGI;
 #getting the template
 my ( $template, $librarian, $cookie ) = get_template_and_user(
     {
-        template_name   => "circ/returns.tmpl",
+        template_name   => "circ/returns.tt",
         query           => $query,
         type            => "intranet",
         authnotrequired => 0,
@@ -384,6 +384,7 @@ if ( $messages->{'WrongTransfer'} and not $messages->{'WasTransfered'}) {
             wbortitle       => $borr->{'title'},
             wborphone       => $borr->{'phone'},
             wboremail       => $borr->{'email'},
+            wborstnum       => $borr->{streetnumber},
             wboraddress     => $borr->{'address'},
             wboraddress2    => $borr->{'address2'},
             wborcity        => $borr->{'city'},
@@ -429,6 +430,7 @@ if ( $messages->{'ResFound'}) {
             boremail       => $borr->{'email'},
             boraddress     => $borr->{'address'},
             boraddress2    => $borr->{'address2'},
+            borstnum       => $borr->{streetnumber},
             borcity        => $borr->{'city'},
             borzip         => $borr->{'zipcode'},
             borcnum        => $borr->{'cardnumber'},

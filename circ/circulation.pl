@@ -87,7 +87,7 @@ if (!C4::Context->userenv && !$branch){
 
 my ( $template, $loggedinuser, $cookie ) = get_template_and_user (
     {
-        template_name   => 'circ/circulation.tmpl',
+        template_name   => 'circ/circulation.tt',
         query           => $query,
         type            => "intranet",
         authnotrequired => 0,
@@ -534,7 +534,9 @@ $template->param(
     state              => $borrower->{'state'},
     zipcode           => $borrower->{'zipcode'},
     country           => $borrower->{'country'},
-    phone             => $borrower->{'phone'} || $borrower->{'mobile'},
+    phone             => $borrower->{'phone'},
+    mobile            => $borrower->{'mobile'},
+    phonepro          => $borrower->{'phonepro'},
     cardnumber        => $borrower->{'cardnumber'},
     othernames        => $borrower->{'othernames'},
     amountold         => $amountold,

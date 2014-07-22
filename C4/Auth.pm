@@ -87,7 +87,7 @@ C4::Auth - Authenticates Koha users
   my ($template, $borrowernumber, $cookie)
     = get_template_and_user(
         {
-            template_name   => "opac-main.tmpl",
+            template_name   => "opac-main.tt",
             query           => $query,
       type            => "opac",
       authnotrequired => 0,
@@ -111,7 +111,7 @@ automatically. This gets loaded into the template.
  my ($template, $borrowernumber, $cookie)
      = get_template_and_user(
        {
-         template_name   => "opac-main.tmpl",
+         template_name   => "opac-main.tt",
          query           => $query,
          type            => "opac",
          authnotrequired => 0,
@@ -410,6 +410,11 @@ sub get_template_and_user {
         } elsif (C4::Context->preference("SearchMyLibraryFirst") && C4::Context->userenv && C4::Context->userenv->{'branch'}) {
             $opac_name = C4::Context->userenv->{'branch'};
         }
+        # FIXME Under Plack the CGI->https method always returns 'OFF' ($using_https will be set to 0 in this case)
+        my $opac_base_url = C4::Context->preference("OPACBaseURL"); #FIXME uses $using_https below as well
+        if (!$opac_base_url){
+            $opac_base_url = $ENV{'SERVER_NAME'} . ($ENV{'SERVER_PORT'} eq ($using_https ? "443" : "80") ? '' : ":$ENV{'SERVER_PORT'}");
+        }
         $template->param(
             opaccolorstylesheet       => C4::Context->preference("opaccolorstylesheet"),
             AnonSuggestions           => "" . C4::Context->preference("AnonSuggestions"),
@@ -430,8 +435,7 @@ sub get_template_and_user {
             OPACMobileUserCSS         => "". C4::Context->preference("OPACMobileUserCSS"),
             OPACViewOthersSuggestions => "" . C4::Context->preference("OPACViewOthersSuggestions"),
             OpacAuthorities           => C4::Context->preference("OpacAuthorities"),
-            OPACBaseURL               => ($in->{'query'}->https() ? "https://" : "http://") . $ENV{'SERVER_NAME'} .
-                   ($ENV{'SERVER_PORT'} eq ($in->{'query'}->https() ? "443" : "80") ? '' : ":$ENV{'SERVER_PORT'}"),
+            OPACBaseURL               => ($using_https ? "https://" : "http://") . $opac_base_url,
             opac_css_override         => $ENV{'OPAC_CSS_OVERRIDE'},
             opac_search_limit         => $opac_search_limit,
             opac_limit_override       => $opac_limit_override,
@@ -461,7 +465,6 @@ sub get_template_and_user {
             opacheader                => "" . C4::Context->preference("opacheader"),
             opaclanguagesdisplay      => "" . C4::Context->preference("opaclanguagesdisplay"),
             opacreadinghistory        => C4::Context->preference("opacreadinghistory"),
-            opacsmallimage            => "" . C4::Context->preference("opacsmallimage"),
             opacuserjs                => C4::Context->preference("opacuserjs"),
             opacuserlogin             => "" . C4::Context->preference("opacuserlogin"),
             ShowReviewer              => C4::Context->preference("ShowReviewer"),
@@ -1047,7 +1050,7 @@ sub checkauth {
     $LibraryNameTitle =~ s/<(?:\/?)(?:br|p)\s*(?:\/?)>/ /sgi;
     $LibraryNameTitle =~ s/<(?:[^<>'"]|'(?:[^']*)'|"(?:[^"]*)")*>//sg;
 
-    my $template_name = ( $type eq 'opac' ) ? 'opac-auth.tmpl' : 'auth.tmpl';
+    my $template_name = ( $type eq 'opac' ) ? 'opac-auth.tt' : 'auth.tt';
     my $template = C4::Templates::gettemplate($template_name, $type, $query );
     $template->param(
         branchloop           => GetBranchesLoop(),
@@ -1067,7 +1070,6 @@ sub checkauth {
         opaccredits          => C4::Context->preference("opaccredits"),
         OpacFavicon          => C4::Context->preference("OpacFavicon"),
         opacreadinghistory   => C4::Context->preference("opacreadinghistory"),
-        opacsmallimage       => C4::Context->preference("opacsmallimage"),
         opaclanguagesdisplay => C4::Context->preference("opaclanguagesdisplay"),
         opacuserjs           => C4::Context->preference("opacuserjs"),
         opacbookbag          => "" . C4::Context->preference("opacbookbag"),

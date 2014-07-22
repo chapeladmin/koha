@@ -64,7 +64,7 @@ my $flagsrequired = { circulate => "circulate_remaining_permissions" };
 
 my ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     {
-        template_name   => "circ/printslip.tmpl",
+        template_name   => "circ/printslip.tt",
         query           => $input,
         type            => "intranet",
         authnotrequired => 0,
@@ -84,7 +84,8 @@ if (my $letter = IssueSlip ($session->param('branch') || $branch, $borrowernumbe
 $template->param(
     slip => $slip,
     plain => !$is_html,
-    title => "Print Receipt for $borrowernumber",
+    borrowernumber => $borrowernumber,
+    caller => 'members',
     stylesheet => C4::Context->preference("SlipCSS"),
     error           => $error,
 );

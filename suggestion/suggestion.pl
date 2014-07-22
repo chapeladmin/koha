@@ -59,10 +59,13 @@ sub Init{
 
 sub GetCriteriumDesc{
     my ($criteriumvalue,$displayby)=@_;
-    unless ( grep { /$criteriumvalue/ } qw(ASKED ACCEPTED REJECTED CHECKED) ) {
-        return GetAuthorisedValueByCode('SUGGEST_STATUS', $criteriumvalue ) || "Unknown";
+    if ($displayby =~ /status/i) {
+        if ( grep { /^($criteriumvalue)$/ } qw(ASKED ACCEPTED REJECTED CHECKED ORDERED AVAILABLE) ) {
+            return ($criteriumvalue eq 'ASKED'?"Pending":ucfirst(lc( $criteriumvalue)));
+        } else {
+            return GetAuthorisedValueByCode('SUGGEST_STATUS', $criteriumvalue) || $criteriumvalue;
+        }
     }
-    return ($criteriumvalue eq 'ASKED'?"Pending":ucfirst(lc( $criteriumvalue))) if ($displayby =~/status/i);
     return (GetBranchName($criteriumvalue)) if ($displayby =~/branchcode/);
     return (GetSupportName($criteriumvalue)) if ($displayby =~/itemtype/);
     if ($displayby =~/suggestedby/||$displayby =~/managedby/||$displayby =~/acceptedby/){
@@ -98,7 +101,7 @@ foreach (keys %$suggestion_ref){
 }
 my ( $template, $borrowernumber, $cookie, $userflags ) = get_template_and_user(
         {
-            template_name   => "suggestion/suggestion.tmpl",
+            template_name   => "suggestion/suggestion.tt",
             query           => $input,
             type            => "intranet",
             flagsrequired   => { catalogue => 1 },
@@ -410,7 +413,7 @@ foreach my $field ( qw(managedby acceptedby suggestedby budgetid) ) {
 
 $template->param(
     %hashlists,
-    borrowernumber           => $input->param('borrowernumber'),
+    borrowernumber           => ($input->param('borrowernumber') // undef),
     SuggestionStatuses       => GetAuthorisedValues('SUGGEST_STATUS'),
 );
 output_html_with_http_headers $input, $cookie, $template->output;

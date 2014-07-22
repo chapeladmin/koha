@@ -23,7 +23,7 @@
 
 =head1 NAME
 
-    addbybiblionumber.pl
+addbybiblionumber.pl
 
 =head1 DESCRIPTION
 
@@ -81,7 +81,7 @@ our $errcode	    = 0;
 
 our ( $template, $loggedinuser, $cookie ) = get_template_and_user(
     {
-        template_name   => "virtualshelves/addbybiblionumber.tmpl",
+        template_name   => "virtualshelves/addbybiblionumber.tt",
         query           => $query,
         type            => "intranet",
         authnotrequired => 0,
