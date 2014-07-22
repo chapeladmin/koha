@@ -210,8 +210,8 @@ sub calculate {
         }
         $column = "borrowers.".$column if $column=~/categorycode/;
         my @colfilter ;
-        $colfilter[0] = @$filters[0] if ($column =~ /timestamp/ )  ;
-        $colfilter[1] = @$filters[1] if ($column =~ /timestamp/ )  ;
+        $colfilter[0] = @$filters[0] if ($column =~ /issuedate/ )  ;
+        $colfilter[1] = @$filters[1] if ($column =~ /issuedate/ )  ;
         $colfilter[0] = @$filters[2] if ($column =~ /returndate/ )  ;
         $colfilter[1] = @$filters[3] if ($column =~ /returndate/ )  ;
         $colfilter[0] = @$filters[4] if ($column =~ /branch/ )  ;
@@ -251,7 +251,7 @@ sub calculate {
                      LEFT JOIN items ON old_issues.itemnumber=items.itemnumber 
                      LEFT JOIN biblioitems  ON biblioitems.biblioitemnumber=items.biblioitemnumber 
                      WHERE 1";
-        if (($column=~/timestamp/) or ($column=~/returndate/)){
+        if (($column=~/issuedate/) or ($column=~/returndate/)){
             if ($colfilter[1] and ($colfilter[0])){
                 $strsth2 .= " and $column between '$colfilter[0]' and '$colfilter[1]' " ;
             } elsif ($colfilter[1]) {
@@ -314,9 +314,9 @@ sub calculate {
                   WHERE 1";
 
     @$filters[0]=~ s/\*/%/g if (@$filters[0]);
-    $strcalc .= " AND old_issues.timestamp > '" . @$filters[0] ."'" if ( @$filters[0] );
+    $strcalc .= " AND old_issues.issuedate > '" . @$filters[0] ."'" if ( @$filters[0] );
     @$filters[1]=~ s/\*/%/g if (@$filters[1]);
-    $strcalc .= " AND old_issues.timestamp < '" . @$filters[1] ."'" if ( @$filters[1] );
+    $strcalc .= " AND old_issues.issuedate < '" . @$filters[1] ."'" if ( @$filters[1] );
     @$filters[2]=~ s/\*/%/g if (@$filters[2]);
     $strcalc .= " AND old_issues.returndate > '" . @$filters[2] ."'" if ( @$filters[2] );
     @$filters[3]=~ s/\*/%/g if (@$filters[3]);
