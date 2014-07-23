@@ -1,0 +1,17 @@
+[Unit]
+Description=Backend for library system
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/koha/var/run/zebradb/zebra.pid
+PrivateDevices=yes
+SyslogLevel=err
+
+ExecStart=/usr/bin/zebrasrv -D -p /koha/var/run/zebradb/zebra.pid -u http -f /koha/etc/koha-conf.xml
+ExecReload=/usr/bin/kill -HUP $MAINPID
+KillSignal=SIGQUIT
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target

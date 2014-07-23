@@ -1,0 +1,19 @@
+[Unit]
+Description=Backend for library system
+After=network.target
+
+[Service]
+Type=forking
+PIDFile=/koha/var/run/plack.pid
+Environment=KOHA_CONF=/koha/etc/koha-conf.xml OPACDIR=/build/koha/opac INTRANETDIR=/build/koha LOGDIR=/koha/var/log
+
+PrivateDevices=yes
+SyslogLevel=err
+
+ExecStart=/usr/bin/site_perl/starman --group http --access-log /koha/var/log/koha-access.log --error-log /koha/var/log/koha-error.log -M FindBin --max-requests 50 --workers 2 -E deployment --listen /koha/var/run/plack.sock -D --pid /koha/var/run/plack.pid /koha/bin/koha.psgi
+ExecReload=/usr/bin/kill -HUP $MAINPID
+KillSignal=SIGQUIT
+KillMode=mixed
+
+[Install]
+WantedBy=multi-user.target
