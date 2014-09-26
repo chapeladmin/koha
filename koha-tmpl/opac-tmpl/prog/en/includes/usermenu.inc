@@ -26,9 +26,6 @@
       [% IF ( suggestionsview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-suggestions.pl">my purchase suggestions</a></li>
     [% END %]
   [% END %]
-  [% IF ( EnhancedMessagingPreferences ) %]
-    [% IF ( messagingview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-messaging.pl">my messaging</a></li>
-  [% END %]
   [% IF ( virtualshelves ) %] 
   [% IF ( listsview ) %]<li class="active">[% ELSE %]<li>[% END %]<a href="/cgi-bin/koha/opac-shelves.pl?display=privateshelves">my lists</a></li>
   [% END %]
